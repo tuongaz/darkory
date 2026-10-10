@@ -375,6 +375,58 @@
   --tint-border: 0.42 0.07;
 }
 @layer components {
+  /* Markdown (components/Markdown.tsx): a Task's description, a Note, an Observation, at the size
+     of the text round it. Tailwind's preflight takes lists' markers off; they come back here. */
+  .prose-dk {
+    overflow-wrap: anywhere;
+  }
+  .prose-dk :is(p, ul, ol, pre) {
+    @apply mb-2;
+  }
+  .prose-dk > :last-child,
+  .prose-dk li > :last-child {
+    @apply mb-0;
+  }
+  .prose-dk ul {
+    @apply list-disc pl-5;
+  }
+  .prose-dk ol {
+    @apply list-decimal pl-5;
+  }
+  .prose-dk li + li,
+  .prose-dk li > :is(ul, ol) {
+    @apply mt-0.5;
+  }
+  .prose-dk li > :is(ul, ol) {
+    @apply mb-0;
+  }
+  .prose-dk :not(pre) > code {
+    @apply rounded bg-muted px-1 font-mono text-xs;
+  }
+  .prose-dk pre {
+    @apply overflow-x-auto rounded-md border bg-muted px-3 py-2 font-mono text-xs leading-normal;
+    overflow-wrap: normal;
+  }
+  .prose-dk pre code {
+    font-size: inherit;
+  }
+  .prose-dk a {
+    @apply underline underline-offset-2 hover:text-muted-foreground;
+  }
+  .prose-dk strong {
+    @apply font-semibold;
+  }
+  /* A task list's item: its box, ticked or not, where the bullet would be. */
+  .prose-dk li[data-task] {
+    @apply relative list-none;
+  }
+  .prose-dk .task-box {
+    @apply absolute top-[0.2em] -left-5 size-3.5 text-muted-foreground;
+  }
+  .prose-dk li[data-task="done"] > .task-box {
+    @apply text-foreground;
+  }
+
   /* A Member's mark (MemberAvatar): a tinted disc, or its Avatar, round. A human's has a neutral
      hairline round it. An agent's face sits inside a thick ring in the AI gradient with a clear
      1px gap between, so the ring reads as a ring of its own: the ring is about an eighth of the

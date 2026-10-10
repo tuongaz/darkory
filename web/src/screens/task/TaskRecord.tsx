@@ -11,6 +11,7 @@ import { dayText, sizeText, useMemberName, useSkillName } from "./format";
 import { durationText } from "@/lib/time";
 import { Avatar, TaskLink } from "./parts";
 import { taskRecord, type RecordEntry } from "./record";
+import { Markdown } from "@/components/Markdown";
 
 /** A Task's record, oldest first, grouped by day when it spans more than today. */
 export function TaskRecord({ detail, path, steps }: { detail: TaskDetail; path: readonly Activity[]; steps: readonly WorkflowStep[] }) {
@@ -118,7 +119,7 @@ function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDe
               <b className="text-foreground">{name(entry.note.author_id)}</b> Note
               {skill(entry.note.skill_id) && <span>under {skill(entry.note.skill_id)}</span>}
             </header>
-            <p className="whitespace-pre-wrap">{entry.note.body}</p>
+            <Markdown text={entry.note.body} />
           </article>
         </TimelineRow>
       );
@@ -132,7 +133,7 @@ function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDe
               <b className="text-foreground">{name(o.author_id)}</b>
               {skill(o.skill_id) && <span>under {skill(o.skill_id)}</span>}
             </header>
-            <p className="whitespace-pre-wrap">{o.body}</p>
+            <Markdown text={o.body} />
           </article>
         </TimelineRow>
       );
