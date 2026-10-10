@@ -1,0 +1,1269 @@
+{
+  "clock": {
+    "iso": "2026-10-10T14:30:00+11:00",
+    "text": "Fri 10 Oct 2026, 14:30 AEDT",
+    "note": "Every age below is computed at this clock; ages read like the app's tokenTime (3m, 18m, 21h, 1d)."
+  },
+  "widths": {
+    "card1440": 1184,
+    "card768": 512,
+    "phone": 390,
+    "note": "1184 = the page card at a 1440 window beside the 240px sidebar (8px insets); 512 = the card at 768 beside a 16rem sidebar; 390 = a phone, full-bleed."
+  },
+  "members": {
+    "tuongaz": {
+      "id": "tuongaz",
+      "name": "Tuong Le",
+      "initials": "TL",
+      "kind": "human",
+      "admin": true,
+      "skills": [
+        "breakdown",
+        "review",
+        "acceptance"
+      ]
+    },
+    "planner": {
+      "id": "planner",
+      "name": "planner",
+      "initials": "PL",
+      "kind": "agent",
+      "admin": false,
+      "skills": [
+        "breakdown",
+        "triage"
+      ]
+    },
+    "builder": {
+      "id": "builder",
+      "name": "builder",
+      "initials": "BL",
+      "kind": "agent",
+      "admin": false,
+      "skills": [
+        "engineer"
+      ]
+    },
+    "reviewer": {
+      "id": "reviewer",
+      "name": "reviewer",
+      "initials": "RV",
+      "kind": "agent",
+      "admin": false,
+      "skills": [
+        "review",
+        "skill-review"
+      ]
+    },
+    "tester": {
+      "id": "tester",
+      "name": "tester",
+      "initials": "TS",
+      "kind": "agent",
+      "admin": false,
+      "skills": [
+        "qa"
+      ]
+    },
+    "retro": {
+      "id": "retro",
+      "name": "retro",
+      "initials": "RT",
+      "kind": "agent",
+      "admin": false,
+      "skills": [
+        "retro"
+      ]
+    },
+    "mai": {
+      "id": "mai",
+      "name": "Mai Tran",
+      "initials": "MT",
+      "kind": "human",
+      "admin": false,
+      "skills": [
+        "editor"
+      ]
+    },
+    "jo": {
+      "id": "jo",
+      "name": "Jo Park",
+      "initials": "JP",
+      "kind": "human",
+      "admin": true,
+      "skills": [
+        "editor"
+      ]
+    },
+    "writer": {
+      "id": "writer",
+      "name": "writer",
+      "initials": "WR",
+      "kind": "agent",
+      "admin": false,
+      "skills": [
+        "writer"
+      ]
+    },
+    "publisher": {
+      "id": "publisher",
+      "name": "publisher",
+      "initials": "PB",
+      "kind": "agent",
+      "admin": false,
+      "skills": [
+        "publisher"
+      ]
+    }
+  },
+  "projects": {
+    "DARK": {
+      "key": "DARK",
+      "name": "Darkory",
+      "mark": "D",
+      "markToken": "--mark-dark",
+      "members": [
+        "tuongaz",
+        "planner",
+        "builder",
+        "reviewer",
+        "tester",
+        "retro"
+      ],
+      "entry": {
+        "g1": "Build",
+        "g2": "Build",
+        "rule": "the first Step by Workflow position, then Step position, whose Skill is the Project's own work (not breakdown, acceptance, retro, skill-review) and not a hold"
+      },
+      "g1": {
+        "workflows": [
+          {
+            "name": "Implementation",
+            "position": 1,
+            "steps": [
+              {
+                "name": "Backlog",
+                "skill": null,
+                "position": 1
+              },
+              {
+                "name": "Plan",
+                "skill": "breakdown",
+                "position": 2
+              },
+              {
+                "name": "Build",
+                "skill": "engineer",
+                "position": 3
+              },
+              {
+                "name": "Review",
+                "skill": "review",
+                "position": 4
+              },
+              {
+                "name": "Retro",
+                "skill": "retro",
+                "position": 5
+              },
+              {
+                "name": "Skill review",
+                "skill": "skill-review",
+                "position": 6
+              }
+            ],
+            "connectors": [
+              {
+                "from": "Plan",
+                "name": "done",
+                "to": null
+              },
+              {
+                "from": "Build",
+                "name": "pass",
+                "to": "Review"
+              },
+              {
+                "from": "Review",
+                "name": "pass",
+                "to": null
+              },
+              {
+                "from": "Review",
+                "name": "needs changes",
+                "to": "Build"
+              },
+              {
+                "from": "Retro",
+                "name": "done",
+                "to": null
+              },
+              {
+                "from": "Retro",
+                "name": "propose",
+                "to": "Skill review"
+              },
+              {
+                "from": "Skill review",
+                "name": "publish",
+                "to": null
+              },
+              {
+                "from": "Skill review",
+                "name": "needs changes",
+                "to": "Retro"
+              }
+            ]
+          },
+          {
+            "name": "Bug triage",
+            "position": 2,
+            "steps": [
+              {
+                "name": "Triage",
+                "skill": "triage",
+                "position": 1
+              },
+              {
+                "name": "Fix",
+                "skill": "engineer",
+                "position": 2
+              },
+              {
+                "name": "Code review",
+                "skill": "review",
+                "position": 3
+              },
+              {
+                "name": "Verify",
+                "skill": "qa",
+                "position": 4
+              }
+            ],
+            "connectors": [
+              {
+                "from": "Triage",
+                "name": "bug",
+                "to": "Fix"
+              },
+              {
+                "from": "Triage",
+                "name": "not a bug",
+                "to": null
+              },
+              {
+                "from": "Triage",
+                "name": "feature",
+                "to": "Build"
+              },
+              {
+                "from": "Fix",
+                "name": "ready",
+                "to": "Code review"
+              },
+              {
+                "from": "Code review",
+                "name": "pass",
+                "to": "Verify"
+              },
+              {
+                "from": "Code review",
+                "name": "needs changes",
+                "to": "Fix"
+              },
+              {
+                "from": "Verify",
+                "name": "pass",
+                "to": null
+              },
+              {
+                "from": "Verify",
+                "name": "fail",
+                "to": "Fix"
+              }
+            ]
+          }
+        ]
+      },
+      "g2": {
+        "workflows": [
+          {
+            "name": "Implementation",
+            "position": 1,
+            "steps": [
+              {
+                "name": "Backlog",
+                "skill": null,
+                "position": 1
+              },
+              {
+                "name": "Plan",
+                "skill": "breakdown",
+                "position": 2
+              },
+              {
+                "name": "Build",
+                "skill": "engineer",
+                "position": 3
+              },
+              {
+                "name": "Review",
+                "skill": "review",
+                "position": 4
+              }
+            ],
+            "connectors": [
+              {
+                "from": "Plan",
+                "name": "done",
+                "to": null
+              },
+              {
+                "from": "Build",
+                "name": "pass",
+                "to": "Review"
+              },
+              {
+                "from": "Review",
+                "name": "pass",
+                "to": null
+              },
+              {
+                "from": "Review",
+                "name": "needs changes",
+                "to": "Build"
+              }
+            ]
+          },
+          {
+            "name": "Bug triage",
+            "position": 2,
+            "steps": [
+              {
+                "name": "Triage",
+                "skill": "triage",
+                "position": 1
+              },
+              {
+                "name": "Fix",
+                "skill": "engineer",
+                "position": 2
+              },
+              {
+                "name": "Code review",
+                "skill": "review",
+                "position": 3
+              },
+              {
+                "name": "Verify",
+                "skill": "qa",
+                "position": 4
+              }
+            ],
+            "connectors": [
+              {
+                "from": "Triage",
+                "name": "bug",
+                "to": "Fix"
+              },
+              {
+                "from": "Triage",
+                "name": "not a bug",
+                "to": null
+              },
+              {
+                "from": "Triage",
+                "name": "feature",
+                "to": "Build"
+              },
+              {
+                "from": "Fix",
+                "name": "ready",
+                "to": "Code review"
+              },
+              {
+                "from": "Code review",
+                "name": "pass",
+                "to": "Verify"
+              },
+              {
+                "from": "Code review",
+                "name": "needs changes",
+                "to": "Fix"
+              },
+              {
+                "from": "Verify",
+                "name": "pass",
+                "to": null
+              },
+              {
+                "from": "Verify",
+                "name": "fail",
+                "to": "Fix"
+              }
+            ]
+          },
+          {
+            "name": "Retrospective",
+            "position": 3,
+            "steps": [
+              {
+                "name": "Retro",
+                "skill": "retro",
+                "position": 1
+              },
+              {
+                "name": "Skill review",
+                "skill": "skill-review",
+                "position": 2
+              }
+            ],
+            "connectors": [
+              {
+                "from": "Retro",
+                "name": "done",
+                "to": null
+              },
+              {
+                "from": "Retro",
+                "name": "propose",
+                "to": "Skill review"
+              },
+              {
+                "from": "Skill review",
+                "name": "publish",
+                "to": null
+              },
+              {
+                "from": "Skill review",
+                "name": "needs changes",
+                "to": "Retro"
+              }
+            ]
+          }
+        ],
+        "note": "The split: Retro and Skill review leave Implementation for their own Workflow, Retrospective, at position 3. Nothing else changes; Darkory files a Parent's Retrospective at the Project's first Step carrying retro, which is now Retrospective › Retro. New Tasks still start at Build. If the owner picks it, it is a decisions.md line and the seed changes."
+      },
+      "stepFacts": {
+        "Backlog": {
+          "takers": [],
+          "median": null
+        },
+        "Plan": {
+          "takers": [
+            "planner",
+            "tuongaz"
+          ],
+          "median": "4m"
+        },
+        "Build": {
+          "takers": [
+            "builder"
+          ],
+          "median": "6m"
+        },
+        "Review": {
+          "takers": [
+            "reviewer",
+            "tuongaz"
+          ],
+          "median": "5m"
+        },
+        "Retro": {
+          "takers": [
+            "retro"
+          ],
+          "median": "3m"
+        },
+        "Skill review": {
+          "takers": [
+            "reviewer"
+          ],
+          "median": "4m"
+        },
+        "Triage": {
+          "takers": [
+            "planner"
+          ],
+          "median": "6m"
+        },
+        "Fix": {
+          "takers": [
+            "builder"
+          ],
+          "median": "2m"
+        },
+        "Code review": {
+          "takers": [
+            "reviewer",
+            "tuongaz"
+          ],
+          "median": "3m"
+        },
+        "Verify": {
+          "takers": [
+            "tester"
+          ],
+          "median": "7m"
+        }
+      },
+      "tasks": [
+        {
+          "key": "DARK-18",
+          "title": "Inbox: group questions by their Parent",
+          "step": "Backlog",
+          "since": "2026-10-09T17:40:00+11:00",
+          "age": "20h 50m"
+        },
+        {
+          "key": "DARK-22",
+          "title": "Break down: the Workflow page as where a Project opens",
+          "step": "Plan",
+          "since": "2026-10-10T14:25:00+11:00",
+          "age": "5m",
+          "holder": "planner",
+          "heldSince": "2026-10-10T14:27:00+11:00",
+          "heldFor": "3m",
+          "parent": "DARK-20",
+          "breakdown": true,
+          "blockedBy": "DARK-27"
+        },
+        {
+          "key": "DARK-21",
+          "title": "Filters: a saved View is shared by its address",
+          "step": "Build",
+          "since": "2026-10-10T14:10:00+11:00",
+          "age": "20m",
+          "holder": "builder",
+          "heldSince": "2026-10-10T14:12:00+11:00",
+          "heldFor": "18m"
+        },
+        {
+          "key": "DARK-23",
+          "title": "Task page: Evidence previews for PDFs",
+          "step": "Build",
+          "since": "2026-10-10T13:58:00+11:00",
+          "age": "32m"
+        },
+        {
+          "key": "DARK-19",
+          "title": "Agents page: a Shift's log opens in a peek",
+          "step": "Review",
+          "since": "2026-10-10T14:23:00+11:00",
+          "age": "7m",
+          "holder": "reviewer",
+          "heldSince": "2026-10-10T14:24:00+11:00",
+          "heldFor": "6m"
+        },
+        {
+          "key": "DARK-26",
+          "title": "Delete on the Workflow page shows no reason when it is off",
+          "step": "Triage",
+          "since": "2026-10-10T14:21:00+11:00",
+          "age": "9m"
+        },
+        {
+          "key": "DARK-14",
+          "title": "Line: an exit chip overlaps the loop's label at 1280",
+          "step": "Fix",
+          "since": "2026-10-10T14:05:00+11:00",
+          "age": "25m"
+        },
+        {
+          "key": "DARK-16",
+          "title": "Phone: the Workflow chip truncates at 12 characters",
+          "step": "Verify",
+          "since": "2026-10-10T14:17:00+11:00",
+          "age": "13m",
+          "holder": "tester",
+          "heldSince": "2026-10-10T14:19:00+11:00",
+          "heldFor": "11m"
+        }
+      ],
+      "parents": [
+        {
+          "key": "DARK-20",
+          "title": "The Workflow page as where a Project opens",
+          "owner": "tuongaz",
+          "subtasks": [
+            "DARK-22"
+          ]
+        }
+      ],
+      "questions": [
+        {
+          "key": "DARK-27",
+          "title": "Migration 0009: keep `company` readable for old clients?",
+          "aimedAt": "tuongaz",
+          "filedBy": "planner",
+          "since": "2026-10-10T14:29:00+11:00",
+          "age": "1m",
+          "blocks": "DARK-22",
+          "parent": "DARK-20"
+        }
+      ],
+      "doneToday": {
+        "Implementation": [
+          "DARK-13",
+          "DARK-15",
+          "DARK-17"
+        ],
+        "Bug triage": [
+          "DARK-12"
+        ]
+      },
+      "counts": {
+        "Implementation": {
+          "Backlog": {
+            "waiting": 1,
+            "working": 0
+          },
+          "Plan": {
+            "waiting": 0,
+            "working": 1
+          },
+          "Build": {
+            "waiting": 1,
+            "working": 1
+          },
+          "Review": {
+            "waiting": 0,
+            "working": 1
+          },
+          "Retro": {
+            "waiting": 0,
+            "working": 0
+          },
+          "Skill review": {
+            "waiting": 0,
+            "working": 0
+          }
+        },
+        "Bug triage": {
+          "Triage": {
+            "waiting": 1,
+            "working": 0
+          },
+          "Fix": {
+            "waiting": 1,
+            "working": 0
+          },
+          "Code review": {
+            "waiting": 0,
+            "working": 0
+          },
+          "Verify": {
+            "waiting": 0,
+            "working": 1
+          }
+        }
+      },
+      "needsYou": {
+        "tuongaz": [
+          "DARK-27"
+        ]
+      },
+      "whatsHappening": [
+        {
+          "at": "2026-10-10T14:29:00+11:00",
+          "when": "14:29",
+          "text": "planner asked tuongaz: Migration 0009: keep `company` readable for old clients? (blocks DARK-22)"
+        },
+        {
+          "at": "2026-10-10T14:27:00+11:00",
+          "when": "14:27",
+          "text": "planner took DARK-22 at Plan"
+        },
+        {
+          "at": "2026-10-10T14:24:00+11:00",
+          "when": "14:24",
+          "text": "reviewer took DARK-19 at Review"
+        },
+        {
+          "at": "2026-10-10T14:23:00+11:00",
+          "when": "14:23",
+          "text": "builder advanced DARK-19 · pass → Review"
+        },
+        {
+          "at": "2026-10-10T14:19:00+11:00",
+          "when": "14:19",
+          "text": "tester took DARK-16 at Verify"
+        },
+        {
+          "at": "2026-10-10T14:17:00+11:00",
+          "when": "14:17",
+          "text": "reviewer advanced DARK-16 · pass → Verify"
+        },
+        {
+          "at": "2026-10-10T14:12:00+11:00",
+          "when": "14:12",
+          "text": "builder took DARK-21 at Build"
+        },
+        {
+          "at": "2026-10-10T14:08:00+11:00",
+          "when": "14:08",
+          "text": "DARK-17 Done · reviewer advanced pass"
+        }
+      ],
+      "busy": {
+        "note": "A busy afternoon at Build on g1/g2: builder holds DARK-21 (18m); 13 more wait. The page never lists them all: a Step shows its held Tasks (at most three) and one 'N waiting' count; the count opens the Step's list.",
+        "step": "Build",
+        "working": [
+          "DARK-21"
+        ],
+        "waiting": [
+          {
+            "key": "DARK-28",
+            "title": "Inbox: a question's Parent in the row",
+            "step": "Build",
+            "since": "2026-10-10T14:28:00+11:00",
+            "age": "2m"
+          },
+          {
+            "key": "DARK-29",
+            "title": "Board: drag a card between Steps",
+            "step": "Build",
+            "since": "2026-10-10T14:25:00+11:00",
+            "age": "5m"
+          },
+          {
+            "key": "DARK-30",
+            "title": "Agents: a Shift's log streams live",
+            "step": "Build",
+            "since": "2026-10-10T14:21:00+11:00",
+            "age": "9m"
+          },
+          {
+            "key": "DARK-31",
+            "title": "Labels: colour picker keeps the hue",
+            "step": "Build",
+            "since": "2026-10-10T14:16:00+11:00",
+            "age": "14m"
+          },
+          {
+            "key": "DARK-32",
+            "title": "Tasks list: group by Workflow",
+            "step": "Build",
+            "since": "2026-10-10T14:09:00+11:00",
+            "age": "21m"
+          },
+          {
+            "key": "DARK-33",
+            "title": "Record: Evidence previews for logs",
+            "step": "Build",
+            "since": "2026-10-10T14:03:00+11:00",
+            "age": "27m"
+          },
+          {
+            "key": "DARK-34",
+            "title": "Workflow page: the Loops list folds",
+            "step": "Build",
+            "since": "2026-10-10T13:57:00+11:00",
+            "age": "33m"
+          },
+          {
+            "key": "DARK-35",
+            "title": "Settings: Workspace kind picker",
+            "step": "Build",
+            "since": "2026-10-10T13:49:00+11:00",
+            "age": "41m"
+          },
+          {
+            "key": "DARK-36",
+            "title": "CLI: tasks --workflow on a Project of one",
+            "step": "Build",
+            "since": "2026-10-10T13:42:00+11:00",
+            "age": "48m"
+          },
+          {
+            "key": "DARK-37",
+            "title": "Runner: nudge after a silent Shift",
+            "step": "Build",
+            "since": "2026-10-10T13:35:00+11:00",
+            "age": "55m"
+          },
+          {
+            "key": "DARK-38",
+            "title": "Peek: Markdown in a Note",
+            "step": "Build",
+            "since": "2026-10-10T13:28:00+11:00",
+            "age": "1h 2m"
+          },
+          {
+            "key": "DARK-39",
+            "title": "Activity: fold a Shift log onto its Claim",
+            "step": "Build",
+            "since": "2026-10-10T13:15:00+11:00",
+            "age": "1h 15m"
+          },
+          {
+            "key": "DARK-40",
+            "title": "Filters: saved View by address",
+            "step": "Build",
+            "since": "2026-10-10T13:02:00+11:00",
+            "age": "1h 28m"
+          }
+        ],
+        "counts": {
+          "working": 1,
+          "waiting": 13
+        }
+      }
+    },
+    "NEWS": {
+      "key": "NEWS",
+      "name": "Newsletter",
+      "mark": "N",
+      "markToken": "--mark-news",
+      "members": [
+        "mai",
+        "jo",
+        "writer",
+        "publisher"
+      ],
+      "entry": {
+        "g1": "Draft",
+        "rule": "Draft is the first Step with a Skill of the Project's own work"
+      },
+      "g1": {
+        "workflows": [
+          {
+            "name": "Editorial",
+            "position": 1,
+            "steps": [
+              {
+                "name": "Draft",
+                "skill": "writer",
+                "position": 1
+              },
+              {
+                "name": "Edit",
+                "skill": "editor",
+                "position": 2
+              },
+              {
+                "name": "Legal",
+                "skill": null,
+                "position": 3
+              },
+              {
+                "name": "Publish",
+                "skill": "publisher",
+                "position": 4
+              }
+            ],
+            "connectors": [
+              {
+                "from": "Draft",
+                "name": "ready",
+                "to": "Edit"
+              },
+              {
+                "from": "Edit",
+                "name": "approved",
+                "to": "Legal"
+              },
+              {
+                "from": "Edit",
+                "name": "needs changes",
+                "to": "Draft"
+              },
+              {
+                "from": "Publish",
+                "name": "published",
+                "to": null
+              },
+              {
+                "from": "Publish",
+                "name": "broken link",
+                "to": "Draft"
+              }
+            ]
+          }
+        ]
+      },
+      "stepFacts": {
+        "Draft": {
+          "takers": [
+            "writer"
+          ],
+          "median": "12m"
+        },
+        "Edit": {
+          "takers": [
+            "mai",
+            "jo"
+          ],
+          "median": "1h 40m"
+        },
+        "Legal": {
+          "takers": [],
+          "median": null
+        },
+        "Publish": {
+          "takers": [
+            "publisher"
+          ],
+          "median": "2m"
+        }
+      },
+      "tasks": [
+        {
+          "key": "NEWS-42",
+          "title": "Customer story: Sacca's kitchen",
+          "step": "Draft",
+          "since": "2026-10-10T14:18:00+11:00",
+          "age": "12m",
+          "holder": "writer",
+          "heldSince": "2026-10-10T14:20:00+11:00",
+          "heldFor": "10m"
+        },
+        {
+          "key": "NEWS-41",
+          "title": "October issue: product update",
+          "step": "Edit",
+          "since": "2026-10-10T13:55:00+11:00",
+          "age": "35m",
+          "holder": "mai",
+          "heldSince": "2026-10-10T14:02:00+11:00",
+          "heldFor": "28m"
+        },
+        {
+          "key": "NEWS-40",
+          "title": "Pricing page copy",
+          "step": "Legal",
+          "since": "2026-10-09T16:10:00+11:00",
+          "age": "22h 20m"
+        },
+        {
+          "key": "NEWS-39",
+          "title": "Welcome sequence, email 3",
+          "step": "Publish",
+          "since": "2026-10-10T14:26:00+11:00",
+          "age": "4m"
+        }
+      ],
+      "parents": [],
+      "questions": [],
+      "doneToday": {
+        "Editorial": [
+          "NEWS-37",
+          "NEWS-38"
+        ]
+      },
+      "counts": {
+        "Editorial": {
+          "Draft": {
+            "waiting": 0,
+            "working": 1
+          },
+          "Edit": {
+            "waiting": 0,
+            "working": 1
+          },
+          "Legal": {
+            "waiting": 1,
+            "working": 0
+          },
+          "Publish": {
+            "waiting": 1,
+            "working": 0
+          }
+        }
+      },
+      "holdNote": "Legal is a hold: the legal check happens outside Darkory; Jo moves each Task on to Publish by hand when it clears."
+    },
+    "ACME": {
+      "key": "ACME",
+      "name": "Platform",
+      "mark": "A",
+      "markToken": "--mark-acme",
+      "members": [
+        "triager",
+        "planner-a",
+        "designer",
+        "eng-1",
+        "eng-2",
+        "reviewer-a",
+        "tester-a",
+        "sec",
+        "writer-a",
+        "release-bot",
+        "retro-a",
+        "jo"
+      ],
+      "memberKinds": {
+        "triager": "agent",
+        "planner-a": "agent",
+        "designer": "agent",
+        "eng-1": "agent",
+        "eng-2": "agent",
+        "reviewer-a": "agent",
+        "tester-a": "agent",
+        "sec": "agent",
+        "writer-a": "agent",
+        "release-bot": "agent",
+        "retro-a": "agent",
+        "jo": "human"
+      },
+      "entry": {
+        "g1": "Triage",
+        "rule": "Backlog is a hold with a Connector out (pass → Triage): a human moves a Task on; Triage is the first Step with a Skill of the Project's own work"
+      },
+      "g1": {
+        "workflows": [
+          {
+            "name": "Platform",
+            "position": 1,
+            "steps": [
+              {
+                "name": "Backlog",
+                "skill": null,
+                "position": 1
+              },
+              {
+                "name": "Triage",
+                "skill": "triage",
+                "position": 2
+              },
+              {
+                "name": "Plan",
+                "skill": "breakdown",
+                "position": 3
+              },
+              {
+                "name": "Design",
+                "skill": "design",
+                "position": 4
+              },
+              {
+                "name": "Build",
+                "skill": "engineer",
+                "position": 5
+              },
+              {
+                "name": "Code review",
+                "skill": "review",
+                "position": 6
+              },
+              {
+                "name": "QA",
+                "skill": "qa",
+                "position": 7
+              },
+              {
+                "name": "Security review",
+                "skill": "security",
+                "position": 8
+              },
+              {
+                "name": "Docs",
+                "skill": "docs",
+                "position": 9
+              },
+              {
+                "name": "Acceptance",
+                "skill": "acceptance",
+                "position": 10
+              },
+              {
+                "name": "Release",
+                "skill": "release",
+                "position": 11
+              },
+              {
+                "name": "Retro",
+                "skill": "retro",
+                "position": 12
+              }
+            ],
+            "connectors": [
+              {
+                "from": "Backlog",
+                "name": "pass",
+                "to": "Triage"
+              },
+              {
+                "from": "Triage",
+                "name": "pass",
+                "to": "Plan"
+              },
+              {
+                "from": "Plan",
+                "name": "pass",
+                "to": "Design"
+              },
+              {
+                "from": "Plan",
+                "name": "no design needed",
+                "to": "Build"
+              },
+              {
+                "from": "Design",
+                "name": "pass",
+                "to": "Build"
+              },
+              {
+                "from": "Design",
+                "name": "rework",
+                "to": "Plan"
+              },
+              {
+                "from": "Build",
+                "name": "pass",
+                "to": "Code review"
+              },
+              {
+                "from": "Code review",
+                "name": "pass",
+                "to": "QA"
+              },
+              {
+                "from": "Code review",
+                "name": "needs changes",
+                "to": "Build"
+              },
+              {
+                "from": "QA",
+                "name": "pass",
+                "to": "Security review"
+              },
+              {
+                "from": "QA",
+                "name": "fail",
+                "to": "Build"
+              },
+              {
+                "from": "Security review",
+                "name": "pass",
+                "to": "Docs"
+              },
+              {
+                "from": "Security review",
+                "name": "fail",
+                "to": "Build"
+              },
+              {
+                "from": "Docs",
+                "name": "pass",
+                "to": "Acceptance"
+              },
+              {
+                "from": "Docs",
+                "name": "needs changes",
+                "to": "Build"
+              },
+              {
+                "from": "Acceptance",
+                "name": "pass",
+                "to": "Release"
+              },
+              {
+                "from": "Acceptance",
+                "name": "fail",
+                "to": "Build"
+              },
+              {
+                "from": "Release",
+                "name": "pass",
+                "to": "Retro"
+              },
+              {
+                "from": "Release",
+                "name": "rollback",
+                "to": "QA"
+              },
+              {
+                "from": "Retro",
+                "name": "pass",
+                "to": null
+              }
+            ]
+          }
+        ]
+      },
+      "at": {
+        "Backlog": {
+          "waiting": 4,
+          "working": 0,
+          "holders": []
+        },
+        "Triage": {
+          "waiting": 0,
+          "working": 1,
+          "holders": [
+            "triager"
+          ]
+        },
+        "Plan": {
+          "waiting": 0,
+          "working": 1,
+          "holders": [
+            "planner-a"
+          ]
+        },
+        "Design": {
+          "waiting": 1,
+          "working": 1,
+          "holders": [
+            "designer"
+          ]
+        },
+        "Build": {
+          "waiting": 1,
+          "working": 2,
+          "holders": [
+            "eng-1",
+            "eng-2"
+          ]
+        },
+        "Code review": {
+          "waiting": 0,
+          "working": 1,
+          "holders": [
+            "reviewer-a"
+          ]
+        },
+        "QA": {
+          "waiting": 1,
+          "working": 1,
+          "holders": [
+            "tester-a"
+          ]
+        },
+        "Security review": {
+          "waiting": 1,
+          "working": 0,
+          "holders": []
+        },
+        "Docs": {
+          "waiting": 0,
+          "working": 0,
+          "holders": []
+        },
+        "Acceptance": {
+          "waiting": 1,
+          "working": 0,
+          "holders": []
+        },
+        "Release": {
+          "waiting": 0,
+          "working": 1,
+          "holders": [
+            "release-bot"
+          ]
+        },
+        "Retro": {
+          "waiting": 0,
+          "working": 0,
+          "holders": []
+        }
+      },
+      "doneToday": 5,
+      "loops": 7,
+      "connectors": 20,
+      "steps": 12,
+      "note": "The heaviest realistic case: 12 Steps, 20 Connectors, 7 of them back (Design rework → Plan; Code review, QA, Security review, Docs, Acceptance → Build; Release rollback → QA). No named Tasks: counts per Step and who holds."
+    }
+  }
+}
