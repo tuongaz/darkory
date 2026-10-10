@@ -352,13 +352,13 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 }
 
 // pullRequestLine says how a done Task's branch lands in a Workspace merged through pull requests:
-// the merged pull request whose head is the branch, that there was nothing to land, or that it lands
-// when its pull request merges.
+// the merged pull request whose head is the branch and whose base is its own (target), not a
+// fork's; that there was nothing to land; or that it lands when its pull request merges.
 func (r *Runner) pullRequestLine(ctx context.Context, ws Workspace, branch, target, how string) string {
 	prs, err := r.gh.PullRequestsForBranch(ctx, ws.Path, branch)
 	if err == nil {
 		for _, pr := range prs {
-			if pr.HeadRefName == branch && pr.State == PRMerged && !pr.IsCrossRepository {
+			if pr.HeadRefName == branch && pr.BaseRefName == target && pr.State == PRMerged && !pr.IsCrossRepository {
 				return fmt.Sprintf("%s: %s was merged into %s through pull request #%d (%s)%s.", ws.Name, branch, target, pr.Number, pr.URL, how)
 			}
 		}
@@ -570,12 +570,12 @@ func (r *Runner) pollOnce(ctx context.Context, seen map[string]bool) {
 				continue
 			}
 			id := fmt.Sprintf("%s#%d", ws.Path, pr.Number)
-			key := or(branch.KeyOf(pr.HeadRefName), KeyOf(pr.Title))
-			if seen[id] || key == "" || pr.HeadRefName == ParentBranch(key) {
-				// A Parent's own pull request lands it; there is nothing to complete.
+			key := branch.KeyOf(pr.HeadRefName)
+			if seen[id] || key == "" || !branch.IsTasks(pr.HeadRefName, key) {
+				// No Task's branch; a Parent's own pull request lands it, and there is nothing to complete.
 				continue
 			}
-			if r.completeByPR(ctx, key, pr) {
+			if r.completeByPR(ctx, ws, key, pr) {
 				seen[id] = true
 			}
 		}
@@ -737,13 +737,17 @@ func (r *Runner) writePullRequest(ctx context.Context, rec Record, key string, p
 	}
 }
 
-// completeByPR completes Task key, whose pull request pr was merged, when it waits at a review
-// Step: it advances it along the one Connector out of that Step into Done. It says whether the
+// completeByPR completes Task key, whose pull request pr of Workspace ws was merged, when it
+// waits at a review Step and pr is its landing (notLanding, the rule discovery follows): it
+// advances it along the one Connector out of that Step into Done. It says whether the
 // pull request needs no more looking at.
-func (r *Runner) completeByPR(ctx context.Context, key string, pr PullRequest) bool {
+func (r *Runner) completeByPR(ctx context.Context, ws Workspace, key string, pr PullRequest) bool {
 	d, err := r.reader.Task(ctx, key)
 	if err != nil {
 		return remote.CodeOf(err) == client.ErrorCodeNotFound
+	}
+	if r.notLanding(ctx, d, ws, pr) != "" {
+		return true // not how the Task's branch lands: it completes nothing (recordPullRequests says why)
 	}
 	if d.Task.State != client.TaskStateOpen || len(d.Subtasks) > 0 {
 		return true

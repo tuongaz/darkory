@@ -24,6 +24,7 @@ import (
 
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/blob"
+	"github.com/tuongaz/darkory/internal/branch"
 	"github.com/tuongaz/darkory/internal/cli"
 	"github.com/tuongaz/darkory/internal/server"
 	"github.com/tuongaz/darkory/internal/shortid"
@@ -1097,7 +1098,7 @@ func TestRunnerMergeConflict(t *testing.T) {
 				return false
 			})
 			conflicted := strings.Fields(resolve.Title)[len(strings.Fields(resolve.Title))-3] // … the merge of <branch> into web-1
-			key := KeyOf(conflicted)
+			key := branch.KeyOf(conflicted)
 			r := f.task(resolve.Key)
 			if len(r.Workspaces) != 1 || r.Workspaces[0].Name != "web" {
 				t.Fatalf("the resolving Task names the Workspaces %+v, not the one the merge did not go into", r.Workspaces)

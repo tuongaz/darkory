@@ -139,9 +139,16 @@ func TestRunnerPullRequestMode(t *testing.T) {
 	if !branchExists(t.Context(), f.repo, "web-1") {
 		t.Fatal("no Parent's branch for the pull request's base")
 	}
-	// A pull request with no Task's key, and the Parent's own, are not reviews.
+	// A pull request with no Task's key, the Parent's own, one with the key in its title only, and
+	// one of the Task's branch into another base are not reviews: one landing rule.
 	gh.merge(PullRequest{Number: 5, Title: "Bump the linter", HeadRefName: "chore/lint", URL: "https://github.com/acme/web/pull/5"})
 	gh.merge(PullRequest{Number: 6, Title: "WEB-1: Checkout", HeadRefName: "web-1", BaseRefName: "main", URL: "https://github.com/acme/web/pull/6"})
+	gh.merge(PullRequest{Number: 3, Title: "WEB-2: bump", HeadRefName: "chore/bump", BaseRefName: "web-1", URL: "https://github.com/acme/web/pull/3"})
+	gh.merge(PullRequest{Number: 4, Title: "WEB-2: Cart page", HeadRefName: "web-2-cart-page", BaseRefName: "develop", URL: "https://github.com/acme/web/pull/4"})
+	time.Sleep(5 * f.timings.Poll)
+	if d := f.task("WEB-2"); d.Task.State != client.TaskStateOpen || d.Step == nil || d.Step.Name != "Review" {
+		t.Fatalf("a pull request that is not WEB-2's landing completed its review: %s at %v", d.Task.State, stepName(&d))
+	}
 	gh.merge(PullRequest{Number: 7, Title: "WEB-2: Cart page", HeadRefName: "web-2-cart-page", BaseRefName: "web-1", URL: "https://github.com/acme/web/pull/7"})
 	eventually(t, 20*time.Second, "WEB-2's review completed by its pull request", func() bool { return f.task("WEB-2").Task.State == client.TaskStateDone })
 	// The merged write goes through the server's check on GitHub, which asks this Runner.

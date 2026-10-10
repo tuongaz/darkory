@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -148,15 +147,4 @@ func (g ghCLI) MergePR(ctx context.Context, repo string, n int64, head string) e
 		return &githubRefusal{gh: ge}
 	}
 	return err
-}
-
-var keyPattern = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]*-[0-9]+)(?:[-/:\s]|$)`)
-
-// KeyOf is the Task key a pull request's title starts with, in upper case, as "WEB-12: Cart page";
-// empty when it carries none. Which Task a branch belongs to is branch.KeyOf's rule alone.
-func KeyOf(s string) string {
-	if m := keyPattern.FindStringSubmatch(s); m != nil {
-		return strings.ToUpper(m[1])
-	}
-	return ""
 }

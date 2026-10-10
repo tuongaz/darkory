@@ -37,12 +37,6 @@ func TestBranchNames(t *testing.T) {
 	if strings.HasPrefix(ParentBranch("MAIN-7"), taskPrefix("MAIN-7")) || strings.HasPrefix(TaskBranch("MAIN-70", "x"), taskPrefix("MAIN-7")) {
 		t.Error("branch names overlap")
 	}
-	for in, want := range map[string]string{"main-7-support-emoji": "MAIN-7", "main-7": "MAIN-7", "MAIN-3: Cart page": "MAIN-3",
-		"WEB-12/cart-page": "WEB-12", "chore/lint": "", "main": "", "Bump the linter": ""} {
-		if got := KeyOf(in); got != want {
-			t.Errorf("KeyOf(%q) = %q, want %q", in, got, want)
-		}
-	}
 }
 
 func TestPlanCheckouts(t *testing.T) {
