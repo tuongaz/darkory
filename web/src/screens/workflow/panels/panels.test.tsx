@@ -13,13 +13,13 @@ import { refuse } from "@/test/api";
 import { ada, builder, me, step, task, web } from "@/test/fixtures";
 import { NeedsYouPanel, StoriesPanel, useStoriesQuiet } from ".";
 
-function renderPanel(ui: ReactNode) {
+function renderPanel(ui: ReactNode, who = me(ada)) {
   const client = newQueryClient();
   const live = new LiveActivity();
   return render(
     <Providers client={client} live={live}>
       <MemoryRouter initialEntries={["/projects/WEB/workflows"]}>
-        <MeContext.Provider value={me(ada)}>{ui}</MeContext.Provider>
+        <MeContext.Provider value={who}>{ui}</MeContext.Provider>
       </MemoryRouter>
     </Providers>,
   );
@@ -213,5 +213,16 @@ describe("What's happening", () => {
     expect(screen.queryByRole("separator")).toBeNull();
     view.unmount();
     await waitFor(() => expect(api.calls.find((c) => c.method === "PUT")).toMatchObject({ path: "/v1/projects/WEB/seen", body: { seq: 3 } }));
+  });
+
+  it("keeps no mark for an admin who is not a Member of the Project: no read, no write, no divider", async () => {
+    const { tasks, entries } = storyDay(true);
+    const api = recordApi({ tasks, activity: entries, extra: { "GET /v1/projects/:project/seen": refuse(403, "forbidden", "Only a Member has a mark"), "PUT /v1/projects/:project/seen": refuse(403, "forbidden", "Only a Member has a mark") } });
+    const view = renderPanel(<StoriesPanel project={web} onHover={() => {}} />, me(ada, { projects: [] }));
+    await screen.findByRole("listitem", { name: /WEB-12/ });
+    expect(screen.queryByRole("separator")).toBeNull();
+    view.unmount();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(api.calls.filter((c) => c.path.endsWith("/seen"))).toEqual([]);
   });
 });

@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { api, call, type Schemas } from "@/api/client";
+import { useCurrentMe } from "@/me";
 
 // The Member's "seen" mark of a Project's Activity: `GET` and `PUT /v1/projects/{project}/seen`.
+// Only a Member of the Project has one: for anyone else (an admin looking in) neither is sent.
 
 /** How far the Member has seen a Project's Activity: both null until they first looked. */
 export type Seen = Schemas["ProjectSeen"];
@@ -28,9 +30,15 @@ export function writeSeen(project: string, seq: number): Promise<unknown> {
   return call(api.PUT("/v1/projects/{project}/seen", { params: { path: { project } }, body: { seq }, keepalive: true })).catch(() => undefined);
 }
 
-/** The Member's mark of `project` as it stood when they came to the page (or last came back to it). */
+/** Whether the viewer is a Member of `project` (by key), and so has a mark of it. */
+function useHasMark(project: string): boolean {
+  return useCurrentMe().projects.some((p) => p.key === project);
+}
+
+/** The Member's mark of `project` as it stood when they came to the page (or last came back to it); none for a non-Member. */
 export function useSeen(project: string): Seen | undefined {
-  return useQuery({ queryKey: seenKey(project), queryFn: () => readSeen(project), staleTime: Infinity }).data;
+  const member = useHasMark(project);
+  return useQuery({ queryKey: seenKey(project), queryFn: () => readSeen(project), staleTime: Infinity, enabled: member }).data;
 }
 
 // The mark each Project's panel will write as it goes, unless another mounts for it at once.
@@ -43,6 +51,7 @@ const leaving = new Map<string, ReturnType<typeof setTimeout>>();
  */
 export function useMarkSeenOnLeave(project: string, newest: number | undefined) {
   const qc = useQueryClient();
+  const member = useHasMark(project);
   const seen = useSeen(project);
   const latest = useRef(newest);
   const kept = useRef<number | null>(null);
@@ -53,6 +62,7 @@ export function useMarkSeenOnLeave(project: string, newest: number | undefined) 
     kept.current = Math.max(kept.current ?? 0, seen?.seq ?? 0) || null;
   }, [seen]);
   useEffect(() => {
+    if (!member) return;
     const mark = () => {
       const seq = latest.current;
       if (seq === undefined || (kept.current !== null && seq <= kept.current)) return;
@@ -74,5 +84,5 @@ export function useMarkSeenOnLeave(project: string, newest: number | undefined) 
       window.removeEventListener("pagehide", mark);
       leaving.set(project, setTimeout(mark, 0));
     };
-  }, [project, qc]);
+  }, [project, qc, member]);
 }
