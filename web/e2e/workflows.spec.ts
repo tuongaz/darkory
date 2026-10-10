@@ -360,7 +360,7 @@ test("6 · the Workflows list: added, named and saved; moved later and back; del
 
   // An outcome out of Triage into Deploy: a crossing the delete must ask about.
   await page.goto(`${base}/projects/ACC/workflows/${wf("Triage")}/edit`);
-  await page.getByRole("list", { name: "Steps" }).getByRole("button", { name: "1. Triage" }).click();
+  await page.getByRole("list", { name: "Steps", exact: true }).getByRole("button", { name: "1. Triage" }).click();
   await page.getByRole("button", { name: "Add an outcome out of Triage" }).click();
   await page.getByRole("textbox", { name: "Outcome out of Triage" }).last().fill("release");
   await page.getByRole("combobox", { name: "Where release out of Triage leads" }).click();

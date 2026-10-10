@@ -783,9 +783,9 @@ function RailLine({
                   }}
                   className="absolute top-[7px] left-0 h-[14px] w-[22px]"
                 />
-                <div className="grid min-w-0 grid-cols-1 gap-x-6 gap-y-1 @3xl:grid-cols-[minmax(0,300px)_minmax(0,300px)_minmax(0,1fr)]">
+                <div className="grid min-w-0 grid-cols-1 items-start gap-x-6 gap-y-1 @3xl:grid-cols-[minmax(0,300px)_minmax(0,300px)_minmax(0,1fr)]">
                   <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">{r.name}</div>
-                  <div className="flex min-w-0 flex-wrap items-center gap-1 empty:hidden">{r.tasks}</div>
+                  <div className="flex min-w-0 flex-wrap items-center gap-1 empty:hidden @3xl:empty:flex">{r.tasks}</div>
                   <div className="flex min-w-0 flex-wrap items-center gap-1 empty:hidden">{r.marks}</div>
                 </div>
                 {s ? (

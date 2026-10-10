@@ -167,7 +167,7 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   // MAIN's Workflows list Implementation and Bug triage; Implementation's pencil opens its editor.
   const { page, errors, ctx } = await open(browser, "/projects/MAIN/workflows");
   await page.getByRole("table", { name: "Workflows" }).getByRole("link", { name: "Edit Implementation" }).click();
-  const list = page.getByRole("list", { name: "Steps" });
+  const list = page.getByRole("list", { name: "Steps", exact: true });
   await expect(page.getByRole("note", { name: "No Step picked" })).toBeVisible();
   await expect(list.getByRole("listitem", { name: "3. Build" })).toContainText("New Tasks start here");
   await list.getByRole("button", { name: "3. Build" }).click();

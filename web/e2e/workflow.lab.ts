@@ -45,13 +45,13 @@ for (const scheme of ["light", "dark"] as const) {
 
       // Text view: the same switch at every size.
       await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Text" }).click();
-      await expect(page.getByRole("list", { name: "Steps" })).toBeVisible();
+      await expect(page.getByRole("list", { name: "Steps", exact: true })).toBeVisible();
       await noSidewaysScroll(page);
       await shot(page, `live-text-${tag}`);
 
       // Editing: the list beside the picked Step's panel, the line above (on a phone, the line behind its toggle).
       await page.goto("/projects/WEB/workflows/wf-work/edit");
-      await expect(page.getByRole("list", { name: "Steps" })).toBeVisible();
+      await expect(page.getByRole("list", { name: "Steps", exact: true })).toBeVisible();
       await page.waitForTimeout(300);
       await noSidewaysScroll(page);
       await shot(page, `edit-${tag}`);
@@ -61,7 +61,7 @@ for (const scheme of ["light", "dark"] as const) {
       }
 
       // F5a: a Step added after Review from its panel's menu, named, its Skill picker open on a Skill that does not exist.
-      await page.getByRole("list", { name: "Steps" }).getByRole("button", { name: /^\d+\. Review$/ }).click();
+      await page.getByRole("list", { name: "Steps", exact: true }).getByRole("button", { name: /^\d+\. Review$/ }).click();
       await page.getByRole("button", { name: "More for Review" }).click();
       await page.getByRole("menuitem", { name: "Add Step after Review" }).click();
       await page.getByRole("textbox", { name: "Name of Step 6" }).fill("Security review");
@@ -210,7 +210,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     // The text view lists each Step's Tasks.
     await page.getByRole("button", { name: "Text" }).click();
-    const steps = page.getByRole("list", { name: "Steps" });
+    const steps = page.getByRole("list", { name: "Steps", exact: true });
     await expect(steps.getByRole("list", { name: "Tasks at Build" })).toContainText("WEB-7");
     await shot(page, `live-moments-7-text-${scheme}`);
 
