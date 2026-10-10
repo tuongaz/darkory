@@ -6,8 +6,9 @@ import { DONE, DROPPED, type FlowState, type Token as FlowToken } from "@/compon
 import { spanText } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import type { Ghost, Trace } from "./data";
-import { chipsAt, laneTracks, railOf, tracks as railTracks, type LaneTrack, type LineTopology } from "./layout";
+import { chipsAt, type LaneTrack, type LineTopology } from "./layout";
 import { DONE_STATION, isHoldStep, PICKUP_MS, tokenTime, type LineConnector, type LineFacts, type LineStepFacts, type LineTask } from "./model";
+import { railParts, type Seg } from "./rails";
 import { StepList } from "./StepList";
 import { Count, GhostToken, HiddenCount, Token } from "./Token";
 import {
@@ -116,10 +117,8 @@ function HintPool({ ids }: { ids: ReadonlyMap<string, string> }) {
 }
 
 /** How a Connector reads: on a traced Task's way, one of its next moves, carrying a token now, changed by an edit, or as it is. */
-type Tone = "trace" | "next" | "lit" | "changed" | "plain";
+export type Tone = "trace" | "next" | "lit" | "changed" | "plain";
 
-/** A pair of neighbours on a rail: along a Connector, by hand, a gap no outcome runs along; `null` draws nothing (between two rows of the branch). */
-type Seg = { from: string; to: string; connector?: LineConnector; hand?: boolean } | null;
 
 /** A mark beside a Step, for what leaves the line: into Done, another Workflow, by hand, a Breakdown's Subtasks. */
 type MarkKind = "done" | "exit" | "hand" | "files" | "chip" | "return";
@@ -178,8 +177,7 @@ export function VerticalLine({
   stepHref?: (stepId: string) => string;
 }) {
   const steps = useMemo(() => new Map(facts.steps.map((s) => [s.id, s])), [facts.steps]);
-  const { lead, rail } = useMemo(() => railOf(t), [t]);
-  const mainTracks = useMemo(() => railTracks(t), [t]);
+  const { lead, rail, mainTracks, mainSegs, carried, quietStations, quietTracks, quietSegs, lastRow } = useMemo(() => railParts(t), [t]);
 
   // What a line or a word means, in a sentence, while the pointer is on it or it has the focus.
   const [tip, setTip] = useState<Tip | null>(null);
@@ -593,11 +591,6 @@ export function VerticalLine({
   );
 
   // ---- The main rail.
-  const mainSegs: Seg[] = rail.slice(0, -1).map((from, i) => {
-    const s = t.segments.find((x) => x.from === from && x.to === rail[i + 1]);
-    return s ? { from, to: s.to, connector: s.connector, hand: s.hand } : { from, to: rail[i + 1] };
-  });
-  const carried = new Set([...mainSegs.flatMap((s) => (s?.connector ? [s.connector.id] : [])), ...mainTracks.flatMap((k) => k.connectors.map((c) => c.id))]);
   const first = rail[0];
   // A Workflow of only branch Steps starts where a Parent's end files its own Subtasks: headed so, its sentence behind the ⓘ.
   const heading = branchLabel === AFTER_BRANCH ? AFTER_LABEL : branchLabel;
@@ -677,21 +670,6 @@ export function VerticalLine({
   };
 
   // ---- When a Parent ends: the branch's Steps as a quiet line of their own.
-  // Everything of the quiet line derives from the topology alone.
-  const { quietStations, quietTracks } = useMemo(() => {
-    const stations = [...t.rows.flatMap((r) => r.stations), DONE_STATION];
-    return { quietStations: stations, quietTracks: laneTracks(stations, t.rows.flatMap((r) => r.loops.map((l) => l.connector)), new Set()) };
-  }, [t]);
-  const quietSegs: Seg[] = quietStations.slice(0, -1).map((from, i) => {
-    const to = quietStations[i + 1];
-    const row = t.rows.find((r) => r.stations.includes(from))!;
-    const k = row.stations.indexOf(from);
-    if (to === DONE_STATION) return row.exit ? { from, to, connector: row.exit } : null;
-    if (k === row.stations.length - 1) return null;
-    const seg = row.segments.find((x) => x.lo === k);
-    return { from, to, connector: seg?.connector };
-  });
-  const lastRow = t.rows.at(-1);
   const quietRow = (id: string) => {
     const terminal = id === DONE_STATION;
     const s = steps.get(id);
@@ -778,7 +756,7 @@ export function VerticalLine({
  * outcome's name under the station it leaves and an arrowhead into the next, tracks in lanes
  * between the rail and the rows. Drawn in SVG from where each row's station is measured to stand.
  */
-function RailLine({
+export function RailLine({
   label,
   quiet,
   stations,
@@ -795,6 +773,9 @@ function RailLine({
   travelling,
   outcomeOf,
   measureKey,
+  segment,
+  changed,
+  wide,
 }: {
   label: string;
   quiet?: boolean;
@@ -813,6 +794,12 @@ function RailLine({
   travelling?: readonly FlowToken[];
   outcomeOf?: (connectorId: string) => string | undefined;
   measureKey: unknown[];
+  /** What a segment carries under the station it leaves, in place of its outcome's name (an editor's fields). */
+  segment?: (s: NonNullable<Seg>) => ReactNode;
+  /** A station drawn in the changed colour: a Step an edit added or changed. */
+  changed?: (id: string) => boolean;
+  /** A wider first column, for a row of fields. */
+  wide?: boolean;
 }) {
   const { hover, pool } = hints(useId(), onTip);
   const box = useRef<HTMLDivElement>(null);
@@ -928,8 +915,9 @@ function RailLine({
         cy={v}
         r={radius(id)}
         fill={terminal ? (quiet ? "var(--muted-foreground)" : "var(--state-done)") : start ? (quiet ? "var(--background)" : ink) : "var(--background)"}
-        stroke={terminal ? (quiet ? "var(--muted-foreground)" : "var(--state-done)") : visited?.(id) ? "var(--state-claimed)" : hold ? "var(--muted-foreground)" : ink}
-        strokeWidth={terminal || start ? 0 : weight}
+        stroke={terminal ? (quiet ? "var(--muted-foreground)" : "var(--state-done)") : visited?.(id) ? "var(--state-claimed)" : changed?.(id) ? "var(--ring)" : hold ? "var(--muted-foreground)" : ink}
+        data-changed={changed?.(id) ? "" : undefined}
+        strokeWidth={terminal || (start && !changed?.(id)) ? 0 : weight}
         strokeDasharray={hold ? "3 2.5" : undefined}
       />
     );
@@ -982,14 +970,23 @@ function RailLine({
                   }}
                   className="absolute top-[7px] left-0 h-[14px] w-[22px]"
                 />
-                <div className="grid min-w-0 grid-cols-1 items-start gap-x-6 gap-y-1 @3xl:grid-cols-[minmax(0,300px)_minmax(0,300px)_minmax(0,1fr)]">
+                <div
+                  className={cn(
+                    "grid min-w-0 grid-cols-1 items-start gap-x-6 gap-y-1",
+                    wide ? "@3xl:grid-cols-[minmax(0,360px)_minmax(0,180px)_minmax(0,1fr)]" : "@3xl:grid-cols-[minmax(0,300px)_minmax(0,300px)_minmax(0,1fr)]",
+                  )}
+                >
                   <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">{r.name}</div>
                   <div data-tasks className="flex min-w-0 flex-wrap items-center gap-1 empty:hidden @3xl:empty:flex">
                     {r.tasks}
                   </div>
                   <div className="flex min-w-0 flex-wrap items-center gap-1 empty:hidden">{r.marks}</div>
                 </div>
-                {s ? (
+                {s && segment ? (
+                  <div data-segment={s.from} data-connector={s.connector?.id} className="flex min-h-5 w-max max-w-full flex-wrap items-center gap-1.5 pt-1 pb-2 text-xs text-muted-foreground">
+                    {segment(s)}
+                  </div>
+                ) : s ? (
                   <div
                     data-segment={s.from}
                     data-connector={s.connector?.id}

@@ -22,7 +22,18 @@ export type LineConnector = { id: string; from: string; to: string | null; name:
  * too; and the Workflow the line draws (`drawn`, by id): its Steps on the line, another Workflow's
  * only where a Connector crosses (an exit, an entry). Every Step when unsaid.
  */
-export type LineWorkflow = { workflows: readonly LineWorkflowName[]; steps: readonly LineStep[]; connectors: readonly LineConnector[]; drawn?: string };
+/**
+ * `placed`: Steps an editor keeps where it put them though nothing joins them yet (a new hold): on
+ * the main line ("main"), or "after", among the Steps a Parent's end files into; never parked
+ * beside the start.
+ */
+export type LineWorkflow = {
+  workflows: readonly LineWorkflowName[];
+  steps: readonly LineStep[];
+  connectors: readonly LineConnector[];
+  drawn?: string;
+  placed?: ReadonlyMap<string, "main" | "after">;
+};
 
 /**
  * The Skills of the Steps where Darkory files what a Parent needs once its Subtasks end: they sit
@@ -135,7 +146,8 @@ export function sideSteps(workflow: LineWorkflow): Sides {
   // Darkory files every Breakdown at the first Step carrying breakdown; any other is a Step like the rest.
   const first = inPosition(workflow).find((s) => s.skill?.name === breakdownSkill);
   const before = new Set(first && first.id !== start ? [first.id] : []);
-  const after = new Set(steps.filter((s) => !!s.skill && branchSkills.includes(s.skill.name)).map((s) => s.id));
+  const placed = workflow.placed ?? new Map<string, "main" | "after">();
+  const after = new Set(steps.filter((s) => (!!s.skill && branchSkills.includes(s.skill.name)) || placed.get(s.id) === "after").map((s) => s.id));
   const side = (id: string) => before.has(id) || after.has(id);
   for (let changed = true; changed; ) {
     changed = false;
@@ -148,7 +160,7 @@ export function sideSteps(workflow: LineWorkflow): Sides {
     }
   }
   const joined = new Set(workflow.connectors.flatMap((c) => (c.to === null ? [c.from] : [c.from, c.to])));
-  const holds = new Set(steps.filter((s) => isHoldStep(s) && !joined.has(s.id)).map((s) => s.id));
+  const holds = new Set(steps.filter((s) => isHoldStep(s) && !joined.has(s.id) && !placed.has(s.id)).map((s) => s.id));
   return { start, before, after, holds };
 }
 
