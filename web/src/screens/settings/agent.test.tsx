@@ -171,6 +171,37 @@ describe("an agent's settings", () => {
     expect(await screen.findByText("Paused", { selector: "[data-tone]" })).toBeInTheDocument();
   });
 
+  it("sets how many Shifts the agent runs at once, between Model and Unattended, 1 to 8", async () => {
+    const user = typist();
+    const api = mockApi(routes([ada, bob, runBuilder]));
+    renderApp("/settings/organisation/agents/m-builder");
+    const card = await screen.findByRole("group", { name: "Agent settings of builder" });
+    const shifts = within(card).getByRole("spinbutton", { name: "Shifts" });
+    expect(shifts).toHaveValue(1);
+    expect(shifts).toHaveAttribute("min", "1");
+    expect(shifts).toHaveAttribute("max", "8");
+    expect(within(card).getByText("at once")).toBeInTheDocument();
+    const labels = within(card)
+      .getAllByText(/^(Model|Shifts|Unattended)$/)
+      .map((n) => n.textContent);
+    expect(labels).toEqual(["Model", "Shifts", "Unattended"]);
+
+    await user.clear(shifts);
+    await user.type(shifts, "2");
+    await user.tab();
+    await waitFor(() => expect(patches(api.calls)).toHaveLength(1));
+    expect(patches(api.calls)[0].body).toEqual({ shifts: 2 });
+
+    // Out of bounds or left as it was: nothing is sent, and the field shows the saved count.
+    await waitFor(() => expect(within(card).getByRole("spinbutton", { name: "Shifts" })).toHaveValue(2));
+    const again = within(card).getByRole("spinbutton", { name: "Shifts" });
+    await user.clear(again);
+    await user.type(again, "9");
+    await user.tab();
+    await waitFor(() => expect(within(card).getByRole("spinbutton", { name: "Shifts" })).toHaveValue(2));
+    expect(patches(api.calls)).toHaveLength(1);
+  });
+
   it("sends nothing for a field left as it was, a blank command or a line /v1 would refuse", async () => {
     const user = typist();
     const api = mockApi(routes([ada, bob, runBuilder]));

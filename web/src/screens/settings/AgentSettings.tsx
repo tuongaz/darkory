@@ -161,6 +161,7 @@ function AgentForm({ member, settings: s }: { member: Member; settings: AgentSet
           <option key={m} value={m} />
         ))}
       </datalist>
+      <ShiftsSetting key={`shifts:${s.shifts}`} member={member} saved={s.shifts} />
       <LinesSetting
         key={`env:${envText(s.env)}`}
         member={member}
@@ -259,6 +260,42 @@ function TextSetting({
           if (e.key === "Escape") setValue(saved);
         }}
       />
+      <Refusal error={save.error} />
+    </SettingsRow>
+  );
+}
+
+/** The most Shifts the Runner runs for one agent at once (`AgentSettings.shifts`). */
+const maxShifts = 8;
+
+/** How many Shifts the Runner runs for the agent at once: saved when left or on Enter; out of 1..8 it is put back. */
+function ShiftsSetting({ member, saved }: { member: Member; saved: number }) {
+  const [value, setValue] = useState(String(saved));
+  const save = useMutation({ mutationFn: (shifts: number) => setAgentSettings(member.id, { shifts }) });
+  const commit = () => {
+    const n = Number(value.trim());
+    if (!Number.isInteger(n) || n < 1 || n > maxShifts || n === saved) return setValue(String(saved));
+    save.mutate(n);
+  };
+  return (
+    <SettingsRow label="Shifts" htmlFor="agent-shifts" info="Each Shift runs in its own Session and holds its own Claim.">
+      <Input
+        id="agent-shifts"
+        type="number"
+        inputMode="numeric"
+        min={1}
+        max={maxShifts}
+        step={1}
+        className="w-16 flex-none font-mono text-xs tabular-nums md:text-xs"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") setValue(String(saved));
+        }}
+      />
+      <span className="text-muted-foreground">at once</span>
       <Refusal error={save.error} />
     </SettingsRow>
   );
