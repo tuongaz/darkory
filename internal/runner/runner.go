@@ -508,6 +508,10 @@ func (r *Runner) Merge(ctx context.Context, taskID string, number int64) error {
 	if pr.BaseRefName != base {
 		return fmt.Errorf("pull request #%d is into %s, not %s", number, pr.BaseRefName, base)
 	}
+	if pr.HeadRefOid == "" {
+		// --match-head-commit needs the commit: without it the merge could take another than checked.
+		return fmt.Errorf("GitHub did not say which commit #%d is at", number)
+	}
 	if err := r.gh.MergePR(ctx, ws.Path, number, pr.HeadRefOid); err != nil {
 		detail := err
 		if ge := (*ghError)(nil); errors.As(err, &ge) {

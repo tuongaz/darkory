@@ -336,6 +336,7 @@ func TestRunnerMerge(t *testing.T) {
 		refuse string
 		want   string // the error, "" for a merge
 		noPR   bool
+		noOid  bool // GitHub gives no head commit
 	}{
 		{name: "head and base match", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PROpen}},
 		{name: "a renamed Task", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-old-title", BaseRefName: "main", State: PROpen}},
@@ -354,6 +355,8 @@ func TestRunnerMerge(t *testing.T) {
 		{name: "merged already", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PRMerged}, noPR: true},
 		{name: "from a fork", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PROpen,
 			IsCrossRepository: true}, noPR: true},
+		{name: "no head commit", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PROpen}, noOid: true,
+			want: "GitHub did not say which commit #7 is at"},
 		{name: "GitHub refuses", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PROpen},
 			refuse: "Pull request acme/web#7 is not mergeable: the merge commit cannot be cleanly created.",
 			want:   "Pull request acme/web#7 is not mergeable: the merge commit cannot be cleanly created."},
@@ -361,6 +364,9 @@ func TestRunnerMerge(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			gh := &recordingGitHub{refuse: tc.refuse}
 			tc.pr.Number, tc.pr.URL, tc.pr.HeadRefOid = 7, "https://github.com/acme/web/pull/7", "c0ffee"
+			if tc.noOid {
+				tc.pr.HeadRefOid = ""
+			}
 			gh.set(tc.pr)
 			rec := mergeFixture()
 			r := mergeRunner(t, rec, gh)
