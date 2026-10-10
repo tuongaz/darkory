@@ -49,7 +49,11 @@ const PULSE_MS = 2_400;
 /** The most held Tasks a Step draws as chips; the rest are in its count. */
 const HELD_CHIPS = 3;
 
-/** The line's width below which it reads as a column (a list column, a phone): `@3xl`, where "Also starts here" follows the start Step. */
+/**
+ * The line's width below which it reads as a column (a list column, a phone). It is Tailwind's
+ * `@3xl` container width (48rem = 768px), the breakpoint the classes use where "Also starts here"
+ * follows the start Step and a row's three cells stack: change one, change the other.
+ */
 const NARROW_PX = 768;
 
 /** The rail's x: the centre of its 22px column. */
