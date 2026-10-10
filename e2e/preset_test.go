@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -126,26 +127,49 @@ func TestSoftwarePresetKeepsOtherWorkflows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	run := func() (string, error) {
+	run := func(args ...string) (string, error) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "bash", script)
+		cmd := exec.CommandContext(ctx, "bash", append([]string{script}, args...)...)
 		cmd.Env = append(ada.env(), "DARKORY="+bin, "DATA="+in.dir, "PROJECT=OLD")
 		var out bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &out
 		err := cmd.Run()
 		return out.String(), err
 	}
-	setup := func(n int) {
+	setup := func(n int, args ...string) {
 		t.Helper()
-		if out, err := run(); err != nil {
+		if out, err := run(args...); err != nil {
 			t.Fatalf("setup.sh, run %d: %v\n%s", n, err, out)
 		}
 	}
+	// The preset's company Skills are the Project's (ADR 0020), named <prefix>-<base>, the prefix
+	// the Project's key in lower case unless --skill-prefix says otherwise.
+	projectSkills := func(prefix string) {
+		t.Helper()
+		var d client.TaskDetail
+		ada.json(&d, "show", key)
+		for _, base := range []string{"triage", "architecture", "security", "qa", "devops", "engineer", "review", "breakdown", "acceptance", "retro"} {
+			var sk client.SkillDetail
+			ada.json(&sk, "skill", "show", prefix+"-"+base)
+			if sk.Skill.Kind != client.Company || sk.Skill.ProjectID == nil || *sk.Skill.ProjectID != d.Task.ProjectID {
+				t.Fatalf("%s-%s: %+v, want a company Skill of OLD (%s)", prefix, base, sk.Skill, d.Task.ProjectID)
+			}
+		}
+		// The roster's agents hold them: qa holds <prefix>-qa.
+		var qa client.MemberDetail
+		ada.json(&qa, "member", "show", "qa")
+		if !slices.ContainsFunc(qa.Skills, func(sk client.Skill) bool { return sk.Name == prefix+"-qa" }) {
+			t.Fatalf("qa holds %+v, not %s-qa", qa.Skills, prefix)
+		}
+	}
+	// A company Skill of the preset's name from before, the Organisation's: the run makes it OLD's.
+	ada.ok("skill", "create", "old-engineer", "--kind", "company", "--base", "engineer", "--body", "From before.")
 
 	// Run 1: one change, with Software (the old Workflow, by id) and Bugs (by id).
 	setup(1)
+	projectSkills("old")
 	got := changes(last)
 	if len(got) != 1 {
 		t.Fatalf("setup.sh run 1 recorded %d workflow.changed, want 1", len(got))
@@ -221,6 +245,10 @@ func TestSoftwarePresetKeepsOtherWorkflows(t *testing.T) {
 	if got := changes(last); len(got) != 0 {
 		t.Fatalf("setup.sh run 2 recorded %d workflow.changed, want none: %+v", len(got), got)
 	}
+	projectSkills("old")
+	// Another prefix: its company Skills, OLD's too.
+	setup(3, "--skill-prefix", "acme")
+	projectSkills("acme")
 
 	// Run 3, with Software's QA renamed Testing and a Step of Bugs named qa: refused, naming it,
 	// before any write.
