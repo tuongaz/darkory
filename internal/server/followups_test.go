@@ -111,7 +111,7 @@ func TestPullRequestThroughTheClient(t *testing.T) {
 	})
 }
 
-// A company Skill's Project, Evidence kind and an agent's Shifts through the client.
+// An own Skill's Project, Evidence kind and an agent's Shifts through the client.
 func TestSkillProjectEvidenceKindAndShiftsThroughTheClient(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		h := newHarness(t, st)
@@ -121,7 +121,7 @@ func TestSkillProjectEvidenceKindAndShiftsThroughTheClient(t *testing.T) {
 			want(t, http.StatusCreated).JSON201.Project
 		bob, _ := h.member("bob", client.Agent, "WEB")
 
-		sk := got(ada.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "web-qa", Kind: client.Company,
+		sk := got(ada.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "web-qa", Kind: client.Own,
 			BaseSkill: ptrStr("qa"), Project: ptrStr("WEB"), Body: "WEB's QA"})).want(t, http.StatusCreated).JSON201.Skill
 		if sk.ProjectID == nil || *sk.ProjectID != web.ID {
 			t.Fatalf("created %+v", sk)

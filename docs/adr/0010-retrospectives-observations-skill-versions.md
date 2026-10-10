@@ -1,5 +1,7 @@
 # Retrospectives are Tasks fed by Observations; Skill changes are reviewed versions
 
+Renamed 2026-10-10: the kind `company` is `own` (decisions, "Dogfood follow-ups"); read "own Skill" for "company Skill" below.
+
 When a Feature ships or drops, Darkory files one Task on it, "Retrospective: <Feature>", needing the `retro` Skill. It is an ordinary Task — takeable, claimed, worked, completed — and the only open Task an ended Feature may hold, apart from question Tasks that block it. Filing it does not start anyone, so Darkory stays pull-based.
 
 Darkory files one other Task itself, by the same mechanism. When a Feature is filed, it files "Break down: <Feature>", needing the `breakdown` Skill, and whoever takes it files the Feature's other Tasks. Without it a new Feature holds no Task, so no Member pulling work would ever see it, and nothing would stop two Members breaking down the same Feature.

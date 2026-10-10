@@ -25,7 +25,7 @@ func TestMVPFlowThroughTheClient(t *testing.T) {
 		ctx := t.Context()
 		ada := h.admin // the human, an admin, who owns the Task
 		for _, sk := range []client.CreateSkillBody{
-			{Name: "qa-acme", Kind: client.Company, BaseSkill: ptrStr("qa"), Body: "Test the happy path in the browser."},
+			{Name: "qa-acme", Kind: client.Own, BaseSkill: ptrStr("qa"), Body: "Test the happy path in the browser."},
 		} {
 			got(ada.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, sk)).want(t, http.StatusCreated)
 		}

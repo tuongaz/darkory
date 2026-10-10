@@ -7,9 +7,9 @@ import { ada, bob, builder, detail, engineer, memberDetail, review, signedIn, sk
 import { renderApp } from "@/test/render";
 
 const at = "2026-10-01T09:00:00Z";
-const webEngineer: Skill = { id: "s-web-engineer", name: "web-engineer", kind: "company", base_skill_id: engineer.id, project_id: web.id, builtin: false, current_version: 2, created_at: at };
-/** A company Skill of the whole Organisation. */
-const playbook: Skill = { id: "s-playbook", name: "playbook", kind: "company", base_skill_id: engineer.id, builtin: false, current_version: 1, created_at: at };
+const webEngineer: Skill = { id: "s-web-engineer", name: "web-engineer", kind: "own", base_skill_id: engineer.id, project_id: web.id, builtin: false, current_version: 2, created_at: at };
+/** An own Skill of the whole Organisation. */
+const playbook: Skill = { id: "s-playbook", name: "playbook", kind: "own", base_skill_id: engineer.id, builtin: false, current_version: 1, created_at: at };
 const proposal = (id: string, retroId: string, body: string, created_at: string, author = builder.id): SkillProposal => ({
   id,
   skill_id: webEngineer.id,
@@ -73,7 +73,7 @@ describe("Settings › Skills", () => {
     expect(within(within(table).getByRole("row", { name: "acceptance" })).getByText("Built in")).toBeInTheDocument();
   });
 
-  it("says the Project a company Skill belongs to: its key, or Organisation; a generic Skill has none", async () => {
+  it("says the Project an own Skill belongs to: its key, or Organisation; a generic Skill has none", async () => {
     mockApi(routes());
     renderApp("/settings/organisation/skills");
     const table = await screen.findByRole("table", { name: "Skills" });
@@ -87,7 +87,7 @@ describe("Settings › Skills", () => {
     expect(cell("engineer")).toHaveTextContent("—");
   });
 
-  it("an admin moves a company Skill to a Project from its page", async () => {
+  it("an admin moves an own Skill to a Project from its page", async () => {
     const user = userEvent.setup();
     const api = mockApi(routes({ "PATCH /v1/skills/:skill": { skill: { ...playbook, project_id: web.id }, current: skillVersion(playbook) } }));
     renderApp("/settings/organisation/skills/playbook");
@@ -100,7 +100,7 @@ describe("Settings › Skills", () => {
     expect(api.calls.find((c) => c.method === "PATCH")).toMatchObject({ path: "/v1/skills/playbook", body: { project: web.id } });
   });
 
-  it("a refusal to move a company Skill says why under its Project", async () => {
+  it("a refusal to move an own Skill says why under its Project", async () => {
     const user = userEvent.setup();
     const api = mockApi(routes({ "PATCH /v1/skills/:skill": refuse(400, "invalid", "WEB's Workflow carries web-engineer at Build") }));
     renderApp("/settings/organisation/skills/web-engineer");
@@ -146,7 +146,7 @@ describe("Settings › Skills", () => {
     expect(within(versions).getByText("Current")).toBeInTheDocument();
   });
 
-  it("New Skill names a company Skill's generic one and publishes the text as version 1", async () => {
+  it("New Skill names an own Skill's generic one and publishes the text as version 1", async () => {
     const user = userEvent.setup();
     const api = mockApi(routes({ "POST /v1/skills": json(201, { skill: { ...webEngineer, id: "s-ops", name: "ops-engineer", current_version: 1 }, current: v1 }) }));
     renderApp("/settings/organisation/skills");
@@ -156,7 +156,7 @@ describe("Settings › Skills", () => {
     expect(within(dialog).getByText("Small letters, digits and dashes, as in web-qa.")).toBeInTheDocument();
     await user.clear(within(dialog).getByLabelText("Name"));
     await user.type(within(dialog).getByLabelText("Name"), "ops-engineer");
-    await user.click(within(dialog).getByRole("radio", { name: "Company" }));
+    await user.click(within(dialog).getByRole("radio", { name: "Own" }));
     await user.type(within(dialog).getByLabelText("Text"), "Run the playbook.");
     expect(within(dialog).getByRole("button", { name: "Create Skill" })).toBeDisabled();
     await user.click(within(dialog).getByRole("combobox", { name: "Builds on" }));
@@ -164,11 +164,11 @@ describe("Settings › Skills", () => {
     await user.click(within(dialog).getByRole("button", { name: "Create Skill" }));
 
     await waitFor(() => expect(api.calls.some((c) => c.method === "POST")).toBe(true));
-    expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ name: "ops-engineer", kind: "company", base_skill: "engineer", body: "Run the playbook." });
+    expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ name: "ops-engineer", kind: "own", base_skill: "engineer", body: "Run the playbook." });
     expect(await screen.findByRole("heading", { name: "ops-engineer" })).toBeInTheDocument();
   });
 
-  it("New Skill asks a company Skill's Project, Organisation unless picked, and a generic one none", async () => {
+  it("New Skill asks an own Skill's Project, Organisation unless picked, and a generic one none", async () => {
     const user = userEvent.setup();
     const api = mockApi(routes({ "POST /v1/skills": json(201, { skill: { ...webEngineer, id: "s-ops", name: "ops-engineer", current_version: 1 }, current: v1 }) }));
     renderApp("/settings/organisation/skills");
@@ -176,7 +176,7 @@ describe("Settings › Skills", () => {
     const dialog = await screen.findByRole("dialog", { name: "New Skill" });
     expect(within(dialog).queryByRole("combobox", { name: "Project" })).not.toBeInTheDocument();
     await user.type(within(dialog).getByLabelText("Name"), "ops-engineer");
-    await user.click(within(dialog).getByRole("radio", { name: "Company" }));
+    await user.click(within(dialog).getByRole("radio", { name: "Own" }));
     await user.type(within(dialog).getByLabelText("Text"), "Run the playbook.");
     await user.click(within(dialog).getByRole("combobox", { name: "Builds on" }));
     await user.click(await screen.findByRole("option", { name: "engineer" }));
@@ -187,6 +187,6 @@ describe("Settings › Skills", () => {
     await user.click(within(dialog).getByRole("button", { name: "Create Skill" }));
 
     await waitFor(() => expect(api.calls.some((c) => c.method === "POST")).toBe(true));
-    expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ name: "ops-engineer", kind: "company", base_skill: "engineer", project: web.id, body: "Run the playbook." });
+    expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ name: "ops-engineer", kind: "own", base_skill: "engineer", project: web.id, body: "Run the playbook." });
   });
 });

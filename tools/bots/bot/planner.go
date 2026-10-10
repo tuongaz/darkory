@@ -62,7 +62,7 @@ func (it *Item) entry(step string) string {
 	return it.Entry
 }
 
-// DefaultPlan breaks a Parent into two builds under the company Skill, one with a question for
+// DefaultPlan breaks a Parent into two builds under the own Skill, one with a question for
 // ask; a QA waiting on both; and a help page, a demo and a polish filed ahead into the Backlog.
 // Every build goes to review when built.
 func DefaultPlan(parent, ask string) []Item {

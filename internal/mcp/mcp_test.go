@@ -478,7 +478,7 @@ func TestRetrospectiveTools(t *testing.T) {
 		f := newFixture(t, st, server.Options{})
 		ctx := t.Context()
 		ada := dial(t, f.url, f.ada, "ada-1")
-		must(t)(ada.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "build-acme", Kind: client.Company, BaseSkill: ptr("build"), Body: "v1"}))
+		must(t)(ada.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "build-acme", Kind: client.Own, BaseSkill: ptr("build"), Body: "v1"}))
 		_, cs := f.connect("bob-mcp", Options{})
 		var d client.TaskDetail
 		ok(t, cs, &d, "claim", map[string]any{"task": "WEB-3", "heartbeat_timeout_seconds": 60})

@@ -573,13 +573,13 @@ export function BlockerDialog({ detail, open, onOpenChange }: DialogProps) {
 }
 
 /**
- * A Retrospective's proposal for a company Skill: the current text, edited, for skill-review to
+ * A Retrospective's proposal for an own Skill: the current text, edited, for skill-review to
  * publish. A Task carries one pending proposal per Skill; a new one for the same Skill replaces it.
  */
 export function ProposeDialog({ detail, open, onOpenChange }: DialogProps) {
   const { task } = detail;
   const { skillList } = useDirectory();
-  const company = skillList.filter((s) => s.kind === "company");
+  const own = skillList.filter((s) => s.kind === "own");
   const [skill, setSkill] = useState("");
   const [body, setBody] = useState<string | null>(null);
   const current = useSkillDetail(skill || undefined).data?.current;
@@ -621,10 +621,10 @@ export function ProposeDialog({ detail, open, onOpenChange }: DialogProps) {
           }}
         >
           <SelectTrigger id="propose-skill" className="w-full">
-            <SelectValue placeholder="Choose a company Skill" />
+            <SelectValue placeholder="Choose an own Skill" />
           </SelectTrigger>
           <SelectContent>
-            {company.map((s) => (
+            {own.map((s) => (
               <SelectItem key={s.id} value={s.id}>
                 {s.name}
               </SelectItem>

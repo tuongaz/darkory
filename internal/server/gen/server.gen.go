@@ -573,16 +573,16 @@ func (e SignInMode) Valid() bool {
 
 // Defines values for SkillKind.
 const (
-	Company SkillKind = "company"
 	Generic SkillKind = "generic"
+	Own     SkillKind = "own"
 )
 
 // Valid indicates whether the value is a known member of the SkillKind enum.
 func (e SkillKind) Valid() bool {
 	switch e {
-	case Company:
-		return true
 	case Generic:
+		return true
+	case Own:
 		return true
 	default:
 		return false
@@ -1005,15 +1005,18 @@ type CreateProjectBody struct {
 
 // CreateSkillBody defines model for CreateSkillBody.
 type CreateSkillBody struct {
-	// BaseSkill Required for a company Skill. Id or name of a generic Skill.
+	// BaseSkill Required for an own Skill. Id or name of a generic Skill.
 	BaseSkill *string `json:"base_skill,omitempty"`
 
 	// Body The Skill's text, published as version 1.
-	Body string    `json:"body"`
+	Body string `json:"body"`
+
+	// Kind `generic`: what a Member arrives with. `own`: ours, a Project's or the Organisation's, built
+	// on a generic Skill.
 	Kind SkillKind `json:"kind"`
 	Name string    `json:"name"`
 
-	// Project Id or key of the Project the Skill belongs to; only for a company Skill.
+	// Project Id or key of the Project the Skill belongs to; only for an own Skill.
 	Project *string `json:"project,omitempty"`
 }
 
@@ -1531,7 +1534,7 @@ type ProposeSkillVersionBody struct {
 	BasedOnVersion int64  `json:"based_on_version"`
 	Body           string `json:"body"`
 
-	// Skill Id or name of a company Skill.
+	// Skill Id or name of an own Skill.
 	Skill string `json:"skill"`
 }
 
@@ -1741,7 +1744,7 @@ type SignInMode string
 
 // Skill defines model for Skill.
 type Skill struct {
-	// BaseSkillID The generic Skill a company Skill builds on.
+	// BaseSkillID The generic Skill an own Skill builds on.
 	BaseSkillID *shortid.ID `json:"base_skill_id,omitempty"`
 
 	// Builtin True for `breakdown`, `acceptance`, `retro` and `skill-review`, which Darkory relies on.
@@ -1749,10 +1752,13 @@ type Skill struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	CurrentVersion int64      `json:"current_version"`
 	ID             shortid.ID `json:"id"`
-	Kind           SkillKind  `json:"kind"`
-	Name           string     `json:"name"`
 
-	// ProjectID The Project a company Skill belongs to; absent for a generic Skill and for a company
+	// Kind `generic`: what a Member arrives with. `own`: ours, a Project's or the Organisation's, built
+	// on a generic Skill.
+	Kind SkillKind `json:"kind"`
+	Name string    `json:"name"`
+
+	// ProjectID The Project an own Skill belongs to; absent for a generic Skill and for an own
 	// Skill of the whole Organisation.
 	ProjectID *shortid.ID `json:"project_id,omitempty"`
 }
@@ -1772,7 +1778,8 @@ type SkillGrantInput struct {
 	Skill string `json:"skill"`
 }
 
-// SkillKind defines model for SkillKind.
+// SkillKind `generic`: what a Member arrives with. `own`: ours, a Project's or the Organisation's, built
+// on a generic Skill.
 type SkillKind string
 
 // SkillList defines model for SkillList.
@@ -2150,7 +2157,7 @@ type UpdateProjectBody struct {
 
 // UpdateSkillBody defines model for UpdateSkillBody.
 type UpdateSkillBody struct {
-	// Project Id or key of the Project the company Skill belongs to; `""` makes it the Organisation's.
+	// Project Id or key of the Project the own Skill belongs to; `""` makes it the Organisation's.
 	Project string `json:"project"`
 }
 
@@ -3285,13 +3292,13 @@ type ServerInterface interface {
 	// ListSkills List the Organisation's Skills
 	// (GET /v1/skills)
 	ListSkills(w http.ResponseWriter, r *http.Request, params ListSkillsParams)
-	// CreateSkill Create a generic or company Skill (admin)
+	// CreateSkill Create a generic or own Skill (admin)
 	// (POST /v1/skills)
 	CreateSkill(w http.ResponseWriter, r *http.Request, params CreateSkillParams)
 	// GetSkill Get a Skill with its current version
 	// (GET /v1/skills/{skill})
 	GetSkill(w http.ResponseWriter, r *http.Request, skill SkillRef)
-	// UpdateSkill Set the Project a company Skill belongs to (admin)
+	// UpdateSkill Set the Project an own Skill belongs to (admin)
 	// (PATCH /v1/skills/{skill})
 	UpdateSkill(w http.ResponseWriter, r *http.Request, skill SkillRef, params UpdateSkillParams)
 	// ListSkillVersions List a Skill's published versions
@@ -3366,7 +3373,7 @@ type ServerInterface interface {
 	// ReleaseTask Give up the caller's Claim, leaving the Task at its Step
 	// (POST /v1/tasks/{task}/release)
 	ReleaseTask(w http.ResponseWriter, r *http.Request, task TaskRef, params ReleaseTaskParams)
-	// ProposeSkillVersion Propose a new version of a company Skill from the Retrospective the caller holds
+	// ProposeSkillVersion Propose a new version of an own Skill from the Retrospective the caller holds
 	// (POST /v1/tasks/{task}/skill-proposals)
 	ProposeSkillVersion(w http.ResponseWriter, r *http.Request, task TaskRef, params ProposeSkillVersionParams)
 	// MoveTask Move a Task to a Step of its Project by hand

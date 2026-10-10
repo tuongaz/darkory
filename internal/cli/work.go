@@ -43,7 +43,7 @@ var workCommands = []command{
 	{path: "unblock", args: "<task> --by <task>", short: "stop a Task blocking another", run: cmdUnblock},
 	{path: "show", args: "<task>", short: "show a Task with its Step and outcomes, Subtasks, Claims, Notes, Evidence and Observations", run: cmdShow},
 	{path: "tasks", args: "[--project p] [--parent task] [--state s] [--workflow w] [--step s] [--aimed-at m] [--holder m | --mine] [--filter field:op:values]...", short: "list Tasks", run: cmdTasks},
-	{path: "propose", args: "<task> --skill skill --base n --file path|-", short: "propose a new version of a company Skill", run: cmdPropose},
+	{path: "propose", args: "<task> --skill skill --base n --file path|-", short: "propose a new version of an own Skill", run: cmdPropose},
 	{path: "proposal show", args: "<task|proposal id>", short: "show the Skill proposals written on a Task, or one by id", run: cmdProposalShow},
 	{path: "activity", args: "[--after n | --before n | --all] [--limit n] [--member m] [--kind k,…] [--project p] [--task t] [--follow]", short: "read Activity (the latest page by default), or follow it as it is written", run: cmdActivity, long: true},
 }
@@ -793,7 +793,7 @@ func cmdTasks(c *call) error {
 }
 
 func cmdPropose(c *call) error {
-	skill := c.fs.String("skill", "", "the company Skill")
+	skill := c.fs.String("skill", "", "the own Skill")
 	base := c.fs.String("base", "", "the version the proposal is written against, which must be current")
 	file := c.fs.String("file", "", "the proposed text; - reads standard input")
 	args, err := c.args(1, 1)

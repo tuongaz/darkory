@@ -327,7 +327,7 @@ func TestPhase2Flow(t *testing.T) {
 		in := newInstall(t, st)
 		in.setup()
 		ada := in.as("ada", "ada-1")
-		ada.ok("skill", "create", "engineer-acme", "--kind", "company", "--base", "engineer", "--body", "Build it the Acme way.")
+		ada.ok("skill", "create", "engineer-acme", "--kind", "own", "--base", "engineer", "--body", "Build it the Acme way.")
 		in.agent("rita", "", "review", "skill-review")
 		ada.ok("project", "create", "SHOP", "Shop", "--member", "ada", "--member", "bob", "--member", "rita")
 		ada.ok("report-to", "bob", "ada")
@@ -468,7 +468,7 @@ func TestPhase2Flow(t *testing.T) {
 		retro := subtasks.Items[0].Key
 
 		// The Retrospective: the Owner takes it, as nobody in SHOP has retro, reads the
-		// Observations, and proposes a new version of the company Skill for review.
+		// Observations, and proposes a new version of the own Skill for review.
 		ada.ok("claim", retro, "--timeout", "0")
 		var obs client.ObservationList
 		ada.json(&obs, "observations", "SHOP-1")

@@ -153,7 +153,7 @@ type proposalIn struct {
 
 type proposeIn struct {
 	Task           string `json:"task" jsonschema:"the Retrospective Task you hold"`
-	Skill          string `json:"skill" jsonschema:"the company Skill"`
+	Skill          string `json:"skill" jsonschema:"the own Skill"`
 	BasedOnVersion int64  `json:"based_on_version" jsonschema:"the version the proposal is written against, which must be current"`
 	Body           string `json:"body" jsonschema:"the proposed text of the Skill"`
 }
@@ -449,7 +449,7 @@ func (s *Server) addTools() {
 			}
 			return *res.JSON200, nil
 		})
-	tool(s, "skill_show", "Read a Skill and its current version's text: how this company does that work.",
+	tool(s, "skill_show", "Read a Skill and its current version's text: how this Project, or this Organisation, does that work.",
 		func(ctx context.Context, in skillIn) (client.SkillDetail, error) {
 			res, err := c.GetSkillWithResponse(ctx, in.Skill)
 			if err := check(res, err, http.StatusOK); err != nil {
@@ -457,7 +457,7 @@ func (s *Server) addTools() {
 			}
 			return *res.JSON200, nil
 		})
-	tool(s, "propose_skill_version", "From a Retrospective Task you hold, propose a new version of a company Skill, written against its current version "+
+	tool(s, "propose_skill_version", "From a Retrospective Task you hold, propose a new version of an own Skill, written against its current version "+
 		"(one pending proposal per Skill; another for the same Skill replaces it); then advance the Task to the Step carrying skill-review.",
 		func(ctx context.Context, in proposeIn) (client.SkillProposal, error) {
 			res, err := c.ProposeSkillVersionWithResponse(ctx, in.Task, &client.ProposeSkillVersionParams{},

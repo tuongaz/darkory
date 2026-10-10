@@ -10,7 +10,7 @@ import (
 )
 
 // Retro takes Retrospective Subtasks through next (it holds retro), reads the Observations on its
-// Parent and the Parent's Subtasks and, when some say a company Skill didn't work, proposes that
+// Parent and the Parent's Subtasks and, when some say an own Skill didn't work, proposes that
 // Skill's next version with what they said, then advances the Retrospective along "propose" to
 // Skill review. With nothing to change it advances it into Done with a Note.
 type Retro struct{ agent }
@@ -48,7 +48,7 @@ func (r *Retro) retro(ctx context.Context, d *client.TaskDetail) error {
 	}
 	obs := res.JSON200.Items
 	worked := 0
-	// The company Skill to improve: the first one an Observation says didn't work, with what the
+	// The own Skill to improve: the first one an Observation says didn't work, with what the
 	// Observations under it said.
 	var skill *client.SkillDetail
 	var lessons []string
@@ -65,7 +65,7 @@ func (r *Retro) retro(ctx context.Context, d *client.TaskDetail) error {
 			if err != nil {
 				return gone(wctx, err)
 			}
-			if s.Skill.Kind == client.Company {
+			if s.Skill.Kind == client.Own {
 				skill = s
 			}
 		}
@@ -82,7 +82,7 @@ func (r *Retro) retro(ctx context.Context, d *client.TaskDetail) error {
 		if ctx.Err() != nil {
 			return nil
 		}
-		_, err := r.advance(ctx, key, intoDone(d), fmt.Sprintf("Read %s; no company Skill needs a change.", count(len(obs), "Observation")))
+		_, err := r.advance(ctx, key, intoDone(d), fmt.Sprintf("Read %s; no own Skill needs a change.", count(len(obs), "Observation")))
 		return gone(ctx, err)
 	}
 	// Another Retrospective may publish a version between reading the Skill and proposing; then

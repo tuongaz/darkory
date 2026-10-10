@@ -314,12 +314,12 @@ func TestBots(t *testing.T) {
 	rec.wait(30*time.Second, "retro", "advanced", retro.Key)
 	rec.wait(30*time.Second, "reviewer", "published", retro.Key)
 	var v2 client.SkillDetail
-	ada.json(&v2, "skill", "show", bot.SkillCompany)
+	ada.json(&v2, "skill", "show", bot.SkillOwn)
 	rd := admin.task(retro.Key)
 	if v2.Skill.CurrentVersion != 2 || v2.Current.PublishedBy == nil || *v2.Current.PublishedBy != id("reviewer") ||
 		!strings.Contains(v2.Current.Body, "From the Retrospective of "+pkey) || len(rd.Proposals) != 1 ||
 		rd.Proposals[0].State != client.Published || rd.Proposals[0].AuthorID != id("retro") || rd.Task.State != client.TaskStateDone {
-		t.Fatalf("%s is %+v; the Retrospective %+v with proposals %+v", bot.SkillCompany, v2, rd.Task, rd.Proposals)
+		t.Fatalf("%s is %+v; the Retrospective %+v with proposals %+v", bot.SkillOwn, v2, rd.Task, rd.Proposals)
 	}
 
 	// Stop the bots, then check the record as a whole.

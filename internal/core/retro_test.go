@@ -11,7 +11,7 @@ import (
 )
 
 // retroFixture is Project WEB on the default Workflows with a completed Parent whose Build
-// Subtask left an Observation, its Retrospective open at Retro, a company Skill qa-acme at
+// Subtask left an Observation, its Retrospective open at Retro, an own Skill qa-acme at
 // version 1, retro writers in WEB and a reviewer in OPS.
 type retroFixture struct {
 	*fixture
@@ -26,7 +26,7 @@ func newRetroFixture(t *testing.T, st *store.Store) retroFixture {
 	ctx := t.Context()
 	f.project("WEB")
 	f.project("OPS")
-	if _, err := f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "qa-acme", Kind: "company", BaseSkill: ptrStr("qa"), Body: "Test the happy path."}, core.Idem{}); err != nil {
+	if _, err := f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "qa-acme", Kind: "own", BaseSkill: ptrStr("qa"), Body: "Test the happy path."}, core.Idem{}); err != nil {
 		t.Fatal(err)
 	}
 	r := retroFixture{fixture: f}
@@ -80,7 +80,7 @@ func (r retroFixture) version(skill string) int64 {
 	return d.Skill.CurrentVersion
 }
 
-// A Retrospective proposes a new version of a company Skill and is advanced to the Step carrying
+// A Retrospective proposes a new version of an own Skill and is advanced to the Step carrying
 // skill-review; a reviewer from another Project publishes it by advancing it into Done, which
 // also marks its Parent's Observations reviewed. Later Claims work under the new version.
 func TestSkillVersionPublishes(t *testing.T) {
@@ -283,7 +283,7 @@ func TestProposalsPerSkill(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		r := newRetroFixture(t, st)
 		ctx := t.Context()
-		if _, err := r.svc.CreateSkill(ctx, r.admin, core.NewSkill{Name: "build-acme", Kind: "company", BaseSkill: ptrStr(core.SkillEngineer),
+		if _, err := r.svc.CreateSkill(ctx, r.admin, core.NewSkill{Name: "build-acme", Kind: "own", BaseSkill: ptrStr(core.SkillEngineer),
 			Body: "Build it."}, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}

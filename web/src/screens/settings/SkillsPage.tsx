@@ -29,18 +29,18 @@ import { useMemberDetails, useRetrospectives, useSkillDetail, useSkillTasks, use
 // Skill · Kind · Project · Builds on · Built in · Current · Held by. A phone keeps Skill and Held by.
 const cols = "grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_90px_100px_120px_80px_90px_220px]";
 
-/** The Select's value for a company Skill of the whole Organisation (a Select item cannot be ""). */
+/** The Select's value for an own Skill of the whole Organisation (a Select item cannot be ""). */
 const organisation = "organisation";
 
-/** Where a company Skill belongs, as the Skills page says it: its Project's key, or Organisation. */
+/** Where an own Skill belongs, as the Skills page says it: its Project's key, or Organisation. */
 function ProjectOf({ skill, projects }: { skill: Skill; projects: Map<string, Project> }) {
-  if (skill.kind !== "company") return <span className="text-muted-foreground">—</span>;
+  if (skill.kind !== "own") return <span className="text-muted-foreground">—</span>;
   if (!skill.project_id) return <span className="text-muted-foreground">Organisation</span>;
   const p = projects.get(skill.project_id);
   return p ? <Key>{p.key}</Key> : <Skeleton className="h-4 w-10" />;
 }
 
-/** The Organisation's Projects and the Organisation itself, as a company Skill's Project select offers them. */
+/** The Organisation's Projects and the Organisation itself, as an own Skill's Project select offers them. */
 function ProjectItems({ projects }: { projects: Project[] }) {
   return (
     <>
@@ -138,11 +138,11 @@ export function SkillsPage() {
   );
 }
 
-/** New Skill: its name, kind, the generic Skill a company one builds on, and the text published as version 1. */
+/** New Skill: its name, kind, the generic Skill an own one builds on, and the text published as version 1. */
 function NewSkillDialog({ skills, onClose }: { skills: Skill[]; onClose: () => void }) {
   const navigate = useNavigate();
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<"generic" | "company">("generic");
+  const [kind, setKind] = useState<"generic" | "own">("generic");
   const [base, setBase] = useState("");
   const [project, setProject] = useState(organisation);
   const [body, setBody] = useState("");
@@ -152,8 +152,8 @@ function NewSkillDialog({ skills, onClose }: { skills: Skill[]; onClose: () => v
       createSkill({
         name: name.trim(),
         kind,
-        base_skill: kind === "company" ? base : undefined,
-        project: kind === "company" && project !== organisation ? project : undefined,
+        base_skill: kind === "own" ? base : undefined,
+        project: kind === "own" && project !== organisation ? project : undefined,
         body,
       }),
     onSuccess: (d) => {
@@ -172,7 +172,7 @@ function NewSkillDialog({ skills, onClose }: { skills: Skill[]; onClose: () => v
       size="lg"
       onSubmit={() => create.mutate()}
       pending={create.isPending}
-      submitDisabled={!nameOK || !body.trim() || (kind === "company" && !base)}
+      submitDisabled={!nameOK || !body.trim() || (kind === "own" && !base)}
       error={create.error}
     >
       <FormRows>
@@ -192,18 +192,18 @@ function NewSkillDialog({ skills, onClose }: { skills: Skill[]; onClose: () => v
             autoFocus
           />
         </FormRow>
-        <FormRow label="Kind" info="A generic Skill is what a Member arrives with; a company Skill builds on a generic one and adds the company's own knowledge.">
+        <FormRow label="Kind" info="A generic Skill is what a Member arrives with; an own Skill builds on a generic one and adds how this Project, or this Organisation, does it.">
           <Segmented
             label="Kind"
             value={kind}
             onChange={setKind}
             options={[
               { value: "generic", label: "Generic" },
-              { value: "company", label: "Company" },
+              { value: "own", label: "Own" },
             ]}
           />
         </FormRow>
-        {kind === "company" && (
+        {kind === "own" && (
           <FormRow label="Builds on" htmlFor="skill-base">
             <Select value={base} onValueChange={setBase}>
               <SelectTrigger id="skill-base" size="sm" className="h-8 w-full">
@@ -219,7 +219,7 @@ function NewSkillDialog({ skills, onClose }: { skills: Skill[]; onClose: () => v
             </Select>
           </FormRow>
         )}
-        {kind === "company" && (
+        {kind === "own" && (
           <FormRow label="Project" htmlFor="skill-project">
             <Select value={project} onValueChange={setProject}>
               <SelectTrigger id="skill-project" size="sm" className="h-8 w-full">
@@ -285,7 +285,7 @@ function SkillRecord({ detail }: { detail: SkillDetail }) {
         </div>
         <aside aria-label="About the Skill" className="min-w-0 lg:border-l lg:pl-6">
           <PropertiesRail compact>
-            {skill.kind === "company" && (
+            {skill.kind === "own" && (
               <Property label="Project">
                 <SkillProject skill={skill} />
               </Property>
@@ -328,7 +328,7 @@ function SkillRecord({ detail }: { detail: SkillDetail }) {
   );
 }
 
-/** A company Skill's Project, picked in place (Settings › Organisation is an admin's). */
+/** An own Skill's Project, picked in place (Settings › Organisation is an admin's). */
 function SkillProject({ skill }: { skill: Skill }) {
   const { projectList } = useDirectory();
   const save = useMutation({ mutationFn: (project: string) => updateSkill(skill.name, { project: project === organisation ? "" : project }) });

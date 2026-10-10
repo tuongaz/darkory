@@ -46,7 +46,7 @@ const skill = (name: string, extra: object = {}) => ({ id: `s-${name}`, name, ki
 const engineer = skill("engineer");
 const review = skill("review");
 const qaSkill = skill("qa");
-const webEngineer = skill("web-engineer", { kind: "company", base_skill_id: "s-engineer", current_version: 3 });
+const webEngineer = skill("web-engineer", { kind: "own", base_skill_id: "s-engineer", current_version: 3 });
 const builtins = ["acceptance", "breakdown", "retro", "skill-review"].map((n) => skill(n, { builtin: true }));
 const skills = [...builtins, engineer, qaSkill, review, webEngineer].sort((a, b) => a.name.localeCompare(b.name));
 

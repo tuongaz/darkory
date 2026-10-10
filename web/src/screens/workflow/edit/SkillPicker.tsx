@@ -49,7 +49,7 @@ export function SkillPicker({
       ? { name: pending[value]?.name ?? value.slice(10), fresh: true }
       : { name: skills.find((s) => s.id === value)?.name ?? "…", fresh: false }
     : undefined;
-  // The generic Skills, and the Step's own when it is a company Skill.
+  // The generic Skills, and the Step's Skill when it is an own one.
   const offered = skills.filter((s) => s.kind === "generic" || s.id === value);
   const name = typed.trim().toLowerCase();
   const taken = skills.some((s) => s.name === name) || Object.values(pending).some((s) => s.name === name);

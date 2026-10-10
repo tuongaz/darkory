@@ -9,11 +9,11 @@ import (
 )
 
 // The learning loop (ADR 0010): Observations recorded while working feed the Retrospective of
-// their Task's Parent, which may propose a new version of a company Skill; a Member with
+// their Task's Parent, which may propose a new version of an own Skill; a Member with
 // skill-review, other than the author, publishes it by advancing the Retrospective from the Step
 // carrying skill-review into Done while its base is still current.
 
-// ProposeSkillVersion writes a proposed new version of a company Skill on a Retrospective the
+// ProposeSkillVersion writes a proposed new version of an own Skill on a Retrospective the
 // caller holds (ADR 0010), against basedOn, which must be the Skill's current version; refused
 // no_step unless a Connector leads from the Retrospective's Step to a Step carrying skill-review,
 // along which the caller then advances it. A Task carries one pending proposal per Skill: a new
@@ -55,8 +55,8 @@ WHERE k.org_id = $1 AND k.from_step_id = $2 AND sk.builtin = TRUE AND sk.name = 
 		if err != nil {
 			return nil, err
 		}
-		if sk.Kind != "company" {
-			return nil, refuse(CodeInvalid, "only a company Skill takes proposals, and %s is generic", sk.Name)
+		if sk.Kind != "own" {
+			return nil, refuse(CodeInvalid, "only an own Skill takes proposals, and %s is generic", sk.Name)
 		}
 		if basedOn != sk.CurrentVersion {
 			return nil, refuse(CodeProposalStale, "%s is at version %d; write the proposal against it, not version %d", sk.Name, sk.CurrentVersion, basedOn)

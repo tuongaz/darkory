@@ -15,7 +15,7 @@
 # PROJECT_NAME (default Software), REPO (a git repository to work in), WORKSPACE (its name,
 # default the folder's), MODE (plain or pull_request, default plain), DARKORY (the binary).
 #
-# The Project's company Skills, one on each role, are named <prefix>-<base> (sw-qa, sw-engineer),
+# The Project's own Skills, one on each role, are named <prefix>-<base> (sw-qa, sw-engineer),
 # the prefix the Project's key in lower case unless --skill-prefix <p> says otherwise: a Skill's
 # name is the Organisation's, so two Projects set up from the preset each have their own.
 set -euo pipefail
@@ -129,7 +129,7 @@ else
   echo "project $project: created"
 fi
 
-# The generic Skills each Step carries, then the Project's company Skill on each (ADR 0020), whose
+# The generic Skills each Step carries, then the Project's own Skill on each (ADR 0020), whose
 # text (software-<base>.md) the Runner puts first in a Shift's prompt of this Project's Tasks and
 # a Retrospective may propose changes to. One already there is made the Project's.
 generic() { # name
@@ -137,18 +137,18 @@ generic() { # name
   $dk skill create "$1" --kind generic --file "$here/$1.md" >/dev/null
   echo "skill $1: created"
 }
-company() { # base
+own() { # base
   local name=$prefix-$1
   if $dk skill show "$name" >/dev/null 2>&1; then
     $dk skill set "$name" --project "$project" >/dev/null
     echo "skill $name: there, $project's"
     return
   fi
-  $dk skill create "$name" --kind company --base "$1" --project "$project" --file "$here/software-$1.md" >/dev/null
+  $dk skill create "$name" --kind own --base "$1" --project "$project" --file "$here/software-$1.md" >/dev/null
   echo "skill $name: created"
 }
 for s in triage architecture security qa devops; do generic "$s"; done
-for s in triage architecture security qa devops engineer review breakdown acceptance retro; do company "$s"; done
+for s in triage architecture security qa devops engineer review breakdown acceptance retro; do own "$s"; done
 $dk project set "$project" --acceptance=true --auto-complete=true >/dev/null
 
 if [ -n "${REPO:-}" ]; then
@@ -184,7 +184,7 @@ while IFS=$'\t' read -r name model manager skills; do
   if $dk member show "$name" >/dev/null 2>&1; then echo "agent $name: there"
   else $dk member create "$name" --kind agent >/dev/null; echo "agent $name: created"; fi
   $dk project add "$project" "$name" >/dev/null 2>&1 || true
-  # agents.json names the preset's company Skills software-<base>; here they are <prefix>-<base>.
+  # agents.json names the preset's own Skills software-<base>; here they are <prefix>-<base>.
   for s in $(echo "$skills" | tr ',' ' '); do
     case $s in software-*) s=$prefix-${s#software-} ;; esac
     $dk grant "$name" "$s" >/dev/null 2>&1 || true

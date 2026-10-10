@@ -145,7 +145,7 @@ test("New Project from the sidebar, then Members and Skills from Settings", asyn
     await shot(page, "09-project-members");
   });
 
-  await test.step("New Skill: a generic one, then a company one building on it", async () => {
+  await test.step("New Skill: a generic one, then an own one building on it", async () => {
     await page.goto(`${base}/settings/organisation/skills`);
     await page.getByRole("button", { name: "New Skill" }).click();
     let dialog = page.getByRole("dialog", { name: "New Skill" });
@@ -158,7 +158,7 @@ test("New Project from the sidebar, then Members and Skills from Settings", asyn
     await page.getByRole("button", { name: "New Skill" }).click();
     dialog = page.getByRole("dialog", { name: "New Skill" });
     await dialog.getByLabel("Name", { exact: true }).fill("web-engineer");
-    await dialog.getByRole("radio", { name: "Company" }).click();
+    await dialog.getByRole("radio", { name: "Own" }).click();
     await dialog.getByRole("combobox", { name: "Builds on" }).click();
     await page.getByRole("option", { name: "engineer", exact: true }).click();
     await dialog.getByLabel("Text", { exact: true }).fill("1. Reuse the cart component.\n2. Ship behind a flag.");

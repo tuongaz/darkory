@@ -16,7 +16,7 @@ import (
 // built in.
 const (
 	SkillBuild       = "build"
-	SkillCompany     = "build-acme" // the company Skill the builders work under, which a Retrospective improves
+	SkillOwn         = "build-acme" // the own Skill the builders work under, which a Retrospective improves
 	SkillReview      = "review"
 	SkillQA          = "qa"
 	SkillDocs        = "docs"
@@ -27,11 +27,11 @@ const (
 	SkillSkillReview = "skill-review"
 )
 
-// skills are the Skills the software preset makes when missing, generic ones before the company
+// skills are the Skills the software preset makes when missing, generic ones before the own
 // Skill on them.
 var skills = []client.CreateSkillBody{
 	{Name: SkillBuild, Kind: client.Generic, Body: "Build what the Task describes, test it, and attach the test log."},
-	{Name: SkillCompany, Kind: client.Company, BaseSkill: ptr(SkillBuild), Body: "Build it the Acme way: small commits, tests first, the log attached."},
+	{Name: SkillOwn, Kind: client.Own, BaseSkill: ptr(SkillBuild), Body: "Build it the Acme way: small commits, tests first, the log attached."},
 	{Name: SkillReview, Kind: client.Generic, Body: "Read the change and its Evidence; complete with what you checked."},
 	{Name: SkillQA, Kind: client.Generic, Body: "Try the change end to end and say what worked."},
 	{Name: SkillDocs, Kind: client.Generic, Body: "Write the help page or the demo the Task asks for."},
@@ -65,8 +65,8 @@ type Spec struct {
 // Roster is every bot of the software preset.
 var Roster = []Spec{
 	{Name: "planner", Role: RolePlanner, Projects: []string{"WEB"}, Skills: []string{SkillBreakdown}, Model: "claude-opus-5-5"},
-	{Name: "builder-1", Role: RoleBuilder, Projects: []string{"WEB"}, Skills: []string{SkillBuild, SkillCompany, SkillQA}, Model: "claude-sonnet-5-5"},
-	{Name: "builder-2", Role: RoleBuilder, Projects: []string{"WEB"}, Skills: []string{SkillBuild, SkillCompany, SkillQA}, Model: "claude-opus-5-5"},
+	{Name: "builder-1", Role: RoleBuilder, Projects: []string{"WEB"}, Skills: []string{SkillBuild, SkillOwn, SkillQA}, Model: "claude-sonnet-5-5"},
+	{Name: "builder-2", Role: RoleBuilder, Projects: []string{"WEB"}, Skills: []string{SkillBuild, SkillOwn, SkillQA}, Model: "claude-opus-5-5"},
 	{Name: "reviewer", Role: RoleReviewer, Projects: []string{"WEB", "OPS"}, Skills: []string{SkillReview, SkillSkillReview}, Model: "claude-opus-5-5"},
 	{Name: "retro", Role: RoleRetro, Projects: []string{"WEB"}, Skills: []string{SkillRetro}, Model: "claude-sonnet-5-5"},
 	{Name: "lapser", Role: RoleLapser, Projects: []string{"OPS"}, Skills: []string{SkillTriage}, Model: "claude-haiku-4-5"},

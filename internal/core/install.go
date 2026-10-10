@@ -51,7 +51,7 @@ var seededSkills = []struct {
 	{SkillAcceptance, "Confirm a Parent as a whole before it is called done. Read the Parent, its Subtasks, their Notes and Evidence, " +
 		"and check that together they do what the Parent asks. Advance this Task into Done when they do. When something is missing, " +
 		"file a Subtask under the Parent for each thing, then advance this Task; Darkory files a new Acceptance once they are done.", true},
-	{SkillRetro, "Run a Parent's Retrospective. Read the Observations recorded on its Subtasks, propose a new version of any company " +
+	{SkillRetro, "Run a Parent's Retrospective. Read the Observations recorded on its Subtasks, propose a new version of any own " +
 		"Skill that should change and advance this Task to skill review, and file new Tasks for problems that need work rather than a " +
 		"Skill change.", true},
 	{SkillSkillReview, "Review a proposed Skill version. Advance this Task into Done to publish it, or back to the Retrospective with a " +
