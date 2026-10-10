@@ -409,10 +409,11 @@ describe("a Task's pull request", () => {
     expect((await bar()).queryByRole("button", { name: "Merge" })).not.toBeInTheDocument();
   });
 
-  it("gives its Owner Merge while it is open and a Runner is attached; the dialog names the branch it lands on", async () => {
+  it("gives its Owner Merge while it is open and a Runner is attached; the dialog says the pull request lands on its base", async () => {
     const api = mockApi(
       taskRoutes({
-        "GET /v1/tasks/:task": landed("open"),
+        // Renamed since its branch was made: the dialog names no branch from the title.
+        "GET /v1/tasks/:task": landed("open", { title: "Renamed since" }),
         ...runner(true),
         "POST /v1/tasks/:task/pull-request/merge": refuse(409, "conflict", "Pull request #7 is not mergeable: checks failing"),
       }),
@@ -420,6 +421,8 @@ describe("a Task's pull request", () => {
     renderApp("/tasks/WEB-1");
     await userEvent.click(await (await bar()).findByRole("button", { name: "Merge" }));
     const dialog = await screen.findByRole("dialog", { name: "Merge #7 into trunk" });
+    expect(dialog).toHaveTextContent("#7 lands on trunk");
+    expect(dialog).not.toHaveTextContent("web-1-renamed-since");
     await userEvent.click(within(dialog).getByRole("button", { name: "Merge" }));
     await waitFor(() => expect(posted(api, "/pull-request/merge")).toBeDefined());
     expect(posted(api, "/pull-request/merge")?.path).toBe(`/v1/tasks/${copy.id}/pull-request/merge`);

@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { taskBranch } from "@/lib/branch";
 import { cn } from "@/lib/utils";
 import { liveClaim } from "@/work";
 import { Combobox } from "../board/Combobox";
@@ -344,7 +343,7 @@ export function MergeDialog({ detail, open, onOpenChange, onRefused }: DialogPro
     >
       <Consequences>
         <Consequence mark={<GitMergeIcon />}>
-          {taskBranch(task.key, task.title)} lands on {base}
+          #{pr.number} lands on {base}
         </Consequence>
         <Consequence mark={<UserRoundIcon />}>On GitHub, as the account the Runner signs in with</Consequence>
       </Consequences>
