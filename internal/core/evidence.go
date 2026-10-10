@@ -37,16 +37,18 @@ type NewEvidence struct {
 
 // MayAttachEvidence refuses a caller who may not attach Evidence to target, before the file is
 // uploaded; AttachEvidence checks again under the counter.
-func (s *Service) MayAttachEvidence(ctx context.Context, c *auth.Caller, target EvidenceTarget) error {
-	_, _, err := evidenceTarget(ctx, s.store, c, target, s.clock.Now())
+func (s *Service) MayAttachEvidence(ctx context.Context, c *auth.Caller, target EvidenceTarget, kind string) error {
+	_, _, err := evidenceTarget(ctx, s.store, c, target, kind, s.clock.Now())
 	return err
 }
 
-// evidenceTarget resolves target and checks the caller may attach to it: a held Task needs its
-// Claim (plan invariant 6); a Task nobody holds, its Owner or a Member of its Project. It returns
-// the Claim the Evidence belongs to: the one target names, which must be the caller's on the Task,
-// else the caller's current Claim when it holds the Task, else nil.
-func evidenceTarget(ctx context.Context, r store.Reader, c *auth.Caller, target EvidenceTarget, now time.Time) (Task, *string, error) {
+// evidenceTarget resolves target and checks the caller may attach Evidence of kind to it: a held
+// Task needs its Claim (plan invariant 6); a Task nobody holds, its Owner or a Member of its
+// Project. A Shift's log naming the caller's own ended Claim is that Claim's, not the current
+// holder's work, so it is taken whoever holds the Task now. It returns the Claim the Evidence
+// belongs to: the one target names, which must be the caller's on the Task, else the caller's
+// current Claim when it holds the Task, else nil.
+func evidenceTarget(ctx context.Context, r store.Reader, c *auth.Caller, target EvidenceTarget, kind string, now time.Time) (Task, *string, error) {
 	id, err := resolveTask(ctx, r, c.OrgID, target.Task)
 	if err != nil {
 		return Task{}, nil, err
@@ -55,25 +57,33 @@ func evidenceTarget(ctx context.Context, r store.Reader, c *auth.Caller, target 
 	if err != nil {
 		return Task{}, nil, err
 	}
-	if t.Claim != nil {
+	var claim *string
+	ended := false
+	if target.Claim != "" {
+		named := shortid.Canonical(target.Claim) // either form (ADR 0017)
+		var endedAt sql.NullInt64
+		err := r.QueryRow(ctx, `SELECT ended_at FROM claims WHERE org_id = $1 AND id = $2 AND task_id = $3 AND holder_id = $4`,
+			c.OrgID, named, t.ID, c.MemberID).Scan(&endedAt)
+		if errors.Is(err, sql.ErrNoRows) {
+			return t, nil, refuse(CodeForbidden, "the Claim is not yours: name a Claim of yours on %s", t.Key)
+		}
+		if err != nil {
+			return t, nil, err
+		}
+		claim, ended = &named, endedAt.Valid
+	}
+	switch {
+	case kind == EvidenceKindLog && ended:
+	case t.Claim != nil:
 		err = holds(c, t)
-	} else {
+	default:
 		err = inProjectOrOwner(ctx, r, c, t, "attach Evidence, while nobody holds it, to")
 	}
 	if err != nil {
 		return t, nil, err
 	}
-	if target.Claim != "" {
-		claim := shortid.Canonical(target.Claim) // either form (ADR 0017)
-		var mine int
-		if err := r.QueryRow(ctx, `SELECT COUNT(*) FROM claims WHERE org_id = $1 AND id = $2 AND task_id = $3 AND holder_id = $4`,
-			c.OrgID, claim, t.ID, c.MemberID).Scan(&mine); err != nil {
-			return t, nil, err
-		}
-		if mine == 0 {
-			return t, nil, refuse(CodeForbidden, "the Claim is not yours: name a Claim of yours on %s", t.Key)
-		}
-		return t, &claim, nil
+	if claim != nil {
+		return t, claim, nil
 	}
 	if t.Claim != nil {
 		return t, &t.Claim.ID, nil
@@ -92,7 +102,7 @@ func (s *Service) AttachEvidence(ctx context.Context, c *auth.Caller, target Evi
 		return Evidence{}, refuse(CodeInvalid, "Evidence is of kind evidence or log, not %q", ne.Kind)
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
-		task, claim, err := evidenceTarget(ctx, t, c, target, t.now)
+		task, claim, err := evidenceTarget(ctx, t, c, target, ne.Kind, t.now)
 		if err != nil {
 			return nil, err
 		}

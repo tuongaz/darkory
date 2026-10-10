@@ -67,7 +67,7 @@ func (s *Server) attachEvidence(w http.ResponseWriter, r *http.Request, target c
 		return
 	}
 	// Refuse before uploading anything; the write checks again under the counter.
-	if err := s.core.MayAttachEvidence(ctx, c, target); err != nil {
+	if err := s.core.MayAttachEvidence(ctx, c, target, kind); err != nil {
 		s.fail(w, r, err)
 		return
 	}

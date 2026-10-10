@@ -632,7 +632,7 @@ func TestEvidenceClaim(t *testing.T) {
 		if _, err := attach(lead, "00000000-0000-4000-8000-999999999999", ""); codeOf(err) != core.CodeForbidden {
 			t.Errorf("naming no Claim at all: %v", err)
 		}
-		if err := f.svc.MayAttachEvidence(ctx, lead, core.EvidenceTarget{Task: task.Key, Claim: held}); codeOf(err) != core.CodeForbidden {
+		if err := f.svc.MayAttachEvidence(ctx, lead, core.EvidenceTarget{Task: task.Key, Claim: held}, core.EvidenceKindLog); codeOf(err) != core.CodeForbidden {
 			t.Errorf("before the upload, naming another Member's Claim: %v", err)
 		}
 		var got []string
@@ -648,6 +648,22 @@ func TestEvidenceClaim(t *testing.T) {
 		}
 		if want := fmt.Sprint([]string{held, held, "none"}); fmt.Sprint(listed) != want {
 			t.Errorf("the Task's Evidence %v, want %s", listed, want)
+		}
+
+		// A Shift's log is its Claim's, not the current holder's work: naming its own ended Claim,
+		// it is taken while another Member holds the Task. Anything else keeps the holder's rule.
+		f.claim(lead, task.Key, noTimeout)
+		if e, err := attach(builder, held, core.EvidenceKindLog); err != nil || claimOf(e) != held {
+			t.Fatalf("the log of an ended Claim while another holds: %s, %v", claimOf(e), err)
+		}
+		if err := f.svc.MayAttachEvidence(ctx, builder, core.EvidenceTarget{Task: task.Key, Claim: held}, core.EvidenceKindLog); err != nil {
+			t.Errorf("before the upload, the log of an ended Claim while another holds: %v", err)
+		}
+		if _, err := attach(builder, held, core.EvidenceKindEvidence); codeOf(err) != core.CodeNotHolder {
+			t.Errorf("Evidence naming an ended Claim while another holds: %v", err)
+		}
+		if _, err := attach(builder, "", core.EvidenceKindLog); codeOf(err) != core.CodeNotHolder {
+			t.Errorf("a log naming no Claim while another holds: %v", err)
 		}
 	})
 }
