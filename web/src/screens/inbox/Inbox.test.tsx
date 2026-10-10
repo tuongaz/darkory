@@ -153,12 +153,17 @@ describe("the Inbox", () => {
       const r = row(needs, "WEB-1");
       expect(r).toHaveTextContent("Landed 1");
       expect(r).toHaveTextContent("Awaits your merge");
-      expect(within(r).getByRole("link", { name: "#7 open" })).toHaveAttribute("href", url);
+      // The chip: in its column on a desktop, on the second line on a phone.
+      for (const chip of within(r).getAllByRole("link", { name: "#7 open" })) expect(chip).toHaveAttribute("href", url);
       const open = within(r).getByRole("link", { name: "Open #7" });
       expect(open).toHaveAttribute("href", url);
       expect(open).toHaveAttribute("rel", "noreferrer noopener");
       expect(within(r).queryByRole("button", { name: /Merge/ })).not.toBeInTheDocument();
-      expect(within(r).getByRole("time")).toHaveAttribute("datetime", doneAt);
+      for (const time of within(r).getAllByRole("time")) expect(time).toHaveAttribute("datetime", doneAt);
+      // A phone's second line carries the chip and the why with the Done time; the act stays at the row's end.
+      const phone = r.querySelector<HTMLElement>("[data-phone-line]")!;
+      expect(within(phone).getByRole("link", { name: "#7 open" })).toHaveAttribute("href", url);
+      expect(phone).toHaveTextContent(/Awaits your merge\s*·\s*\d{2}:\d{2}/);
       // The read asks /v1 for exactly these: my Done Tasks whose pull request is open.
       const read = calls.find((c) => c.path === "/v1/tasks" && c.query.get("state") === "done");
       expect(read?.query.getAll("filter")).toEqual([`owner:is:${ada.id}`, "pull_request:is:open"]);

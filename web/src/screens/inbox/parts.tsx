@@ -116,9 +116,12 @@ export function TaskRow({
   when,
   whenWhat,
   action,
+  phone,
 }: {
   task: Task;
   project: Project | undefined;
+  /** What a phone's second line says after the key, where the wide columns fold away. */
+  phone?: ReactNode;
   stands?: ReactNode;
   marks?: ReactNode;
   by?: ReactNode;
@@ -141,11 +144,12 @@ export function TaskRow({
       <span className="flex min-w-0 flex-col md:flex-row md:items-center md:gap-2">
         <RowLink to={peek(task.key)}>{task.title}</RowLink>
         {project && <LabelPills ids={task.labels} labels={labels} className="hidden md:flex" />}
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground md:hidden">
+        <span data-phone-line className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground md:hidden">
           {project && <ProjectMark project={project} />}
-          {task.key}
+          <span className="flex-none whitespace-nowrap">{task.key}</span>
           {stands && <span aria-hidden>·</span>}
           {stands}
+          {phone}
         </span>
       </span>
       <span className={cn(wide, "items-center gap-1.5")}>{marks}</span>
