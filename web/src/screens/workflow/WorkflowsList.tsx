@@ -64,7 +64,7 @@ export function WorkflowsList({ project, graph, acts }: { project: Project; grap
   const columns = useMemo(() => (data ? columnsOf(graph, data, done) : undefined), [graph, data, done]);
   const [selected, setSelected] = useState<string | null>(null);
   const openTask = useOpenTask();
-  const actionFor = useFirstMove(data?.records ?? []);
+  const actionFor = useFirstMove(data?.records ?? noRecords);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   if (error) return <Refusal error={error} className="m-6" />;
@@ -228,6 +228,8 @@ function WorkflowColumn({
     </li>
   );
 }
+
+const noRecords: LineData["records"] = [];
 
 const openTasks = (n: number) => (n === 0 ? "no open Tasks" : `${n} ${n === 1 ? "Task" : "Tasks"}`);
 

@@ -22,10 +22,14 @@ export function useOpenTask() {
 /** The button for a selected Task's first move, from the open Tasks' records: Answer, Claim. */
 export function useFirstMove(records: readonly Task[]) {
   const recordOf = useMemo(() => new Map<string, Task>(records.map((t) => [t.id, t])), [records]);
-  return (first: Chain["first"]) => {
-    if (first.kind === "none") return null;
-    const task = recordOf.get(first.task.id);
-    if (!task) return null;
-    return first.kind === "answer" ? <AnswerButton task={task} /> : <ClaimButton task={task} />;
-  };
+  // The same function while the records stay: a line it is passed to is not drawn again for it.
+  return useCallback(
+    (first: Chain["first"]) => {
+      if (first.kind === "none") return null;
+      const task = recordOf.get(first.task.id);
+      if (!task) return null;
+      return first.kind === "answer" ? <AnswerButton task={task} /> : <ClaimButton task={task} />;
+    },
+    [recordOf],
+  );
 }
