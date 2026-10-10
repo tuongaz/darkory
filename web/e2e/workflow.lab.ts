@@ -177,6 +177,44 @@ const claimOf = (n: number, holder: string) => ({
   started_at: new Date().toISOString(),
 });
 
+// A busy Build (vf-4, fixture.json's projects.DARK.busy): one held chip and "13 waiting ›"; a
+// click opens Build's list in place, oldest first, five, then "8 more Tasks"; Escape closes it.
+for (const size of sizes) {
+  test(`a busy Step, ${size.name}`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 2 });
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    await mockV1(page, "ada", { busy: true });
+    await page.goto("/projects/WEB/workflows/wf-work");
+    const live = page.getByRole("region", { name: "Workflow", exact: true });
+    const build = live.locator('li[data-station="st-build"]');
+    const count = live.getByRole("button", { name: "Build: 13 waiting" });
+    await expect(count).toHaveText("13 waiting›");
+    await expect(build.locator("[data-tasks] button[data-task]")).toHaveCount(1);
+    await page.waitForTimeout(300);
+    await shot(page, `busy-closed-${size.name}`);
+    const qa = await live.locator('li[data-station="st-qa"]').boundingBox();
+    await count.click();
+    const list = live.getByRole("group", { name: "Build · 13 waiting" });
+    await expect(list.getByRole("button")).toHaveCount(5);
+    await expect(list.getByRole("button").first()).toContainText("WEB-40");
+    await expect(list.getByRole("link", { name: "8 more Tasks" })).toHaveAttribute("href", "/projects/WEB/tasks?filter.tasks=step%3Ais%3Ast-build");
+    // A click moves the rows below down, and the rail follows them.
+    const moved = await live.locator('li[data-station="st-qa"]').boundingBox();
+    expect(moved!.y).toBeGreaterThan(qa!.y + 100);
+    await page.waitForTimeout(300);
+    const dot = await live.locator('circle[data-dot="st-qa"]').boundingBox();
+    expect(Math.abs(dot!.y + dot!.height / 2 - (moved!.y + 21))).toBeLessThan(8);
+    await noSidewaysScroll(page);
+    await shot(page, `busy-open-${size.name}`);
+    await page.keyboard.press("Escape");
+    await expect(list).toHaveCount(0);
+    await expect(count).toBeFocused();
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+}
+
 // The live line as things happen: a pickup reads "now" with its tag, a Task travels its Connector
 // (shot mid-way) and lands, a lapse is tagged; in light and dark, at a phone's size, and with
 // reduced motion, no token.

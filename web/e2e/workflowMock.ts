@@ -150,6 +150,34 @@ export const tasks = [
   task(13, "Export the ledger totals", "st-review", { state: "done", step_id: undefined, last_step_id: "st-review" }),
 ];
 
+/**
+ * A busy afternoon at Build (fixture.json's projects.DARK.busy, on WEB's Workflow): builder-1 holds
+ * one Task 18 minutes in, 13 more wait there, 2 minutes to 1h 28m; the rest of WEB as it is.
+ */
+const busyWaiting: [title: string, minutes: number][] = [
+  ["Inbox: a question's Parent in the row", 2],
+  ["Board: drag a card between Steps", 5],
+  ["Agents: a Shift's log streams live", 9],
+  ["Labels: colour picker keeps the hue", 14],
+  ["Tasks list: group by Workflow", 21],
+  ["Record: Evidence previews for logs", 27],
+  ["Workflow page: the Loops list folds", 33],
+  ["Settings: Workspace kind picker", 41],
+  ["CLI: tasks --workflow on a Project of one", 48],
+  ["Runner: nudge after a silent Shift", 55],
+  ["Peek: Markdown in a Note", 62],
+  ["Activity: fold a Shift log onto its Claim", 75],
+  ["Filters: saved View by address", 88],
+];
+export function busyTasks(): Record<string, unknown>[] {
+  const ago = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+  return [
+    ...tasks.filter((t) => t.step_id !== "st-build"),
+    task(5, "Filters: a saved View is shared by its address", "st-build", { step_since: ago(25), claim: claim(5, "m-builder-1", 18) }),
+    ...busyWaiting.map(([title, m], i) => task(28 + i, title, "st-build", { step_since: ago(m), waiting_since: ago(m) })),
+  ];
+}
+
 const session = (n: number, member: string, state: string) => ({
   task_id: `k-${n}`,
   member_id: member,
@@ -284,11 +312,11 @@ export function applyBody(wf: ReturnType<typeof initialWorkflow>, body: Body): R
 }
 
 /** Answers every /v1 read the shell and the Workflow screens make, as `who`; returns the Tasks it serves, to change. */
-export async function mockV1(page: Page, who: "ada" | "bob" = "ada") {
+export async function mockV1(page: Page, who: "ada" | "bob" = "ada", opts: { busy?: boolean } = {}) {
   let wf = initialWorkflow();
   const skillList = skills.map((x) => ({ ...x }));
   // This page's own Tasks, which a lab may change before it delivers the entry that says so.
-  const list: Record<string, unknown>[] = tasks.map((t) => ({ ...t }));
+  const list: Record<string, unknown>[] = (opts.busy ? busyTasks() : tasks).map((t) => ({ ...t }));
   await page.addInitScript(fakeStream);
   const me = who === "ada" ? members[0] : { ...human("m-bob", "bob"), admin: false };
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
