@@ -127,7 +127,7 @@ describe("Also starts here", () => {
     const backlog = group.querySelector<HTMLElement>('[data-side="backlog"]')!;
     expect(within(backlog).getByText("hold")).toBeInTheDocument();
     // Its Task waits in the hold: counted, "1 waiting", as vf-1 draws it.
-    expect(within(backlog).getByRole("button", { name: "Backlog: 1 waiting" })).toBeInTheDocument();
+    expect(within(backlog).getByRole("button", { name: "Backlog: 1 Task waiting" })).toBeInTheDocument();
     expect(backlog.querySelector("[data-mark]")).toHaveTextContent("⇢ Build");
     const plan = group.querySelector<HTMLElement>('[data-side="plan"]')!;
     expect([...plan.querySelectorAll("[data-mark]")].map((m) => m.textContent)).toEqual(["● done → Done", "↳ Build"]);

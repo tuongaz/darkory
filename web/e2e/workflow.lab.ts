@@ -188,7 +188,7 @@ for (const size of sizes) {
     await page.goto("/projects/WEB/workflows/wf-work");
     const live = page.getByRole("region", { name: "Workflow", exact: true });
     const build = live.locator('li[data-station="st-build"]');
-    const count = live.getByRole("button", { name: "Build: 13 waiting" });
+    const count = live.getByRole("button", { name: "Build: 13 Tasks waiting" });
     await expect(count).toHaveText("13 waiting›");
     await expect(build.locator("[data-tasks] button[data-task]")).toHaveCount(1);
     await page.waitForTimeout(300);

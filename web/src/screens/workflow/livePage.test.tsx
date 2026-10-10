@@ -42,7 +42,7 @@ function serve(tasks: Task[], who = ada) {
 
 const line = () => screen.getByRole("region", { name: "Workflow" });
 const tokenOf = (key: string) => line().querySelector<HTMLElement>(`button[data-task="${key}"]:not([data-step-list] *)`);
-/** A Step's count on the line, "Build: 2 waiting", once the line is drawn. */
+/** A Step's count on the line, "Build: 2 Tasks waiting", once the line is drawn. */
 const countAt = (step: string) => waitFor(() => within(line()).getByRole("button", { name: new RegExp(`^${step}: `) }));
 /** A Step's list, opened from its count. */
 async function listAt(step: string) {
@@ -68,9 +68,9 @@ describe("the Workflow page", () => {
     await waitFor(() => expect(tokenOf("WEB-1")).not.toBeNull());
     expect(tokenOf("WEB-1")).toHaveAccessibleName("WEB-1 Normalise names, held by builder (agent)");
     expect(tokenOf("WEB-1")).toHaveAttribute("data-state", "held");
-    expect(await countAt("Build")).toHaveAccessibleName("Build: 1 waiting");
+    expect(await countAt("Build")).toHaveAccessibleName("Build: 1 Task waiting");
     expect(within(await listAt("Build")).getByRole("button")).toHaveAccessibleName("WEB-2 Task 2, waiting");
-    expect(await countAt("Review")).toHaveAccessibleName("Review: 1 waiting");
+    expect(await countAt("Review")).toHaveAccessibleName("Review: 1 Task waiting");
     expect(line().querySelector('[data-task="WEB-6"]')).toBeNull();
     // Retro and Skill review run on the quiet line when a Parent ends.
     expect(within(line()).getByRole("region", { name: "When a Parent ends" })).toBeInTheDocument();
@@ -204,7 +204,7 @@ describe("the Workflow page", () => {
     expect(within(line()).getByText("Next for WEB-7")).toBeInTheDocument();
     // × widens it again.
     await userEvent.click(screen.getByRole("button", { name: "All Tasks" }));
-    await waitFor(() => expect(within(line()).getByRole("button", { name: /^Build: / })).toHaveAccessibleName("Build: 3 waiting"));
+    await waitFor(() => expect(within(line()).getByRole("button", { name: /^Build: / })).toHaveAccessibleName("Build: 3 Tasks waiting"));
   });
 
   it("the Filter narrows the tokens like a scope: what it leaves out counts into its Step's +N", async () => {
@@ -237,7 +237,7 @@ describe("the Workflow page", () => {
     const options = await screen.findAllByRole("option");
     expect(options.map((o) => o.textContent)).toEqual(["All Tasks2", "WEB-7Emoji reactions1 open", "No Parent1"]);
     await userEvent.click(options[2]);
-    await waitFor(() => expect(within(line()).getByRole("button", { name: /^Build: / })).toHaveAccessibleName("Build: 1 waiting"));
+    await waitFor(() => expect(within(line()).getByRole("button", { name: /^Build: / })).toHaveAccessibleName("Build: 1 Task waiting"));
     expect(keys(await listAt("Build"))).toEqual(["WEB-10"]);
   });
 

@@ -346,7 +346,7 @@ describe("a Parent's page", () => {
     );
     renderApp("/tasks/WEB-3?view=line");
     const line = await within(await screen.findByRole("region", { name: "Subtasks" })).findByRole("region", { name: "Subtask line" });
-    await userEvent.click(await within(line).findByRole("button", { name: "Review: 7 waiting" }));
+    await userEvent.click(await within(line).findByRole("button", { name: "Review: 7 Tasks waiting" }));
     const href = within(within(line).getByRole("group", { name: "Review · 7 waiting" })).getByRole("link", { name: "2 more Tasks" }).getAttribute("href")!;
     expect(href.startsWith("/projects/WEB/tasks?")).toBe(true);
     expect(new URLSearchParams(href.split("?")[1]).getAll("filter.tasks")).toEqual([`step:is:${step.review}`, `parent:is:${checkout.id}`]);
@@ -360,7 +360,7 @@ describe("a Parent's page", () => {
     const section = await screen.findByRole("region", { name: "Subtasks" });
     const line = await within(section).findByRole("region", { name: "Subtask line" });
     // WEB-5 waits at Review: counted there.
-    expect(await within(line).findByRole("button", { name: "Review: 1 waiting" })).toBeInTheDocument();
+    expect(await within(line).findByRole("button", { name: "Review: 1 Task waiting" })).toBeInTheDocument();
     expect([...line.querySelectorAll("[data-head]")].map((e) => e.getAttribute("data-head"))).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]);
     expect(line.querySelector('button[data-task="WEB-4"]')).toBeNull();
     // WEB-4 does not vanish: the header says it is on Features' line.

@@ -189,7 +189,12 @@ export function VerticalLine({
   };
 
   const at = new Map<string, LineTask[]>();
-  for (const task of tasks) if (task.stepId && !flow.transit.has(task.id)) at.set(task.stepId, [...(at.get(task.stepId) ?? []), task]);
+  for (const task of tasks) {
+    if (!task.stepId || flow.transit.has(task.id)) continue;
+    const list = at.get(task.stepId);
+    if (list) list.push(task);
+    else at.set(task.stepId, [task]);
+  }
   for (const list of at.values()) list.sort((a, b) => Number(!!b.holder) - Number(!!a.holder) || (a.since ?? 0) - (b.since ?? 0));
 
   /** A Task whose live moment plays: it arrived, it pulses, a tag names it. */
@@ -197,18 +202,21 @@ export function VerticalLine({
   /** A waiting Task standing as a chip for now: its live moment plays or it is selected. */
   const standing = (task: LineTask) => moment(task) || selected === task.id;
   /** A Step's Tasks split: its chips (held, at most three, and a waiting one while it stands) and the rest, counted. */
-  const split = (id: string) => {
-    const list = at.get(id) ?? [];
-    const held = list.filter((x) => x.holder);
-    const ids = new Set([...held.slice(0, HELD_CHIPS), ...list.filter((x) => !x.holder && standing(x))].map((x) => x.id));
-    return { held, chips: list.filter((x) => ids.has(x.id)), rest: list.filter((x) => !ids.has(x.id)) };
-  };
+  const splits = new Map(
+    [...at].map(([id, list]) => {
+      const held = list.filter((x) => x.holder);
+      const ids = new Set([...held.slice(0, HELD_CHIPS), ...list.filter((x) => !x.holder && standing(x))].map((x) => x.id));
+      return [id, { held, chips: list.filter((x) => ids.has(x.id)), rest: list.filter((x) => !ids.has(x.id)) }];
+    }),
+  );
+  const nothing = { held: [], chips: [], rest: [] };
+  const split = (id: string) => splits.get(id) ?? nothing;
 
   // A count pulses once when a Task folds into it: a waiting Task whose moment stood it as a chip
   // drops into the count as the moment ends. Nothing else that changes a count (a Filter, a scope, a
   // refetch, a deselection) pulses it.
   const playing = JSON.stringify([...at].sort().map(([id, list]) => [id, list.filter((x) => !x.holder && moment(x)).map((x) => x.id)]));
-  const counted = JSON.stringify([...at.keys()].sort().map((id) => [id, split(id).rest.map((x) => x.id)]));
+  const counted = JSON.stringify([...splits].sort().map(([id, x]) => [id, x.rest.map((r) => r.id)]));
   const was = useRef<{ playing: Map<string, string[]>; counted: Map<string, string[]> } | null>(null);
   const beats = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
@@ -229,6 +237,8 @@ export function VerticalLine({
     const timers = beats.current;
     return () => timers.forEach(clearTimeout);
   }, []);
+  // A list whose count has emptied closes, so it never opens again on its own when a Task returns.
+  if (open !== null && split(open).rest.length === 0) setOpen(null);
 
   const traversed = new Set(trace?.traversed ?? []);
   const next = new Set(trace?.next ?? []);
@@ -391,7 +401,9 @@ export function VerticalLine({
     const { held, chips, rest } = split(id);
     const n = hidden?.get(id) ?? 0;
     const hold = !!s && isHoldStep(s);
-    const text = `${rest.length} ${held.length > HELD_CHIPS ? "more" : "waiting"}`;
+    const more = held.length > HELD_CHIPS;
+    const text = `${rest.length} ${more ? "more" : "waiting"}`;
+    const tasksWord = rest.length === 1 ? "Task" : "Tasks";
     const shown = open === id && rest.length > 0;
     const controls = `${listId}-${id}`;
     return (
@@ -400,8 +412,8 @@ export function VerticalLine({
         {rest.length > 0 && (
           <Count
             stepId={id}
-            stepName={name(id)}
             text={text}
+            label={`${name(id)}: ${rest.length} ${more ? `more ${tasksWord}` : `${tasksWord} waiting`}`}
             hold={hold}
             open={shown}
             controls={controls}
@@ -424,7 +436,7 @@ export function VerticalLine({
             hold={hold}
             now={now}
             href={stepHref?.(id)}
-            onPick={(task) => (onSelect ? onSelect(task.id) : onOpenTask?.(task.key))}
+            onPick={onSelect ? (task) => onSelect(task.id) : onOpenTask && ((task) => onOpenTask(task.key))}
             onKeyDown={closeOnEscape}
           />
         )}

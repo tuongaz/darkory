@@ -34,7 +34,7 @@ const ages = [2, 5, 9, 14, 21, 27, 33, 41, 48, 55, 62, 75, 88];
 const BUSY: LineTask[] = [held(21, "build", "builder", 18), ...ages.map((a, i) => waiting(28 + i, "build", a)), held(19, "review", "reviewer", 6)];
 
 const href = (stepId: string) => `/projects/DARK/tasks?filter.tasks=${encodeURIComponent(`step:is:${stepId}`)}`;
-function draw(tasks: readonly LineTask[], flow?: FlowState, onSelect?: (id: string | null) => void) {
+function draw(tasks: readonly LineTask[], flow?: FlowState, onSelect: (id: string | null) => void = () => {}) {
   return render(
     <MemoryRouter>
       <WorkflowLine workflow={DARK("impl")} tasks={tasks} now={NOW} stepHref={href} flow={flow} onSelect={onSelect} />
@@ -51,7 +51,7 @@ describe("the Tasks at a Step", () => {
     expect(chips(station("build"))).toEqual(["DARK-21"]);
     const pill = count(station("build"))!;
     expect(pill).toHaveTextContent("13 waiting");
-    expect(pill).toHaveAccessibleName("Build: 13 waiting");
+    expect(pill).toHaveAccessibleName("Build: 13 Tasks waiting");
     expect(pill).toHaveAttribute("aria-expanded", "false");
     // Review holds its one Task: a chip and no count.
     expect(chips(station("review"))).toEqual(["DARK-19"]);
@@ -62,6 +62,7 @@ describe("the Tasks at a Step", () => {
     draw([held(1, "build", "a", 40), held(2, "build", "b", 30), held(3, "build", "c", 20), held(4, "build", "d", 10), waiting(5, "build", 3), waiting(6, "build", 1)]);
     expect(chips(station("build"))).toEqual(["DARK-1", "DARK-2", "DARK-3"]);
     expect(count(station("build"))).toHaveTextContent("3 more");
+    expect(count(station("build"))).toHaveAccessibleName("Build: 3 more Tasks");
   });
 
   it("opens the Step's list in place on a click: the waiting Tasks oldest first, five, then 'N more Tasks' to the Tasks list at the Step", async () => {
@@ -126,6 +127,33 @@ describe("the Tasks at a Step", () => {
     expect(within(list).getAllByRole("button").map((r) => r.getAttribute("data-task"))).toEqual(["DARK-50", "DARK-51"]);
     // Five or fewer: no link to the rest.
     expect(within(list).queryByRole("link")).toBeNull();
+  });
+
+  it("says what a blocked row waits on, and reads only where the line can select nothing", async () => {
+    const tasks = [waiting(1, "build", 9, { blockers: [{ id: "k-27", key: "DARK-27", title: "Blocker" }] }), waiting(2, "build", 3)];
+    render(
+      <MemoryRouter>
+        <WorkflowLine workflow={DARK("impl")} tasks={tasks} now={NOW} />
+      </MemoryRouter>,
+    );
+    await userEvent.click(count(station("build"))!);
+    const list = screen.getByRole("group", { name: "Build · 2 waiting" });
+    expect(within(list).queryByRole("button")).toBeNull();
+    expect(list.querySelector('[data-task="DARK-1"]')).toHaveTextContent("DARK-1Task 1blocked by DARK-279m");
+  });
+
+  it("closes a list whose count empties, and never opens it again on its own", async () => {
+    const line = (tasks: readonly LineTask[]) => (
+      <MemoryRouter>
+        <WorkflowLine workflow={DARK("impl")} tasks={tasks} now={NOW} stepHref={href} onSelect={() => {}} />
+      </MemoryRouter>
+    );
+    const { rerender } = render(line([waiting(1, "build", 9)]));
+    await userEvent.click(count(station("build"))!);
+    rerender(line([]));
+    rerender(line([waiting(1, "build", 9)]));
+    expect(count(station("build"))).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("group", { name: /^Build · / })).toBeNull();
   });
 
   it("draws nothing at a Step with no Tasks", () => {

@@ -144,8 +144,8 @@ export function Glyph({ state }: { state: TokenState }) {
  */
 export function Count({
   stepId,
-  stepName,
   text,
+  label,
   hold,
   open,
   controls,
@@ -156,8 +156,10 @@ export function Count({
   buttonRef,
 }: {
   stepId: string;
-  stepName: string;
+  /** What the pill reads: "13 waiting". */
   text: string;
+  /** What it says aloud, with its noun: "Build: 13 Tasks waiting". */
+  label: string;
   hold: boolean;
   open: boolean;
   controls: string;
@@ -175,7 +177,7 @@ export function Count({
       data-count={stepId}
       data-ringed={ringed ? "" : undefined}
       data-pulse={pulse ? "" : undefined}
-      aria-label={`${stepName}: ${text}`}
+      aria-label={label}
       aria-expanded={open}
       aria-controls={open ? controls : undefined}
       onClick={onToggle}
