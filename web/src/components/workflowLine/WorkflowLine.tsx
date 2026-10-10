@@ -1,12 +1,11 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { quiet, type FlowState } from "@/components/workflow/live";
-import { MemberAvatar } from "@/components/MemberAvatar";
 import { cn } from "@/lib/utils";
-import { ChainCallout } from "./Callout";
+import { WayStrip } from "./Callout";
 import { chainOf, type Chain, type Ghost, type Trace } from "./data";
 import { lineTopology } from "./layout";
 import type { LineFacts, LineTask } from "./model";
-import { VerticalLine } from "./Vertical";
+import { VerticalLine, type Way } from "./Vertical";
 import { AFTER_BRANCH } from "./words";
 
 export type WorkflowLineProps = {
@@ -56,8 +55,9 @@ const nobody = { id: "", takeable: new Set<string>() };
  * A Project's Workflow as one line, top to bottom at every width (the final design, vf-1 … vf-6):
  * Start first, each Step a row, the outcomes on the rail, returns as tracks beside it, "Also starts
  * here" beside the start, the Steps where Darkory files a Parent's own Subtasks a quiet row "When a
- * Parent ends"; every Task a token at its Step, a pickup tagged "now". Selecting a token says its
- * Blocking chain and what must end first.
+ * Parent ends"; every Task a token at its Step, a pickup tagged "now". Selecting a token puts its
+ * way in a strip above the line (vf-7): what it can do next, its Blocking chain and what must end
+ * first; its way stays in full ink, its chain ringed, the rest fades.
  */
 export function WorkflowLine(props: WorkflowLineProps) {
   const topology = useMemo(() => lineTopology(props.workflow), [props.workflow]);
@@ -65,8 +65,6 @@ export function WorkflowLine(props: WorkflowLineProps) {
   const all = props.all ?? props.tasks;
   const me = props.me ?? nobody;
   const ring = props.ringed;
-  const ringed = useMemo<ReadonlySet<string>>(() => new Set(typeof ring === "string" ? [ring] : (ring ?? [])), [ring]);
-
   const { onSelect, selected } = props;
   useEffect(() => {
     if (!selected || !onSelect) return;
@@ -79,23 +77,68 @@ export function WorkflowLine(props: WorkflowLineProps) {
   const chain = useMemo(() => (selected ? chainOf(selected, all, me) : undefined), [selected, all, me]);
   // A question the chain waits on, with a Member at no Step: it stands with the chain.
   const aimed = chain?.upstream.flat().find((x) => x.aimedAt && !x.stepId);
+  const inChain = useMemo(() => (chain ? new Set([chain.task.id, ...chain.upstream.flat().map((x) => x.id), ...chain.downstream.map((x) => x.id)]) : undefined), [chain]);
+  // The chain's Tasks are ringed on the line, beside what is lit from outside.
+  const ringed = useMemo<ReadonlySet<string>>(() => new Set([...(typeof ring === "string" ? [ring] : (ring ?? [])), ...(inChain ?? [])]), [ring, inChain]);
+
+  const task = chain?.task;
+  const nameOf = (id: string | null) => (id === null ? "Done" : (topology.others.get(id) ?? props.workflow.steps.find((s) => s.id === id)?.name ?? "a Step"));
+  const next = task?.stepId
+    ? props.workflow.connectors
+        .filter((c) => c.from === task.stepId)
+        .sort((a, b) => a.position - b.position)
+        .map((c) => ({ outcome: c.name, to: nameOf(c.to) }))
+    : [];
+  // Its way in: the trace says it when the line is this one Task's (its scope draws it alone), else its Step is.
+  const trace = props.trace;
+  const traced = !!task && !!trace && props.tasks.length === 1 && props.tasks[0].id === task.id;
+  const way: Way | undefined =
+    task && inChain
+      ? {
+          id: task.id,
+          stepId: task.stepId,
+          chain: inChain,
+          entered: traced ? [...trace.traversed].reverse().find((id) => topology.entries.some((e) => e.connector.id === id)) : undefined,
+          from: traced ? trace.stays[0]?.stepId : task.stepId,
+        }
+      : undefined;
+
+  // The strip takes the focus as it appears; cleared, the focus goes back to the Task's chip, or to
+  // the count it folded into, unless it has gone elsewhere on the page.
+  const box = useRef<HTMLDivElement>(null);
+  const strip = useRef<HTMLElement>(null);
+  const back = useRef<{ key: string; stepId?: string } | null>(null);
+  const [selKey, selStep] = [task?.key, task?.stepId];
+  useEffect(() => {
+    if (selKey) {
+      back.current = { key: selKey, stepId: selStep };
+      strip.current?.querySelector<HTMLElement>("button, a[href]")?.focus();
+      return;
+    }
+    const was = back.current;
+    back.current = null;
+    const root = box.current;
+    if (!was || !root) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && !root.contains(active)) return;
+    const to = root.querySelector<HTMLElement>(`[data-box="token"][data-task="${was.key}"]`) ?? (was.stepId ? root.querySelector<HTMLElement>(`button[data-count="${was.stepId}"]`) : null);
+    to?.focus();
+  }, [selKey, selStep]);
 
   return (
-    <div role="region" aria-label={props.label ?? "Workflow line"} data-orientation="vertical" className={cn("w-full min-w-0", props.className)}>
+    <div ref={box} role="region" aria-label={props.label ?? "Workflow line"} data-orientation="vertical" className={cn("w-full min-w-0", props.className)}>
       {chain && (
-        <div role="dialog" aria-label={`${chain.task.key} Blocking`} className="mb-3 flex flex-col gap-2 rounded-lg border bg-popover px-3 py-2.5 text-popover-foreground shadow-pop">
-          <ChainCallout chain={chain} me={me.id} takeable={me.takeable} action={props.actionFor?.(chain.first)} onOpen={props.onOpenTask} now={props.now} />
-          {aimed?.aimedAt && (
-            <span
-              className="inline-flex h-[26px] w-max items-center gap-1.5 rounded-full border-[1.5px] border-dashed border-state-waiting bg-background pr-2.5 pl-1.5 text-xs whitespace-nowrap"
-              aria-label={`${aimed.key} ${aimed.title}, with ${aimed.aimedAt.id === me.id ? "you" : aimed.aimedAt.name}`}
-            >
-              <MemberAvatar member={aimed.aimedAt} />
-              <span className="font-mono text-[11.5px]">{aimed.key}</span>
-              <span className="text-muted-foreground">with {aimed.aimedAt.id === me.id ? "you" : aimed.aimedAt.name}</span>
-            </span>
-          )}
-        </div>
+        <WayStrip
+          ref={strip}
+          chain={chain}
+          next={next}
+          me={me.id}
+          action={props.actionFor?.(chain.first)}
+          aimed={aimed}
+          onOpen={props.onOpenTask}
+          onClear={() => onSelect?.(null)}
+          now={props.now}
+        />
       )}
       <VerticalLine
         topology={topology}
@@ -112,6 +155,7 @@ export function WorkflowLine(props: WorkflowLineProps) {
         selected={selected}
         onSelect={onSelect}
         ringed={ringed}
+        way={way}
         onOpenTask={props.onOpenTask}
         highlight={props.highlight}
         noBranch={props.noBranch}

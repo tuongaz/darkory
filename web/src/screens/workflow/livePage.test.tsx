@@ -152,37 +152,48 @@ describe("the Workflow page", () => {
     expect(screen.getByRole("button", { name: "Text" })).toBeInTheDocument();
   });
 
-  it("selecting a blocked token says its chain, when it unblocks, and what comes first", async () => {
+  it("selecting a blocked token puts its way above the line: when it unblocks, what comes first and its button; its chain ringed", async () => {
     serve([task(2, { aimed_at_id: ada.id, step_id: undefined, title: "Which format?" }), task(3, blockedBy(2)), task(4, blockedBy(3))]);
     renderApp("/projects/WEB/workflows/wf-work");
     await userEvent.click(within(await listAt("Build")).getByRole("button", { name: /^WEB-4 / }));
     // Selected, it stands as a chip at its Step.
     await waitFor(() => expect(tokenOf("WEB-4")).toHaveAttribute("data-selected"));
-    const callout = await screen.findByRole("dialog", { name: "WEB-4 Blocking" });
-    expect(within(callout).getByLabelText("Blocked by")).toHaveTextContent(/WEB-2With you.*WEB-3.*WEB-4/);
-    expect(callout).toHaveTextContent("Unblocks when WEB-2, then WEB-3 end");
-    expect(callout).toHaveTextContent("First: answer WEB-2");
-    expect(within(callout).getByRole("button", { name: "Answer WEB-2" })).toBeInTheDocument();
-    // The question waits with ada at no Step: a "with you" ghost stands for it on the line.
-    expect(within(line()).getByLabelText("WEB-2 Which format?, with you")).toBeInTheDocument();
+    const strip = within(line()).getByRole("region", { name: "WEB-4's way" });
+    expect(strip).toHaveTextContent(/^WEB-4's way/);
+    expect(strip).toHaveTextContent("next: ");
+    expect(strip).toHaveTextContent("Unblocks when WEB-2, then WEB-3 end");
+    expect(strip).toHaveTextContent("First: answer WEB-2");
+    expect(within(strip).getByRole("button", { name: "Answer WEB-2" })).toBeInTheDocument();
+    // The question waits with ada at no Step: a "with you" pill stands for it in the strip.
+    expect(within(strip).getByLabelText("WEB-2 Which format?, with you")).toBeInTheDocument();
+    // WEB-3, in the chain, waits in Build's count: ringed.
+    expect(await countAt("Build")).toHaveAttribute("data-ringed");
+    expect(strip).toContainElement(document.activeElement as HTMLElement);
     await userEvent.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog", { name: "WEB-4 Blocking" })).toBeNull();
+    expect(within(line()).queryByRole("region", { name: "WEB-4's way" })).toBeNull();
+    // WEB-4 waits again: the focus goes back to the count it folded into.
+    expect(await countAt("Build")).toHaveFocus();
   });
 
   it("a blocker selected says what it holds up", async () => {
     serve([task(2), task(3, blockedBy(2)), task(4, blockedBy(3))]);
     renderApp("/projects/WEB/workflows/wf-work");
     await userEvent.click(within(await listAt("Build")).getByRole("button", { name: /^WEB-2 / }));
-    const callout = await screen.findByRole("dialog", { name: "WEB-2 Blocking" });
-    expect(within(callout).getByLabelText("Blocks")).toHaveTextContent(/Blocks 1.*2 in chain/);
-    expect(callout).toHaveTextContent("WEB-3 unblocks when WEB-2 ends; WEB-4 unblocks when WEB-3 ends");
+    const strip = within(line()).getByRole("region", { name: "WEB-2's way" });
+    expect(strip).toHaveTextContent("Blocks 1 · 2 in chain");
+    expect(strip).toHaveTextContent("WEB-3 unblocks when WEB-2 ends; WEB-4 unblocks when WEB-3 ends");
+    expect(strip).not.toHaveTextContent("First:");
   });
 
-  it("opens a selected Task's peek from its callout", async () => {
+  it("opens a selected Task's peek from its strip, and × clears it", async () => {
     serve([task(2)]);
     renderApp("/projects/WEB/workflows/wf-work");
     await userEvent.click(within(await listAt("Build")).getByRole("button", { name: /^WEB-2 / }));
-    await userEvent.click(await screen.findByRole("button", { name: /Open WEB-2/ }));
+    const strip = within(line()).getByRole("region", { name: "WEB-2's way" });
+    await userEvent.click(within(strip).getByRole("button", { name: "Clear" }));
+    expect(within(line()).queryByRole("region", { name: "WEB-2's way" })).toBeNull();
+    await userEvent.click(within(await listAt("Build")).getByRole("button", { name: /^WEB-2 / }));
+    await userEvent.click(within(within(line()).getByRole("region", { name: "WEB-2's way" })).getByRole("button", { name: "Open WEB-2" }));
     expect(await screen.findByRole("dialog", { name: "Task WEB-2" })).toBeInTheDocument();
   });
 

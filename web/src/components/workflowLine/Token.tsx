@@ -53,7 +53,7 @@ export function Token({
   const time = past ? past.text : picked ? "now" : since !== undefined ? tokenTime(now - since) : undefined;
   const by = blockedWords(task);
   return (
-    <span className={cn("relative inline-flex", dim && "wl-dim")}>
+    <span data-dim={dim ? "" : undefined} className="relative inline-flex">
       {tag && (
         <span
           data-tag
@@ -101,9 +101,9 @@ export function Token({
 }
 
 /** A Subtask still to come on a Parent's line: a dashed ghost saying when it will be filed. */
-export function GhostToken({ text, label }: { text: string; label: string }) {
+export function GhostToken({ text, label, dim }: { text: string; label: string; dim?: boolean }) {
   return (
-    <span data-ghost aria-label={`${label} ${text}`} className="wl-token inline-flex h-6 items-center rounded-[6px] border border-dashed px-2 text-xs whitespace-nowrap">
+    <span data-ghost data-dim={dim ? "" : undefined} aria-label={`${label} ${text}`} className="wl-token inline-flex h-6 items-center rounded-[6px] border border-dashed px-2 text-xs whitespace-nowrap">
       {text}
     </span>
   );
@@ -116,9 +116,9 @@ export function Bead({ task, hold, dim }: { task: LineTask; hold: boolean; dim?:
 }
 
 /** The faint count a narrowed line leaves on a Step: "+1". */
-export function HiddenCount({ n }: { n: number }) {
+export function HiddenCount({ n, dim }: { n: number; dim?: boolean }) {
   return (
-    <span aria-label={`${n} more ${n === 1 ? "Task" : "Tasks"} outside this scope`} className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
+    <span data-dim={dim ? "" : undefined} aria-label={`${n} more ${n === 1 ? "Task" : "Tasks"} outside this scope`} className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
       +{n}
     </span>
   );
@@ -150,6 +150,7 @@ export function Count({
   open,
   controls,
   ringed,
+  dim,
   pulse,
   onToggle,
   onKeyDown,
@@ -164,6 +165,8 @@ export function Count({
   open: boolean;
   controls: string;
   ringed?: boolean;
+  /** Off a selected Task's way: faded. */
+  dim?: boolean;
   /** A Task just folded into it: one brief pulse. */
   pulse?: boolean;
   onToggle: () => void;
@@ -176,6 +179,7 @@ export function Count({
       type="button"
       data-count={stepId}
       data-ringed={ringed ? "" : undefined}
+      data-dim={dim ? "" : undefined}
       data-pulse={pulse ? "" : undefined}
       aria-label={label}
       aria-expanded={open}

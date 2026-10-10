@@ -654,6 +654,8 @@
   .wl-bead[data-state="hold"] { border-style: dashed; border-color: var(--muted-foreground); }
   .wl-bead[data-state="done"] { border-color: var(--state-done); background: var(--state-done); }
   .wl-dim { opacity: 0.3; transition: opacity 200ms; }
+  /* Off a selected Task's way (vf-7): faded, still there to hover and click. */
+  [data-line-root] [data-dim] { opacity: 0.25; transition: opacity 200ms; }
   .wl-chain { stroke-dasharray: 2000; animation: wl-draw 200ms ease-out; }
   .wl-travel {
     offset-rotate: 0deg;
@@ -666,7 +668,8 @@
     .wl-count[data-pulse],
     .wl-token[data-arrived],
     .wl-chain,
-    .wl-dim {
+    .wl-dim,
+    [data-line-root] [data-dim] {
       animation: none;
       transition: none;
     }

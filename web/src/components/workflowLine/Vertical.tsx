@@ -126,6 +126,14 @@ type MarkKind = "done" | "exit" | "hand" | "files" | "chip" | "return";
 
 const glyphs: Record<MarkKind, string> = { done: "●", exit: "↗", hand: "⇢", files: "↳", chip: "↗", return: "↩" };
 
+/**
+ * A selected Task's way on the line (vf-7): the Task, its Blocking chain (ringed, in full ink), the
+ * Step it is at, and how it came: the entry it crossed in by, or the Step its way starts at. The
+ * line, its Steps and outcomes stay; the other Tasks, the counts, the entries it did not come by
+ * and "Also starts here" (unless its way runs there) fade.
+ */
+export type Way = { id: string; stepId?: string; chain: ReadonlySet<string>; entered?: string; from?: string };
+
 export function VerticalLine({
   topology: t,
   facts,
@@ -141,6 +149,7 @@ export function VerticalLine({
   selected,
   onSelect,
   ringed,
+  way,
   onOpenTask,
   highlight,
   noBranch,
@@ -161,6 +170,7 @@ export function VerticalLine({
   selected?: string | null;
   onSelect?: (id: string | null) => void;
   ringed?: ReadonlySet<string>;
+  way?: Way;
   onOpenTask?: (key: string) => void;
   highlight?: ReadonlySet<string>;
   noBranch?: boolean;
@@ -283,6 +293,7 @@ export function VerticalLine({
         now={now}
         selected={selected === task.id}
         ringed={!!ringed?.has(task.id)}
+        dim={!!way && !way.chain.has(task.id)}
         pulse={flow.pulses.get(task.id)}
         arrived={flow.arrived.has(task.id)}
         tag={trace ? undefined : tagFor(task)}
@@ -325,6 +336,7 @@ export function VerticalLine({
           data-arrival={id}
           data-connector={e.connector.id}
           data-lit={traversed.has(e.connector.id) ? "true" : undefined}
+          data-dim={way && way.entered !== e.connector.id ? "" : undefined}
           {...hover(e.hint)}
           className={cn(
             "inline-flex h-5 items-center gap-1 rounded-full border px-[7px] text-[11px] font-medium whitespace-nowrap text-muted-foreground",
@@ -418,6 +430,7 @@ export function VerticalLine({
             open={shown}
             controls={controls}
             ringed={rest.some((x) => ringed?.has(x.id))}
+            dim={!!way && !rest.some((x) => way.chain.has(x.id))}
             pulse={folded.has(id)}
             onToggle={() => setOpen(shown ? null : id)}
             onKeyDown={closeOnEscape}
@@ -427,7 +440,7 @@ export function VerticalLine({
             }}
           />
         )}
-        {n > 0 && <HiddenCount n={n} />}
+        {n > 0 && <HiddenCount n={n} dim={!!way} />}
         {shown && (
           <StepList
             id={controls}
@@ -479,9 +492,9 @@ export function VerticalLine({
     return (
       <>
         {atStep(id)}
-        {id === DONE_STATION && done?.map((d) => <Token key={d.id} task={{ id: d.id, key: d.key, title: d.title, kind: "work", blockers: [], done: true }} hold={false} now={now} />)}
+        {id === DONE_STATION && done?.map((d) => <Token key={d.id} task={{ id: d.id, key: d.key, title: d.title, kind: "work", blockers: [], done: true }} hold={false} now={now} dim={!!way} />)}
         {g.map((x) => (
-          <GhostToken key={x.label} text={x.text} label={x.label} />
+          <GhostToken key={x.label} text={x.text} label={x.label} dim={!!way} />
         ))}
       </>
     );
@@ -531,8 +544,10 @@ export function VerticalLine({
     for (const e of t.exits.filter((x) => x.stepId === id)) out.push(mark("exit", e.connector.id, said(e.connector, fullName(e.connector.to)), e.hint, { "data-connector": e.connector.id, "data-chip": "exit", "data-exit": e.connector.id }));
     return out;
   };
+  // A selected Task's way runs through the group when it, or a Task of its chain, is there.
+  const sideLit = !way || tasks.some((x) => way.chain.has(x.id) && !!x.stepId && sideIds.includes(x.stepId));
   const group = sideIds.length > 0 && (
-    <div className="flex w-full min-w-0 basis-full items-start @3xl:basis-auto">
+    <div data-dim={sideLit ? undefined : ""} className="flex w-full min-w-0 basis-full items-start @3xl:basis-auto">
       <span aria-hidden className="relative mt-3 mr-2 hidden h-[1.5px] w-7 flex-none bg-muted-foreground @3xl:block">
         <span className="absolute top-[-4px] left-[-2px] border-y-[4.5px] border-r-[7px] border-y-transparent border-r-muted-foreground" />
       </span>
@@ -547,7 +562,7 @@ export function VerticalLine({
             const tasksHere = trace ? (
               <>
                 {trace.current === id && list.map(token)}
-                {n > 0 && <HiddenCount n={n} />}
+                {n > 0 && <HiddenCount n={n} dim={!!way} />}
               </>
             ) : (
               atStep(id)
@@ -586,7 +601,7 @@ export function VerticalLine({
   const startHint = first === DONE_STATION ? undefined : t.start === first ? entryHint(name(first)) : arriveHint(name(first));
   const startRow = first !== DONE_STATION && (
     <div data-start-row className="flex min-h-6 flex-wrap items-center gap-x-2.5 gap-y-1 pb-0.5">
-      <span data-start-label {...hover(startHint)} className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
+      <span data-start-label data-dim={way && (way.entered || way.from !== first) ? "" : undefined} {...hover(startHint)} className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
         <span aria-hidden>↓</span>
         {START_LABEL}
       </span>

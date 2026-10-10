@@ -1,9 +1,13 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import { wfId } from "@/test/fixtures";
+import type { Chain } from "./data";
 import { BIG, DARK, FIVE, MAIN, NEWS, SOFTWARE } from "./fixtures";
 import { lineTopology, tracks } from "./layout";
+import type { LineMember, LineTask } from "./model";
 import { WorkflowLine } from "./WorkflowLine";
 
 // The line runs top to bottom at every width (the final design, vf-1 … vf-6): Start's filled
@@ -204,5 +208,146 @@ describe("across Workflows (ADR 0019)", () => {
     const entry = document.querySelector('[data-start-row] [data-chip="entry"]')!;
     expect(entry).toHaveTextContent("Triage · bug");
     expect(entry).toHaveAttribute("data-arrival");
+  });
+});
+
+describe("the selected Task's strip (vf-7)", () => {
+  const NOW = Date.UTC(2026, 9, 10, 3, 30);
+  const min = (n: number) => NOW - n * 60_000;
+  const agent = (name: string): LineMember => ({ id: `m-${name}`, name, kind: "agent", working: "running" });
+  const held = (n: number, stepId: string, by: string, minutes: number, extra: Partial<LineTask> = {}): LineTask => ({
+    id: `k-${n}`,
+    key: `DARK-${n}`,
+    title: `Task ${n}`,
+    stepId,
+    kind: "work",
+    since: min(minutes + 5),
+    holder: agent(by),
+    heldSince: min(minutes),
+    blockers: [],
+    ...extra,
+  });
+  const waiting = (n: number, stepId: string, minutes: number, extra: Partial<LineTask> = {}): LineTask => ({ id: `k-${n}`, key: `DARK-${n}`, title: `Task ${n}`, stepId, kind: "work", since: min(minutes), blockers: [], ...extra });
+  /** vf-7's DARK: builder holds DARK-21 at Build (18m), DARK-28 waits there, reviewer holds DARK-19 at Review. */
+  const VF7: LineTask[] = [held(21, "build", "builder", 18), waiting(28, "build", 2), held(19, "review", "reviewer", 6)];
+  const claim = (first: Chain["first"]) => (first.kind === "none" ? null : <button type="button">{`Claim ${first.task.key}`}</button>);
+
+  function Selecting({ tasks, initial = null, takeable = [] }: { tasks: readonly LineTask[]; initial?: string | null; takeable?: string[] }) {
+    const [selected, setSelected] = useState<string | null>(initial);
+    return (
+      <MemoryRouter>
+        <WorkflowLine
+          label="Workflow"
+          workflow={DARK("impl")}
+          tasks={tasks}
+          now={NOW}
+          selected={selected}
+          onSelect={setSelected}
+          me={{ id: "m-me", takeable: new Set(takeable) }}
+          actionFor={claim}
+          onOpenTask={() => {}}
+          stepHref={(id) => `/tasks?step=${id}`}
+        />
+      </MemoryRouter>
+    );
+  }
+  const line = () => screen.getByRole("region", { name: "Workflow" });
+  const chip = (key: string) => line().querySelector<HTMLElement>(`button[data-task="${key}"]:not([data-step-list] *)`)!;
+  const strip = (key: string) => screen.queryByRole("region", { name: `${key}'s way` });
+  const dimmed = (el: Element | null) => !!el?.closest("[data-dim]");
+
+  it("selecting DARK-21's chip puts its way above the line: the pill, its holder, key and age, what it can do next, and ×", async () => {
+    render(<Selecting tasks={VF7} />);
+    expect(strip("DARK-21")).toBeNull();
+    await userEvent.click(chip("DARK-21"));
+    const s = strip("DARK-21")!;
+    expect(line()).toContainElement(s);
+    expect(before(s, rail())).toBe(true);
+    expect(s).toHaveTextContent(/^DARK-21's way/);
+    expect(within(s).getByRole("img", { name: /^builder \(agent\)/ })).toBeInTheDocument();
+    expect(s).toHaveTextContent("DARK-21");
+    expect(s).toHaveTextContent("18m");
+    expect(s).toHaveTextContent("next: pass → Review");
+    expect(within(s).getByRole("button", { name: "Clear" })).toBeInTheDocument();
+    // Nothing must end first: no "First:" and no button.
+    expect(s).not.toHaveTextContent("First:");
+    expect(within(s).queryByRole("button", { name: /^Claim/ })).toBeNull();
+  });
+
+  it("names each of a Task's next outcomes with its target: one at Review lists both", async () => {
+    render(<Selecting tasks={VF7} />);
+    await userEvent.click(chip("DARK-19"));
+    expect(strip("DARK-19")).toHaveTextContent("next: pass → Done · needs changes → Build");
+  });
+
+  it("moves the focus into the strip when it appears", async () => {
+    render(<Selecting tasks={VF7} />);
+    await userEvent.click(chip("DARK-21"));
+    expect(strip("DARK-21")).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  it("keeps the Task's way in full ink and fades everything else: the other Tasks, the counts, the untaken entry, Also starts here", async () => {
+    render(<Selecting tasks={VF7} />);
+    await userEvent.click(chip("DARK-21"));
+    expect(dimmed(chip("DARK-21"))).toBe(false);
+    expect(dimmed(chip("DARK-19"))).toBe(true);
+    expect(dimmed(line().querySelector('button[data-count="build"]'))).toBe(true);
+    expect(dimmed(screen.getByRole("region", { name: "Also starts here" }))).toBe(true);
+    expect(dimmed(line().querySelector('[data-start-row] [data-chip="entry"]'))).toBe(true);
+    // Its way in (Start, into Build) and the line itself stay.
+    expect(dimmed(line().querySelector("[data-start-label]"))).toBe(false);
+    for (const id of ["build", "review", "done"]) expect(dimmed(line().querySelector(`li[data-station="${id}"] [data-segment], li[data-station="${id}"]`)), id).toBe(false);
+    expect(dimmed(line().querySelector("svg"))).toBe(false);
+  });
+
+  it("× clears the selection and returns the focus to the chip", async () => {
+    render(<Selecting tasks={VF7} />);
+    await userEvent.click(chip("DARK-21"));
+    await userEvent.click(within(strip("DARK-21")!).getByRole("button", { name: "Clear" }));
+    expect(strip("DARK-21")).toBeNull();
+    expect(chip("DARK-21")).toHaveFocus();
+    expect(line().querySelector("[data-dim]")).toBeNull();
+  });
+
+  it("Escape clears it; a waiting Task chosen from its Step's list gives the focus back to the Step's count", async () => {
+    render(<Selecting tasks={VF7} />);
+    await userEvent.click(line().querySelector<HTMLElement>('button[data-count="build"]')!);
+    await userEvent.click(within(screen.getByRole("group", { name: /^Build · / })).getByRole("button", { name: /^DARK-28 / }));
+    expect(strip("DARK-28")).toContainElement(document.activeElement as HTMLElement);
+    await userEvent.keyboard("{Escape}");
+    expect(strip("DARK-28")).toBeNull();
+    expect(line().querySelector('button[data-count="build"]')).toHaveFocus();
+  });
+
+  it("leaves the selection alone when a Step's list took the Escape", async () => {
+    render(<Selecting tasks={VF7} />);
+    await userEvent.click(chip("DARK-21"));
+    await userEvent.click(line().querySelector<HTMLElement>('button[data-count="build"]')!);
+    expect(screen.getByRole("group", { name: /^Build · / })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("group", { name: /^Build · / })).toBeNull();
+    expect(strip("DARK-21")).not.toBeNull();
+  });
+
+  it("a blocked Task's strip says when it unblocks and what comes first, with its button; its chain is ringed on the line", async () => {
+    const tasks = [held(21, "build", "builder", 18), waiting(27, "build", 30), waiting(22, "build", 3, { blockers: [{ id: "k-27", key: "DARK-27", title: "Task 27" }] })];
+    render(<Selecting tasks={tasks} initial="k-22" takeable={["k-27"]} />);
+    const s = strip("DARK-22")!;
+    expect(s).toHaveTextContent("next: pass → Review");
+    expect(s).toHaveTextContent("Unblocks when DARK-27 ends");
+    expect(s).toHaveTextContent("First: take DARK-27");
+    expect(within(s).getByRole("button", { name: "Claim DARK-27" })).toBeInTheDocument();
+    // DARK-27 waits in Build's count: the count is ringed and stays in full ink.
+    const count = line().querySelector('button[data-count="build"]');
+    expect(count).toHaveAttribute("data-ringed");
+    expect(dimmed(count)).toBe(false);
+  });
+
+  it("says there is nothing for the viewer, with no button, when nothing in the chain is theirs to do", async () => {
+    const tasks = [waiting(27, "build", 30), waiting(22, "build", 3, { blockers: [{ id: "k-27", key: "DARK-27", title: "Task 27" }] })];
+    render(<Selecting tasks={tasks} initial="k-22" />);
+    const s = strip("DARK-22")!;
+    expect(s).toHaveTextContent("First: nothing for you");
+    expect(within(s).queryByRole("button", { name: /^Claim/ })).toBeNull();
   });
 });
