@@ -413,7 +413,7 @@ paths:
       description: |
         Changes the fields given and keeps the others. An agent with no settings yet starts from
         the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
-        model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+        model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false, `shifts` 1. The Runner starts
         Shifts only for agents that have settings and are not paused. Records
         `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
         `invalid` (a human Member, or a value out of bounds).
@@ -921,7 +921,8 @@ paths:
       summary: Create a generic or company Skill (admin)
       description: |
         Publishes version 1 with the given body. A company Skill names the generic Skill it builds
-        on. Errors: `forbidden`, `conflict` (name taken).
+        on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
+        `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
       parameters:
         - {$ref: "#/components/parameters/IdempotencyKey"}
       requestBody:
@@ -962,6 +963,31 @@ paths:
       responses:
         "200":
           description: The Skill.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SkillDetail"}
+        default: {$ref: "#/components/responses/Error"}
+    patch:
+      operationId: updateSkill
+      tags: [skills]
+      summary: Set the Project a company Skill belongs to (admin)
+      description: |
+        A company Skill belongs to one Project, or to the whole Organisation; a Step of one
+        Project cannot carry another Project's company Skill. Setting the Project it already has
+        changes nothing. Records `skill.changed` with `project_id`, null when it became the
+        Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
+        `invalid` (a generic Skill, or a Step of another Project carries it).
+      parameters:
+        - {$ref: "#/components/parameters/SkillRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/UpdateSkillBody"}
+      responses:
+        "200":
+          description: The Skill with its current version.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/SkillDetail"}
@@ -1604,6 +1630,58 @@ paths:
               schema: {$ref: "#/components/schemas/Task"}
         default: {$ref: "#/components/responses/Error"}
 
+  /v1/tasks/{task}/pull-request:
+    put:
+      operationId: setTaskPullRequest
+      tags: [tasks]
+      summary: Record the pull request a Task's branch lands through
+      description: |
+        Written by the Runner when it finds a pull request for the Task's branch on GitHub, and
+        again when it is merged. By the Task's Owner or a Member of its Project, whoever holds it,
+        open or ended: the next holder may already have the Task when the pull request is read.
+        Writing the values the Task already carries changes nothing and records nothing. Records
+        `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
+        a write of `merged`. Errors: `forbidden`, `invalid` (the Task names no Workspace in
+        `pull_request` mode, through its own Workspaces or else its Project's default),
+        `conflict` (`open` written over a pull request already merged).
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/SetTaskPullRequestBody"}
+      responses:
+        "200":
+          description: The Task with its pull request.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Task"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/pull-request/merge:
+    post:
+      operationId: mergeTaskPullRequest
+      tags: [runner]
+      summary: Merge a Task's open pull request
+      description: |
+        The Runner beside this server merges the Task's open pull request on GitHub, as the
+        identity its `gh` signs in as, then records it merged on the Task. By the Task's Owner or
+        an admin. Errors: `forbidden`, `no_runner` (no Runner is attached to this server),
+        `not_found` (the Task carries no open pull request), `conflict` (GitHub refused the
+        merge; the message is GitHub's, as the Runner read it).
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "200":
+          description: The Task with its pull request merged.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Task"}
+        default: {$ref: "#/components/responses/Error"}
+
   /v1/tasks/{task}/notes:
     post:
       operationId: addNote
@@ -1756,11 +1834,13 @@ paths:
         The request body is the file itself, sent with its own `Content-Type` and a
         `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
         Claim while it is held, else its ownership or membership of its Project. Evidence about a
-        Parent as a whole is attached to the Parent. Records `task.evidence_attached`. Errors:
-        `not_holder`, `forbidden`, `too_large`.
+        Parent as a whole is attached to the Parent. `kind=log` is a Shift's terminal log, which
+        the Runner attaches when the Shift ends. Records `task.evidence_attached` with `kind`.
+        Errors: `not_holder`, `forbidden`, `too_large`.
       parameters:
         - {$ref: "#/components/parameters/TaskRef"}
         - {$ref: "#/components/parameters/EvidenceFilename"}
+        - {$ref: "#/components/parameters/EvidenceKind"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
       requestBody:
         required: true
@@ -2279,6 +2359,11 @@ components:
       required: true
       description: The file's name, as it should be shown and downloaded.
       schema: {type: string, minLength: 1, maxLength: 255}
+    EvidenceKind:
+      name: kind
+      in: query
+      description: What the file is; `evidence` unless given.
+      schema: {$ref: "#/components/schemas/EvidenceKind"}
     Limit:
       name: limit
       in: query
@@ -2337,7 +2422,8 @@ components:
         (Workspace id the Task names) · `model` (the live Claim's model label) · `filed_at` (when
         it was filed) · `completed_at` (when it ended done; a dropped Task has none) · `ended_at`
         (when it ended, done or dropped) · `q` (`contains`, ignoring case, over the key and the
-        title).
+        title) · `pull_request` (`open`, `merged`, or `none`: no pull request recorded; `is`
+        and `not` only).
 
         Example: `filter=step:in:<id>,<id>&filter=holder:is:none&filter=filed_at:last:7d`. An
         unknown field, an operator the field does not take, the wrong number of values or a value
@@ -2716,7 +2802,7 @@ components:
         name them in its `DARKORY_RUNNER_ENV` (comma-separated). A Shift takes only those, `env`
         and a few variables of the server's (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`,
         `LC_*`, `TERM`, `TMPDIR`, `TZ`, `SSH_AUTH_SOCK`, the proxy variables, `ANTHROPIC_*`).
-      required: [command, args, model, env, unattended, paused]
+      required: [command, args, model, env, unattended, paused, shifts]
       properties:
         command:
           type: string
@@ -2738,6 +2824,11 @@ components:
         paused:
           type: boolean
           description: The Runner starts no new Shift for the agent; one running carries on.
+        shifts:
+          type: integer
+          minimum: 1
+          maximum: 8
+          description: How many Shifts the Runner runs for the agent at once, one Session and one Claim each; 1 unless set.
         progress_file:
           type: string
           description: |
@@ -2760,6 +2851,7 @@ components:
           additionalProperties: {type: string}
         unattended: {type: boolean}
         paused: {type: boolean}
+        shifts: {type: integer, minimum: 1, maximum: 8}
         progress_file: {type: string, maxLength: 1000}
     SetManagerBody:
       type: object
@@ -3259,6 +3351,12 @@ components:
           type: string
           format: id
           description: The generic Skill a company Skill builds on.
+        project_id:
+          type: string
+          format: id
+          description: |
+            The Project a company Skill belongs to; absent for a generic Skill and for a company
+            Skill of the whole Organisation.
         builtin:
           type: boolean
           description: True for `breakdown`, `acceptance`, `retro` and `skill-review`, which Darkory relies on.
@@ -3318,9 +3416,19 @@ components:
         base_skill:
           type: string
           description: Required for a company Skill. Id or name of a generic Skill.
+        project:
+          type: string
+          description: Id or key of the Project the Skill belongs to; only for a company Skill.
         body:
           type: string
           description: The Skill's text, published as version 1.
+    UpdateSkillBody:
+      type: object
+      required: [project]
+      properties:
+        project:
+          type: string
+          description: Id or key of the Project the company Skill belongs to; `""` makes it the Organisation's.
     SkillProposal:
       type: object
       required: [id, skill_id, task_id, based_on_version, body, author_id, state, created_at]
@@ -3466,6 +3574,7 @@ components:
           type: array
           description: The Workspaces the Task names, in the order named. Absent when it names none.
           items: {type: string, format: id}
+        pull_request: {$ref: "#/components/schemas/PullRequest"}
         filed_by:
           type: string
           format: id
@@ -3482,6 +3591,28 @@ components:
           format: date-time
           description: When it ended, done or dropped.
         subtask_counts: {$ref: "#/components/schemas/SubtaskCounts"}
+    PullRequest:
+      type: object
+      description: |
+        The pull request a Task's branch lands through, in a Workspace in `pull_request` mode, as the
+        Runner read it on GitHub: written when it finds one open for the branch and again when it is
+        merged. Absent until the Runner has seen one.
+      required: [number, url, state]
+      properties:
+        number: {type: integer, format: int64}
+        url: {type: string}
+        state: {$ref: "#/components/schemas/PullRequestState"}
+    PullRequestState:
+      type: string
+      enum: [open, merged]
+      x-enum-varnames: [PullRequestOpen, PullRequestMerged]
+    SetTaskPullRequestBody:
+      type: object
+      required: [number, url, state]
+      properties:
+        number: {type: integer, format: int64, minimum: 1}
+        url: {type: string, minLength: 1, maxLength: 2000}
+        state: {$ref: "#/components/schemas/PullRequestState"}
     SubtaskCounts:
       type: object
       description: How many of a Parent's Subtasks are in each state. Absent on a Task with no Subtasks.
@@ -3858,10 +3989,11 @@ components:
       description: |
         A report, screenshot or log attached to a Task, recording who attached it; Evidence
         about a Parent as a whole is attached to the Parent.
-      required: [id, task_id, filename, content_type, size, sha256, attached_by, created_at]
+      required: [id, task_id, kind, filename, content_type, size, sha256, attached_by, created_at]
       properties:
         id: {type: string, format: id}
         task_id: {type: string, format: id}
+        kind: {$ref: "#/components/schemas/EvidenceKind"}
         filename: {type: string}
         content_type: {type: string}
         size:
@@ -3870,6 +4002,14 @@ components:
         sha256: {type: string}
         attached_by: {type: string, format: id}
         created_at: {type: string, format: date-time}
+    EvidenceKind:
+      type: string
+      description: |
+        `evidence`: attached by the Task's holder or a Member about the work. `log`: a Shift's
+        terminal log, attached by the Runner when the Shift ends; it belongs to the Claim the Shift
+        worked under and is not counted or listed as the Task's Evidence.
+      enum: [evidence, log]
+      x-enum-varnames: [EvidenceKindEvidence, EvidenceKindLog]
 
     # ------------------------------------------------------------ files
     File:
@@ -3941,7 +4081,10 @@ components:
         milliseconds since the Unix epoch. The Subtasks Darkory files itself (a Breakdown, an
         Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
         Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
-        `holder_id` and `nudge`, 1 or 2.
+        `holder_id` and `nudge`, 1 or 2. `task.evidence_attached` carries `evidence_id`,
+        `filename`, `size` and `kind`. `task.pull_request_opened` and `task.pull_request_merged` carry the
+        pull request's `number` and `url`. `skill.changed` carries `project_id`, null when the
+        Skill became the Organisation's.
 
         `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
         (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
@@ -3970,12 +4113,15 @@ components:
         - task.ranked
         - task.owner_passed
         - task.labels_set
+        - task.pull_request_opened
+        - task.pull_request_merged
         - workflow.changed
         - label.created
         - label.changed
         - label.deleted
         - skill.created
         - skill.version_published
+        - skill.changed
         - member.created
         - member.updated
         - member.manager_set

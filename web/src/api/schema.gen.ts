@@ -303,7 +303,7 @@ export interface paths {
          * Set how the Runner starts an agent Member's Shifts (admin)
          * @description Changes the fields given and keeps the others. An agent with no settings yet starts from
          *     the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
-         *     model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+         *     model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false, `shifts` 1. The Runner starts
          *     Shifts only for agents that have settings and are not paused. Records
          *     `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
          *     `invalid` (a human Member, or a value out of bounds).
@@ -673,7 +673,8 @@ export interface paths {
         /**
          * Create a generic or company Skill (admin)
          * @description Publishes version 1 with the given body. A company Skill names the generic Skill it builds
-         *     on. Errors: `forbidden`, `conflict` (name taken).
+         *     on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
+         *     `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
          */
         post: operations["createSkill"];
         delete?: never;
@@ -696,7 +697,15 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Set the Project a company Skill belongs to (admin)
+         * @description A company Skill belongs to one Project, or to the whole Organisation; a Step of one
+         *     Project cannot carry another Project's company Skill. Setting the Project it already has
+         *     changes nothing. Records `skill.changed` with `project_id`, null when it became the
+         *     Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
+         *     `invalid` (a generic Skill, or a Step of another Project carries it).
+         */
+        patch: operations["updateSkill"];
         trace?: never;
     };
     "/v1/skills/{skill}/versions": {
@@ -1248,6 +1257,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tasks/{task}/pull-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Record the pull request a Task's branch lands through
+         * @description Written by the Runner when it finds a pull request for the Task's branch on GitHub, and
+         *     again when it is merged. By the Task's Owner or a Member of its Project, whoever holds it,
+         *     open or ended: the next holder may already have the Task when the pull request is read.
+         *     Writing the values the Task already carries changes nothing and records nothing. Records
+         *     `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
+         *     a write of `merged`. Errors: `forbidden`, `invalid` (the Task names no Workspace in
+         *     `pull_request` mode, through its own Workspaces or else its Project's default),
+         *     `conflict` (`open` written over a pull request already merged).
+         */
+        put: operations["setTaskPullRequest"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{task}/pull-request/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge a Task's open pull request
+         * @description The Runner beside this server merges the Task's open pull request on GitHub, as the
+         *     identity its `gh` signs in as, then records it merged on the Task. By the Task's Owner or
+         *     an admin. Errors: `forbidden`, `no_runner` (no Runner is attached to this server),
+         *     `not_found` (the Task carries no open pull request), `conflict` (GitHub refused the
+         *     merge; the message is GitHub's, as the Runner read it).
+         */
+        post: operations["mergeTaskPullRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tasks/{task}/notes": {
         parameters: {
             query?: never;
@@ -1373,8 +1433,9 @@ export interface paths {
          * @description The request body is the file itself, sent with its own `Content-Type` and a
          *     `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
          *     Claim while it is held, else its ownership or membership of its Project. Evidence about a
-         *     Parent as a whole is attached to the Parent. Records `task.evidence_attached`. Errors:
-         *     `not_holder`, `forbidden`, `too_large`.
+         *     Parent as a whole is attached to the Parent. `kind=log` is a Shift's terminal log, which
+         *     the Runner attaches when the Shift ends. Records `task.evidence_attached` with `kind`.
+         *     Errors: `not_holder`, `forbidden`, `too_large`.
          */
         post: operations["attachTaskEvidence"];
         delete?: never;
@@ -1984,6 +2045,8 @@ export interface components {
             unattended: boolean;
             /** @description The Runner starts no new Shift for the agent; one running carries on. */
             paused: boolean;
+            /** @description How many Shifts the Runner runs for the agent at once, one Session and one Claim each; 1 unless set. */
+            shifts: number;
             /**
              * @description The file whose modified time shows the Shift making progress, for a command other
              *     than Claude Code (whose transcript the Runner finds itself); it may use the same
@@ -2002,6 +2065,7 @@ export interface components {
             };
             unattended?: boolean;
             paused?: boolean;
+            shifts?: number;
             progress_file?: string;
         };
         SetManagerBody: {
@@ -2393,6 +2457,12 @@ export interface components {
              * @description The generic Skill a company Skill builds on.
              */
             base_skill_id?: string;
+            /**
+             * Format: id
+             * @description The Project a company Skill belongs to; absent for a generic Skill and for a company
+             *     Skill of the whole Organisation.
+             */
+            project_id?: string;
             /** @description True for `breakdown`, `acceptance`, `retro` and `skill-review`, which Darkory relies on. */
             builtin: boolean;
             /** Format: int64 */
@@ -2436,8 +2506,14 @@ export interface components {
             kind: components["schemas"]["SkillKind"];
             /** @description Required for a company Skill. Id or name of a generic Skill. */
             base_skill?: string;
+            /** @description Id or key of the Project the Skill belongs to; only for a company Skill. */
+            project?: string;
             /** @description The Skill's text, published as version 1. */
             body: string;
+        };
+        UpdateSkillBody: {
+            /** @description Id or key of the Project the company Skill belongs to; `""` makes it the Organisation's. */
+            project: string;
         };
         SkillProposal: {
             /** Format: id */
@@ -2577,6 +2653,7 @@ export interface components {
             open_blockers?: components["schemas"]["TaskBrief"][];
             /** @description The Workspaces the Task names, in the order named. Absent when it names none. */
             workspace_ids?: string[];
+            pull_request?: components["schemas"]["PullRequest"];
             /**
              * Format: id
              * @description The Member who filed it. Absent on the Subtasks Darkory files itself: a Breakdown, an
@@ -2596,6 +2673,25 @@ export interface components {
              */
             ended_at?: string;
             subtask_counts?: components["schemas"]["SubtaskCounts"];
+        };
+        /**
+         * @description The pull request a Task's branch lands through, in a Workspace in `pull_request` mode, as the
+         *     Runner read it on GitHub: written when it finds one open for the branch and again when it is
+         *     merged. Absent until the Runner has seen one.
+         */
+        PullRequest: {
+            /** Format: int64 */
+            number: number;
+            url: string;
+            state: components["schemas"]["PullRequestState"];
+        };
+        /** @enum {string} */
+        PullRequestState: "open" | "merged";
+        SetTaskPullRequestBody: {
+            /** Format: int64 */
+            number: number;
+            url: string;
+            state: components["schemas"]["PullRequestState"];
         };
         /** @description How many of a Parent's Subtasks are in each state. Absent on a Task with no Subtasks. */
         SubtaskCounts: {
@@ -2892,6 +2988,7 @@ export interface components {
             id: string;
             /** Format: id */
             task_id: string;
+            kind: components["schemas"]["EvidenceKind"];
             filename: string;
             content_type: string;
             /** Format: int64 */
@@ -2902,6 +2999,13 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description `evidence`: attached by the Task's holder or a Member about the work. `log`: a Shift's
+         *     terminal log, attached by the Runner when the Shift ends; it belongs to the Claim the Shift
+         *     worked under and is not counted or listed as the Task's Evidence.
+         * @enum {string}
+         */
+        EvidenceKind: "evidence" | "log";
         /**
          * @description Bytes the Organisation keeps, referenced by id, such as a Member's avatar. Its bytes are
          *     at `/v1/files/{id}/content`.
@@ -2968,7 +3072,10 @@ export interface components {
          *     milliseconds since the Unix epoch. The Subtasks Darkory files itself (a Breakdown, an
          *     Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
          *     Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
-         *     `holder_id` and `nudge`, 1 or 2.
+         *     `holder_id` and `nudge`, 1 or 2. `task.evidence_attached` carries `evidence_id`,
+         *     `filename`, `size` and `kind`. `task.pull_request_opened` and `task.pull_request_merged` carry the
+         *     pull request's `number` and `url`. `skill.changed` carries `project_id`, null when the
+         *     Skill became the Organisation's.
          *
          *     `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
          *     (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
@@ -2976,7 +3083,7 @@ export interface components {
          *     `tasks_moved` when open Tasks were moved off deleted Steps.
          * @enum {string}
          */
-        ActivityKind: "task.filed" | "task.claimed" | "task.lapsed" | "task.nudged" | "task.released" | "task.advanced" | "task.moved" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.split" | "task.became_parent" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.ranked" | "task.owner_passed" | "task.labels_set" | "workflow.changed" | "label.created" | "label.changed" | "label.deleted" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "member.agent_changed" | "project.created" | "project.changed" | "project.member_added" | "project.member_removed" | "workspace.added" | "workspace.changed" | "workspace.removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed" | "file.uploaded" | "file.deleted";
+        ActivityKind: "task.filed" | "task.claimed" | "task.lapsed" | "task.nudged" | "task.released" | "task.advanced" | "task.moved" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.split" | "task.became_parent" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.ranked" | "task.owner_passed" | "task.labels_set" | "task.pull_request_opened" | "task.pull_request_merged" | "workflow.changed" | "label.created" | "label.changed" | "label.deleted" | "skill.created" | "skill.version_published" | "skill.changed" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "member.agent_changed" | "project.created" | "project.changed" | "project.member_added" | "project.member_removed" | "workspace.added" | "workspace.changed" | "workspace.removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed" | "file.uploaded" | "file.deleted";
         /**
          * @description The kind of record an Activity entry is about. `workflow` is a Project's Workflows as a
          *     whole, every Workflow, Step and Connector; its `subject_id` is the Project's id.
@@ -3171,6 +3278,8 @@ export interface components {
         LoginCode: string;
         /** @description The file's name, as it should be shown and downloaded. */
         EvidenceFilename: string;
+        /** @description What the file is; `evidence` unless given. */
+        EvidenceKind: components["schemas"]["EvidenceKind"];
         /** @description At most this many items. Defaults to 100. */
         Limit: number;
         /** @description The `next_cursor` of the previous page. */
@@ -3218,7 +3327,8 @@ export interface components {
          *     (Workspace id the Task names) · `model` (the live Claim's model label) · `filed_at` (when
          *     it was filed) · `completed_at` (when it ended done; a dropped Task has none) · `ended_at`
          *     (when it ended, done or dropped) · `q` (`contains`, ignoring case, over the key and the
-         *     title).
+         *     title) · `pull_request` (`open`, `merged`, or `none`: no pull request recorded; `is`
+         *     and `not` only).
          *
          *     Example: `filter=step:in:<id>,<id>&filter=holder:is:none&filter=filed_at:last:7d`. An
          *     unknown field, an operator the field does not take, the wrong number of values or a value
@@ -4468,6 +4578,40 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    updateSkill: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Skill id or name. */
+                skill: components["parameters"]["SkillRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSkillBody"];
+            };
+        };
+        responses: {
+            /** @description The Skill with its current version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listSkillVersions: {
         parameters: {
             query?: never;
@@ -4692,7 +4836,8 @@ export interface operations {
                  *     (Workspace id the Task names) · `model` (the live Claim's model label) · `filed_at` (when
                  *     it was filed) · `completed_at` (when it ended done; a dropped Task has none) · `ended_at`
                  *     (when it ended, done or dropped) · `q` (`contains`, ignoring case, over the key and the
-                 *     title).
+                 *     title) · `pull_request` (`open`, `merged`, or `none`: no pull request recorded; `is`
+                 *     and `not` only).
                  *
                  *     Example: `filter=step:in:<id>,<id>&filter=holder:is:none&filter=filed_at:last:7d`. An
                  *     unknown field, an operator the field does not take, the wrong number of values or a value
@@ -5242,6 +5387,70 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    setTaskPullRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Task id or display key, such as `MAIN-42`. */
+                task: components["parameters"]["TaskRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTaskPullRequestBody"];
+            };
+        };
+        responses: {
+            /** @description The Task with its pull request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    mergeTaskPullRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Task id or display key, such as `MAIN-42`. */
+                task: components["parameters"]["TaskRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Task with its pull request merged. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     addNote: {
         parameters: {
             query?: never;
@@ -5439,6 +5648,8 @@ export interface operations {
             query: {
                 /** @description The file's name, as it should be shown and downloaded. */
                 filename: components["parameters"]["EvidenceFilename"];
+                /** @description What the file is; `evidence` unless given. */
+                kind?: components["parameters"]["EvidenceKind"];
             };
             header?: {
                 /**
