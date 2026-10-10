@@ -120,6 +120,40 @@ describe("Activity folds a Claim", () => {
     expect(said(rows)[0]).toBe(`builder · Shift log · 56.8 kB on WEB-2 Cannot delete a Workflow in a Project · the Shift that ended ${clock}`);
   });
 
+  it("folds a Claim an admin took back, or a revoked token ended, into that end, by the holder", () => {
+    for (const kind of ["task.taken_back", "task.claim_ended"] as const) {
+      const rows = foldActivity(
+        newestFirst([
+          entry(1, "task.claimed", dark2.id, by(builder.id, 0, { claim_id: "a" })),
+          entry(2, "task.note_added", dark2.id, by(builder.id, 1)),
+          entry(3, kind, dark2.id, by(ada.id, 2, { claim_id: "a", holder_id: builder.id, how_ended: "token_revoked" })),
+          entry(4, "task.evidence_attached", dark2.id, by(builder.id, 3, { evidence_id: "e-log", filename: "shift-DARK-2-builder-101600.log", size: 56_800, kind: "log" })),
+        ]),
+      );
+      expect(shape(rows), kind).toEqual([
+        [3, [2, 4]],
+        [1, []],
+      ]);
+    }
+  });
+
+  it("names the Stop as the end of the Shift whose log came after the grace", () => {
+    const rows = foldActivity(
+      newestFirst([
+        entry(1, "task.claimed", dark2.id, by(builder.id, 0, { claim_id: "a" })),
+        entry(2, "task.taken_back", dark2.id, by(ada.id, 1, { claim_id: "a", holder_id: builder.id })),
+        entry(3, "task.evidence_attached", dark2.id, by(builder.id, 45, { evidence_id: "e-log", filename: "shift-DARK-2-builder-101600.log", size: 56_800, kind: "log" })),
+      ]),
+    );
+    expect(shape(rows)).toEqual([
+      [3, []],
+      [2, []],
+      [1, []],
+    ]);
+    const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(at(1)));
+    expect(said(rows)[0]).toMatch(new RegExp(`· the Shift that ended ${clock}$`));
+  });
+
   it("folds nothing when a filter left only one kind", () => {
     const notes = dark2Run.filter((e) => e.kind === "task.note_added" || e.kind === "task.evidence_attached");
     expect(foldActivity(newestFirst(notes))).toHaveLength(notes.length);

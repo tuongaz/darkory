@@ -11,7 +11,9 @@ export type ActivityRow = { entry: Activity; folded: Activity[]; shiftEnded?: st
 const logGrace = 30 * 60_000;
 
 /** The entries that end a Claim and say so; each carries the Claim's id. */
-const ends = new Set<string>(["task.released", "task.advanced", "task.completed", "task.split", "task.lapsed"]);
+const ends = new Set<string>(["task.released", "task.advanced", "task.completed", "task.split", "task.lapsed", "task.taken_back", "task.claim_ended"]);
+/** Ends written by someone other than the holder (Darkory, an admin), who are named in the payload. */
+const endedForHolder = new Set<string>(["task.lapsed", "task.taken_back", "task.claim_ended"]);
 /** What a holder writes inside a Claim that its end can carry. */
 const inside = new Set<string>(["task.note_added", "task.observed", "task.evidence_attached", "task.filed"]);
 
@@ -28,10 +30,10 @@ export function isShiftLog(e: Activity): boolean {
   return /^shift-.+-.+\.log$/.test(str(e.payload, "filename") ?? "");
 }
 
-/** Whose Claim on which Task an entry is about: a lapse's holder; a question's the Task it blocks. */
+/** Whose Claim on which Task an entry is about: a lapse's, take-back's or revocation's holder; a question's the Task it blocks. */
 function claimKey(e: Activity): string | undefined {
   if (e.subject_type !== "task") return undefined;
-  if (e.kind === "task.lapsed") {
+  if (endedForHolder.has(e.kind)) {
     const holder = str(e.payload, "holder_id");
     return holder && `${holder} ${e.subject_id}`;
   }
@@ -47,7 +49,7 @@ function claimKey(e: Activity): string | undefined {
  * Folds the entries (newest first, the filters already applied) into rows, newest first. The
  * entries one actor writes on one Task after its `task.claimed` — the Notes, the Observations,
  * the Evidence, the questions it files to block the Task — ride on the entry that ends that Claim
- * (released, advanced, completed, split, lapsed). A Shift's log rides on its holder's latest
+ * (released, advanced, completed, split, lapsed, taken back, ended by a revoked token). A Shift's log rides on its holder's latest
  * Claim end on that Task at most 30 minutes before it, as the Task's record places it, else on
  * the Claim it falls inside, else it is its own row. What lies inside a Claim still held, or one
  * whose end is not among the entries, stays as rows. When the Claim's start was not read (an older
