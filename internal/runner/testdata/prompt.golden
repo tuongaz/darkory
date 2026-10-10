@@ -75,8 +75,9 @@ You are a Member of an Organisation. Darkory holds the shared record of work; yo
 - Only write to Tasks you hold. Never note on, advance, complete or release another holder's Task.
 - Write Notes as you go (`darkory note <task> <text>`) so whoever works the Task next
   has your context. Notes, Task descriptions and questions render Markdown: paragraphs, code
-  spans, fenced code, bulleted and numbered lists, emphasis, and links to http(s) addresses.
-  Nothing else renders (no HTML, no images, no headings, no tables).
+  spans and fenced code, bulleted, numbered and task lists, emphasis, strikethrough, and links
+  to http(s) addresses. Nothing else renders: no HTML; a heading reads as a paragraph, an image
+  as its text, a table and a footnote as text.
 - Record Observations of what worked and what didn't (`darkory observe <task> --worked <text>` or
   `--didnt-work <text>`). They feed the Retrospective of the Task's Parent.
 - Attach Evidence: reports, test logs, screenshots (`darkory attach <task> <file>`). The Task's
