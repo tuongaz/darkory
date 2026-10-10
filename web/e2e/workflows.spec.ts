@@ -7,9 +7,11 @@ import { startInstall } from "./server";
 // PUT of its whole graph. The board and the Workflow page show one Workflow at a time, picked by
 // the chip; a Task advanced along a crossing outcome leaves one board for another without a
 // reload; the line shows exits and entries. Round 2 (list first): Workflows opens on a list of
-// them with their figures, a row opening one Workflow's page. Round 3 (shell-navigation-plan.md,
-// Task 3): the list is the Workflows of every Project, one included, and carries its acts: it adds,
-// moves and deletes one at once, and opens one Workflow's editor in the app, its name in its head.
+// them, one opening a Workflow's page. Round 3 (shell-navigation-plan.md, Task 3): the list is the
+// Workflows of every Project, one included, and carries its acts: it adds, moves and deletes one at
+// once, and opens one Workflow's editor in the app, its name in its head. The vertical round
+// (workflow-vertical-plan.md, Task 4; vf-8): the list draws each Workflow as its own line, side by
+// side in columns, each headed by its name, its open Tasks and the acts.
 test.describe.configure({ mode: "serial" });
 
 const shots = fileURLToPath(new URL("./screenshots/workflows/", import.meta.url));
@@ -275,32 +277,44 @@ test("5 · the line of Triage shows an exit chip per crossing outcome; Bugs' sho
   const { page, errors, ctx } = await open(browser, `/projects/ACC/workflows/${wf("Triage")}`);
   const line = page.getByRole("region", { name: "Workflow", exact: true });
   await expect(line.locator('[data-head="Triage"]')).toBeVisible();
-  await expect(line.locator('[data-chip="exit"]')).toHaveText(["bug → Bugs › Investigate", "feature → Features › Build", "prototype → Prototypes › Sketch", "question → Support › Support"]);
+  await expect(line.locator('[data-chip="exit"]')).toHaveText(["↗ bug → Bugs › Investigate", "↗ feature → Features › Build", "↗ prototype → Prototypes › Sketch", "↗ question → Support › Support"]);
   await shot(page, "line-triage-exits");
   await chip(page).click();
   await page.getByRole("option", { name: "Bugs" }).click();
   await expect(chip(page)).toHaveText("Bugs");
   await expect(line.locator('[data-head="Investigate"]')).toBeVisible();
-  await expect(line.getByText("from Triage · bug")).toBeVisible();
+  // A crossing in is a chip beside Start, in the entry's words (vf-1).
+  await expect(line.locator('[data-start-row] [data-chip="entry"]')).toContainText("Triage · bug");
   await shot(page, "line-bugs-entry");
   expect(errors).toEqual([]);
   await ctx.close();
 });
 
-/** The Workflows table, its rows' names in order. */
-const workflowsTable = (page: Page) => page.getByRole("table", { name: "Workflows" });
-const rowNames = (page: Page) => workflowsTable(page).getByRole("row").evaluateAll((rows) => rows.slice(1).map((r) => r.getAttribute("aria-label")));
+/** The Workflows list: a column per Workflow, its names in order. */
+const workflowsList = (page: Page) => page.getByRole("list", { name: "Workflows", exact: true });
+const column = (page: Page, name: string) => workflowsList(page).locator(`:scope > li[aria-label="${name}"]`);
+const rowNames = (page: Page) => workflowsList(page).evaluate((ul) => [...ul.children].map((li) => li.getAttribute("aria-label")));
+/** Opens a column's ⋯: its menu. */
+async function more(page: Page, name: string) {
+  await column(page, name).getByRole("button", { name: `More for ${name}` }).click();
+  return page.getByRole("menu");
+}
 const five = ["Triage", "Bugs", "Features", "Prototypes", "Support"];
 
 test("6 · the Workflows list: added, named and saved; moved later and back; deleted with a Task and an outcome into it, the dialog asking where each goes", async ({ browser }) => {
   const { page, errors, ctx } = await open(browser, "/projects/ACC/workflows");
   await expect.poll(() => rowNames(page)).toEqual(five);
-  await expect(workflowsTable(page).getByRole("button", { name: "Move Triage earlier" })).toBeDisabled();
-  await expect(workflowsTable(page).getByRole("button", { name: "Move Support later" })).toBeDisabled();
-  await expect(workflowsTable(page).getByRole("link", { name: "Edit Bugs" })).toBeVisible();
-  // From `sm` up the acts sit in the row, and the ⋯ after them, as on a phone.
-  await expect(workflowsTable(page).getByRole("button", { name: "More for Bugs" })).toBeVisible();
+  // Each head: the grip, Edit and the ⋯; the first never earlier, the last never later.
+  await expect(column(page, "Bugs").getByRole("link", { name: "Edit Bugs" })).toBeVisible();
+  await expect(column(page, "Bugs").getByRole("button", { name: /^Drag to order Bugs/ })).toBeVisible();
+  let menu = await more(page, "Triage");
+  await expect(menu.getByRole("menuitem")).toHaveText(["Move earlier", "Move later", "Delete"]);
+  await expect(menu.getByRole("menuitem", { name: "Move earlier" })).toBeDisabled();
   await shot(page, "list-acts");
+  await page.keyboard.press("Escape");
+  menu = await more(page, "Support");
+  await expect(menu.getByRole("menuitem", { name: "Move later" })).toBeDisabled();
+  await page.keyboard.press("Escape");
 
   // + Workflow, the bar's primary: written at once, and its editor opens in the app with its name to type.
   await page.getByRole("group", { name: "Page" }).getByRole("button", { name: "Workflow", exact: true }).click();
@@ -343,18 +357,18 @@ test("6 · the Workflows list: added, named and saved; moved later and back; del
   await shot(page, "editor-outcome-groups");
   await page.keyboard.press("Escape");
 
-  // › moves Triage later at once: the list, the record and the list open in another window read the new order.
+  // Move later moves Triage later at once: the list, the record and the list open in another window read the new order.
   await page.goto(`${base}/projects/ACC/workflows`);
   const live = await open(browser, "/projects/ACC/workflows");
   await expect.poll(() => rowNames(live.page)).toEqual([...five, "Releases"]);
-  await workflowsTable(page).getByRole("button", { name: "Move Triage later" }).click();
+  await (await more(page, "Triage")).getByRole("menuitem", { name: "Move later" }).click();
   const moved = ["Bugs", "Triage", "Features", "Prototypes", "Support", "Releases"];
   await expect.poll(() => rowNames(page)).toEqual(moved);
   await expect.poll(async () => (await readGraph()).workflows.map((w) => w.name)).toEqual(moved);
   await expect.poll(() => rowNames(live.page)).toEqual(moved);
   await shot(page, "list-moved");
-  // ‹ puts it back.
-  await workflowsTable(page).getByRole("button", { name: "Move Triage earlier" }).click();
+  // Move earlier puts it back.
+  await (await more(page, "Triage")).getByRole("menuitem", { name: "Move earlier" }).click();
   await expect.poll(() => rowNames(page)).toEqual([...five, "Releases"]);
   await expect.poll(() => rowNames(live.page)).toEqual([...five, "Releases"]);
 
@@ -375,7 +389,7 @@ test("6 · the Workflows list: added, named and saved; moved later and back; del
   // instead (nowhere: the outcome is removed); confirmed, it is written at once.
   const deploying = (await v1<Detail>(as.ada, "POST", "/v1/tasks", { project: "ACC", title: "Roll the ledger service", step: "Deploy" })).task;
   await page.goto(`${base}/projects/ACC/workflows`);
-  await workflowsTable(page).getByRole("button", { name: "Delete Releases" }).click();
+  await (await more(page, "Releases")).getByRole("menuitem", { name: "Delete" }).click();
   const dialog = page.getByRole("dialog", { name: "Delete Releases" });
   await expect(dialog.getByText("1 Task at Deploy")).toBeVisible();
   await expect(dialog.getByRole("combobox", { name: "Where release out of Triage leads instead" })).toHaveText("Remove this outcome");
@@ -541,13 +555,15 @@ test("10 · on a phone, a board with no chip keeps the List | Board switch as tw
   await ctx.close();
 });
 
-/** The list's rows as their figures read: Workflow, Steps, Waiting, Working, Done today (an admin's act cells follow). */
-const figures = (page: Page) =>
-  workflowsTable(page)
-    .getByRole("row")
-    .evaluateAll((rows) => rows.slice(1).map((r) => [...r.querySelectorAll('[role="cell"]')].slice(0, 5).map((c) => c.textContent?.trim())));
+/** A column's line: its Steps' rows, in order, as the line names them. */
+const stations = (page: Page, name: string) =>
+  column(page, name)
+    .getByRole("list", { name: "Steps on the line" })
+    .evaluate((ol) => [...ol.querySelectorAll(":scope > li[data-station]")].map((li) => li.getAttribute("data-head")));
+/** A column's head: the words beside its name. */
+const head = (page: Page, name: string) => column(page, name).locator(":scope > div").first();
 
-test("11 · Workflows opens on a list of the five with their figures", async ({ browser }) => {
+test("11 · Workflows opens on the five as lines side by side, each headed by its open Tasks", async ({ browser }) => {
   // What the spec has left: "Totals round twice" done today in Bugs (4); "Roll the ledger service"
   // moved to Triage by the delete (6); "Crash on save" at Investigate (7). Now cleo takes Crash on
   // save, ada a Support Task, and one waits at Awaiting customer.
@@ -557,63 +573,66 @@ test("11 · Workflows opens on a list of the five with their figures", async ({ 
   await v1(as.ada, "POST", `/v1/tasks/${refund.key}/claim`, {});
   await v1(as.ada, "POST", "/v1/tasks", { project: "ACC", title: "Card declined abroad", step: "Awaiting customer" });
 
-  const { page, errors, ctx } = await open(browser, "/projects/ACC/workflows");
-  // The figures' heads, then an admin's act columns, named for a screen reader.
-  await expect(workflowsTable(page).getByRole("columnheader")).toHaveText(["Workflow", "Steps", "Waiting", "Working", "Done today", "Order", "Edit or delete", "More"]);
-  // Waiting = a Workflow's open Tasks at its Steps less those worked; Working = those held; Done
-  // today = the Tasks ended today listed in it.
-  await expect
-    .poll(() => figures(page))
-    .toEqual([
-      ["Triage", "1", "1", "0", "0"],
-      ["Bugs", "4", "0", "1", "1"],
-      ["Features", "4", "0", "0", "0"],
-      ["Prototypes", "2", "0", "0", "0"],
-      ["Support", "4", "1", "1", "0"],
-    ]);
-  // No chip: the list is every Workflow; rows are 36 px.
+  const { page, errors, ctx } = await open(browser, "/projects/ACC/workflows", { width: 1184, height: 900 });
+  await expect.poll(() => rowNames(page)).toEqual(five);
+  // Each column its Workflow's line: Start, its Steps, Done.
+  await expect.poll(() => stations(page, "Bugs")).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]);
+  expect(await stations(page, "Support")).toEqual(["Support", "Awaiting customer", "Ops", "Approve", "Done"]);
+  await expect(column(page, "Bugs").locator("[data-start-label]")).toContainText("Start");
+  // Its open Tasks, where its page lists them; done today at its line's Done.
+  await expect(head(page, "Triage")).toContainText("1 Task");
+  await expect(head(page, "Bugs")).toContainText("1 Task");
+  await expect(head(page, "Features")).toContainText("no open Tasks");
+  await expect(head(page, "Support")).toContainText("2 Tasks");
+  await expect(column(page, "Bugs").getByText("1 today")).toBeVisible();
+  // cleo holds Crash on save: its chip at Investigate, in Bugs' column alone.
+  await expect(column(page, "Bugs").locator(`[data-box="token"][data-task="${crash.key}"]`)).toBeVisible();
+  await expect(workflowsList(page).locator(`[data-box="token"][data-task="${crash.key}"]`)).toHaveCount(1);
+  // Three to a row at 1184: the first three side by side, the fourth under the first.
+  const boxes = await Promise.all(five.map(async (n) => (await column(page, n).boundingBox())!));
+  expect(boxes[1].y).toBe(boxes[0].y);
+  expect(boxes[2].y).toBe(boxes[0].y);
+  expect(boxes[1].x).toBeGreaterThan(boxes[0].x + boxes[0].width);
+  expect(boxes[3].x).toBe(boxes[0].x);
+  expect(boxes[3].y).toBeGreaterThan(boxes[0].y);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth)).toBe(true);
+  // No chip: the list is every Workflow.
   await expect(chip(page)).toHaveCount(0);
-  expect((await workflowsTable(page).getByRole("row", { name: "Bugs" }).boundingBox())!.height).toBe(36);
   await shot(page, "list");
+  // Selecting the chip puts its strip in Bugs' column alone.
+  await column(page, "Bugs").locator(`[data-box="token"][data-task="${crash.key}"]`).click();
+  await expect(column(page, "Bugs").getByRole("region", { name: `${crash.key}'s way` })).toBeVisible();
+  await expect(page.getByRole("region", { name: `${crash.key}'s way` })).toHaveCount(1);
+  await shot(page, "list-selected");
   expect(errors).toEqual([]);
   await ctx.close();
 });
 
-test("11b · a row's acts are muted at rest and full contrast while the row is hovered or focused; nothing moves", async ({ browser }) => {
+test("11b · a column's grip moves its Workflow from the keyboard, one write; hover moves nothing", async ({ browser }) => {
   const { page, errors, ctx } = await open(browser, "/projects/ACC/workflows");
-  const row = workflowsTable(page).getByRole("row", { name: "Bugs" });
-  const acts = [
-    row.getByRole("button", { name: "Move Bugs later" }),
-    row.getByRole("link", { name: "Edit Bugs" }),
-    row.getByRole("button", { name: "Delete Bugs" }),
-    row.getByRole("button", { name: "More for Bugs" }),
-  ];
-  await expect(acts[2]).toBeVisible();
-  const look = () => Promise.all(acts.map((a) => a.evaluate((el) => ({ color: getComputedStyle(el).color, box: el.getBoundingClientRect().toJSON() as DOMRect }))));
-  await page.mouse.move(0, 0);
-  const rest = await look();
-  // Over the row, left of its acts: its link covers it.
-  await row.hover({ position: { x: 300, y: 18 } });
-  await expect.poll(async () => (await look())[0].color).not.toBe(rest[0].color);
-  const hovered = await look();
-  for (let i = 0; i < acts.length; i++) {
-    expect(hovered[i].color, `act ${i}`).not.toBe(rest[i].color);
-    expect(hovered[i].box, `act ${i}`).toEqual(rest[i].box);
-  }
-  await shot(page, "list-row-hovered");
-  // Focus in the row draws them the same.
-  await page.mouse.move(0, 0);
-  await row.getByRole("link", { name: "Bugs", exact: true }).focus();
-  await expect.poll(async () => (await look())[2].color).toBe(hovered[2].color);
-  // The ⋯ stands after them.
-  expect(rest[3].box.x).toBeGreaterThan(rest[2].box.x);
+  await expect.poll(() => rowNames(page)).toEqual(five);
+  const grip = column(page, "Features").getByRole("button", { name: /^Drag to order Features/ });
+  await expect(grip).toBeEnabled();
+  const rest = await head(page, "Bugs").boundingBox();
+  await head(page, "Bugs").hover();
+  expect(await head(page, "Bugs").boundingBox()).toEqual(rest);
+  await grip.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByText("Moved Features earlier")).toBeVisible();
+  const moved = ["Triage", "Features", "Bugs", "Prototypes", "Support"];
+  await expect.poll(() => rowNames(page)).toEqual(moved);
+  await expect.poll(async () => (await readGraph()).workflows.map((w) => w.name)).toEqual(moved);
+  await expect(grip).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => rowNames(page)).toEqual(five);
+  await expect.poll(async () => (await readGraph()).workflows.map((w) => w.name)).toEqual(five);
   expect(errors).toEqual([]);
   await ctx.close();
 });
 
-test("12 · a row opens Bugs' page; the chip goes to Support's; Edit opens its editor; the crumb leads back to the list", async ({ browser }) => {
+test("12 · a column's name opens Bugs' page; the chip goes to Support's; Edit opens its editor; the crumb leads back to the list", async ({ browser }) => {
   const { page, errors, ctx } = await open(browser, "/projects/ACC/workflows");
-  await workflowsTable(page).getByRole("row", { name: "Bugs" }).click();
+  await column(page, "Bugs").getByRole("link", { name: "Bugs", exact: true }).click();
   await expect(page).toHaveURL(`${base}/projects/ACC/workflows/${wf("Bugs")}`);
   await expect(chip(page)).toHaveText("Bugs");
   const line = page.getByRole("region", { name: "Workflow", exact: true });
@@ -638,18 +657,20 @@ test("12 · a row opens Bugs' page; the chip goes to Support's; Edit opens its e
   await ctx.close();
 });
 
-test("13 · a Project of one Workflow lists it, with + Workflow", async ({ browser }) => {
+test("13 · a Project of one Workflow draws it, with + Workflow", async ({ browser }) => {
   const { page, errors, ctx } = await open(browser, "/projects/ONE/workflows");
-  await expect(workflowsTable(page).getByRole("row")).toHaveCount(2);
+  await expect(workflowsList(page).locator(":scope > li")).toHaveCount(1);
+  const name = (await workflowsList(page).locator(":scope > li").getAttribute("aria-label"))!;
   await expect(page.getByRole("group", { name: "Page" }).getByRole("button", { name: "Workflow", exact: true })).toBeEnabled();
-  // The last Workflow stays: its trash is off.
-  await expect(workflowsTable(page).getByRole("button", { name: /^Delete / })).toBeDisabled();
+  // The last Workflow stays: its Delete is off, and says why.
+  const menu = await more(page, name);
+  await expect(menu.getByRole("menuitem", { name: /^Delete/ })).toBeDisabled();
+  await expect(menu.getByRole("menuitem", { name: /^Delete/ })).toContainText("The last Workflow stays");
+  await page.keyboard.press("Escape");
   await expect(chip(page)).toHaveCount(0);
   await shot(page, "list-one");
-  // Its row opens its page, with no chip: the last crumb is its name, plain.
-  const row = workflowsTable(page).getByRole("row").nth(1);
-  const name = (await row.getByRole("link").first().textContent())!.trim();
-  await row.getByRole("link").first().click();
+  // Its name opens its page, with no chip: the last crumb is its name, plain.
+  await column(page, name).getByRole("link", { name, exact: true }).click();
   await expect(page).toHaveURL(address("/projects/ONE/workflows/[^/?]+$"));
   await expect(page.getByRole("region", { name: "Workflow", exact: true })).toBeVisible();
   await expect(chip(page)).toHaveCount(0);
@@ -662,24 +683,25 @@ test("13 · a Project of one Workflow lists it, with + Workflow", async ({ brows
   await ctx.close();
 });
 
-test("14 · on a phone, the list is a plain table with a ⋯ per row and no sideways scroll", async ({ browser }) => {
+test("14 · on a phone, the lines stack, each column whole, with a ⋯ per head and no sideways scroll", async ({ browser }) => {
   const { page, errors, ctx } = await open(browser, "/projects/ACC/workflows", { width: 390, height: 844 });
   await expect.poll(() => rowNames(page)).toEqual(five);
-  for (const name of five) {
-    await expect(workflowsTable(page).getByRole("link", { name, exact: true })).toBeInViewport({ ratio: 1 });
-    await expect(workflowsTable(page).getByRole("button", { name: `More for ${name}` })).toBeInViewport({ ratio: 1 });
+  const boxes = await Promise.all(five.map(async (n) => (await column(page, n).boundingBox())!));
+  for (let i = 0; i < boxes.length; i++) {
+    expect(boxes[i].x, five[i]).toBe(boxes[0].x);
+    expect(boxes[i].x + boxes[i].width, five[i]).toBeLessThanOrEqual(390);
+    if (i > 0) expect(boxes[i].y, five[i]).toBeGreaterThan(boxes[i - 1].y + boxes[i - 1].height - 1);
   }
-  await expect(workflowsTable(page).getByRole("button", { name: /^More for / })).toHaveCount(five.length);
-  // The row's own acts fold into the ⋯ below `sm`.
-  await expect(workflowsTable(page).getByRole("button", { name: "Delete Support" })).toBeHidden();
-  await expect(workflowsTable(page).getByRole("columnheader", { name: "Done today" })).toBeInViewport({ ratio: 1 });
+  await expect(workflowsList(page).getByRole("button", { name: /^More for / })).toHaveCount(five.length);
+  await expect(column(page, "Triage").getByRole("button", { name: "More for Triage" })).toBeInViewport({ ratio: 1 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth)).toBe(true);
   await shot(page, "phone-list");
-  await workflowsTable(page).getByRole("button", { name: "More for Bugs" }).click();
-  const menu = page.getByRole("menu");
-  await expect(menu.getByRole("menuitem")).toHaveText(["Edit", "Move earlier", "Move later", "Delete"]);
+  await column(page, "Bugs").getByRole("button", { name: "More for Bugs" }).scrollIntoViewIfNeeded();
+  const menu = await more(page, "Bugs");
+  await expect(menu.getByRole("menuitem")).toHaveText(["Move earlier", "Move later", "Delete"]);
   await shot(page, "phone-list-more");
-  await menu.getByRole("menuitem", { name: "Edit" }).click();
+  await page.keyboard.press("Escape");
+  await column(page, "Bugs").getByRole("link", { name: "Edit Bugs" }).click();
   await expect(page).toHaveURL(`${base}/projects/ACC/workflows/${wf("Bugs")}/edit`);
   expect(errors).toEqual([]);
   await ctx.close();
