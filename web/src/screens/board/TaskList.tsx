@@ -262,7 +262,7 @@ function TaskRow({ task, model, expanded, onExpand, subtasks, showStep, nested }
           <span className="hidden md:inline-flex">
             <EvidenceCount count={trail?.evidence ?? 0} />
           </span>
-          {claim?.expires_at && (
+          {claim && (
             <span className="hidden text-xs text-muted-foreground lg:inline-flex">
               <HeartbeatMeter claim={claim} variant="compact" />
             </span>

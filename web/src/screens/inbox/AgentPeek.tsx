@@ -222,7 +222,7 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
                   <Key to={taskOverAgents(project, t.key)}>{t.key}</Key>
                   <span className="truncate">{t.title}</span>
                   {t.step_id && <span className="whitespace-nowrap text-muted-foreground">· {steps.get(t.step_id)?.name ?? "a Step"}</span>}
-                  {claim?.expires_at && <HeartbeatMeter claim={claim} variant="compact" className="ml-auto text-xs" />}
+                  {claim && <HeartbeatMeter claim={claim} variant="compact" className="ml-auto text-xs" />}
                 </span>
               );
             })

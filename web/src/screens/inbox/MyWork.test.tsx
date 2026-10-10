@@ -32,9 +32,11 @@ describe("My work", () => {
     renderApp("/my-work");
 
     const holding = await section("Held by you");
-    expect(row(holding, "WEB-3")).toHaveTextContent(/lapses in 1[45]m/);
+    // Held 2 minutes, far from its lapse: the hold's age; a Claim with no expiry says the same.
+    expect(row(holding, "WEB-3")).toHaveTextContent("working 2m");
     expect(row(holding, "WEB-3")).toHaveTextContent("Build");
-    expect(row(holding, "WEB-4")).toHaveTextContent("No expiry");
+    expect(row(holding, "WEB-4")).toHaveTextContent("working 2m");
+    expect(holding).not.toHaveTextContent("No expiry");
     expect(row(holding, "WEB-4")).toHaveTextContent("Review");
 
     const aimed = await section("Aimed at you");

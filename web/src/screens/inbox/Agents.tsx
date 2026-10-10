@@ -320,7 +320,7 @@ function AgentTableRow({
                   <small className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                     {t.step_id && <span className="truncate">{stepName(t.step_id) ?? "a Step"}</span>}
                     {t.blocked && t.open_blockers?.[0] && <Pill tone="blocked">Blocked by {t.open_blockers[0].key}</Pill>}
-                    {c?.expires_at && <HeartbeatMeter claim={c} variant="compact" />}
+                    {c && <HeartbeatMeter claim={c} variant="compact" />}
                   </small>
                 </span>
               );

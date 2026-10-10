@@ -38,7 +38,7 @@ describe("Tasks, list", () => {
     expect(within(held).getByText("Blocked by WEB-8")).toBeInTheDocument();
     expect(within(held).getByRole("img", { name: "Working" })).toBeInTheDocument();
     expect(within(held).getByRole("img", { name: "builder (agent)" })).toBeInTheDocument();
-    expect(within(held).getByText(/lapses in 1[45]m/)).toBeInTheDocument();
+    expect(within(held).getByText("working 5m")).toBeInTheDocument();
     expect(within(held).getByLabelText("Labels: client-x")).toBeInTheDocument();
     expect(within(await row(/WEB-1 Draft the launch copy/)).getByText(/^Lapsed /)).toBeInTheDocument();
     expect(within(await row(/WEB-1 Draft/)).getByRole("img", { name: "At a hold" })).toBeInTheDocument();

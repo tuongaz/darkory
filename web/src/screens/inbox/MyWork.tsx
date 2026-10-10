@@ -59,10 +59,7 @@ export function MyWorkPage() {
                     task={t}
                     project={project(t)}
                     stands={<StandsAt task={t} steps={steps} me={id} />}
-                    marks={
-                      claim &&
-                      (claim.expires_at ? <HeartbeatMeter claim={claim} variant="compact" className="text-xs" /> : <Pill tone="outline">No expiry</Pill>)
-                    }
+                    marks={claim && <HeartbeatMeter claim={claim} variant="compact" className="text-xs" />}
                     by={skill && <Pill tone="outline">{skill}</Pill>}
                     when={claim?.started_at}
                     whenWhat="Claimed"

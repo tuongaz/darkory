@@ -175,23 +175,27 @@ describe("SessionId", () => {
 });
 
 describe("HeartbeatMeter", () => {
-  it("reads the time left, No expiry, or Lapsed", () => {
+  it("says working with the hold's age, lapses in its last minute, or Lapsed", () => {
     render(
       <>
-        <HeartbeatMeter claim={{ expires_at: inMinutes(15), heartbeat_timeout_seconds: 900 }} />
-        <HeartbeatMeter claim={{ expires_at: inMinutes(10), heartbeat_timeout_seconds: 900 }} variant="compact" />
-        <HeartbeatMeter claim={{ expires_at: new Date(Date.now() + 36_000).toISOString(), heartbeat_timeout_seconds: 60 }} variant="compact" />
-        <HeartbeatMeter claim={{}} />
-        <HeartbeatMeter claim={{ expires_at: inMinutes(-1), heartbeat_timeout_seconds: 2 }} />
+        <HeartbeatMeter claim={{ started_at: inMinutes(-2), expires_at: inMinutes(13), heartbeat_timeout_seconds: 900 }} variant="compact" />
+        <HeartbeatMeter claim={{ started_at: inMinutes(-7), expires_at: new Date(Date.now() + 40_000).toISOString(), heartbeat_timeout_seconds: 900 }} variant="compact" />
+        <HeartbeatMeter claim={{ started_at: inMinutes(-1) }} variant="compact" />
+        <HeartbeatMeter claim={{ started_at: inMinutes(-3), expires_at: inMinutes(15), heartbeat_timeout_seconds: 900 }} />
+        <HeartbeatMeter claim={{ started_at: inMinutes(-9), expires_at: inMinutes(-1), heartbeat_timeout_seconds: 2 }} />
       </>,
     );
-    expect(screen.getByText("lapses in 15m")).toBeInTheDocument();
+    const working = screen.getByText("working 2m");
+    expect(working.parentElement).toHaveClass("text-state-done");
+    expect(working.closest("[title]")).toHaveAttribute("title", expect.stringMatching(/^Lapses at .+ unless a Heartbeat arrives$/));
+    expect(screen.getByText("lapses in 40s").parentElement).toHaveClass("text-state-claimed");
+    // A Claim with no expiry is held as long as its holder holds it.
+    expect(screen.getByText("working 1m").parentElement).toHaveClass("text-state-done");
+    // The bar keeps the bar and says the same words.
     expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "100");
-    // A card's compact meter reads as the Agents table's does, and says when on hover.
-    expect(screen.getByText("lapses in 10m")).toHaveAttribute("title", expect.stringMatching(/^Lapses at .+ unless a Heartbeat arrives$/));
-    expect(screen.getByText("lapses in 36s")).toBeInTheDocument();
-    expect(screen.getByText("No expiry")).toBeInTheDocument();
+    expect(screen.getByText("working 3m")).toBeInTheDocument();
     expect(screen.getByText("Lapsed")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/No expiry|lapses in 1[0-9]m/);
   });
 });
 

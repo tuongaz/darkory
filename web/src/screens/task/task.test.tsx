@@ -472,6 +472,30 @@ describe("a Task waiting behind a busy taker", () => {
   });
 });
 
+describe("a held Task's rail", () => {
+  it("shows no Heartbeat and no Session for a human's own Claim with no expiry, on the page and in the peek", async () => {
+    const held = { ...copy, claim: { id: "c-ada", task_id: copy.id, holder_id: ada.id, session_id: "s-ada", started_at: at(58) } };
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": detail(held, { claims: [held.claim] }) }));
+    renderApp("/tasks/WEB-1?task=WEB-1");
+    await screen.findAllByText("Held by");
+    // The page's rail and the peek's properties: each a list of terms.
+    const terms = () => screen.getAllByRole("term").map((t) => t.textContent);
+    await waitFor(() => expect(terms().filter((t) => t === "Held by")).toHaveLength(2));
+    expect(terms()).not.toContain("Heartbeat");
+    expect(terms()).not.toContain("Session");
+  });
+
+  it("keeps an agent's Heartbeat, as the bar with working and the hold's age, and its Session", async () => {
+    const held = { ...copy, claim: liveClaimOf(builder, copy.id, { session_id: "s-builder" }) };
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": detail(held, { claims: [held.claim] }) }));
+    renderApp("/tasks/WEB-1?task=WEB-1");
+    await waitFor(() => expect(screen.getAllByRole("term").filter((t) => t.textContent === "Heartbeat")).toHaveLength(2));
+    expect(screen.getAllByRole("term").filter((t) => t.textContent === "Session")).toHaveLength(2);
+    expect(screen.getAllByRole("meter").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^working \d+m$/).length).toBeGreaterThan(0);
+  });
+});
+
 describe("a Task's record", () => {
   it("hangs a Shift's log on the row that ended its Claim, never as the Task's Evidence", async () => {
     const t = { ...copy, state: "done" as const, ended_at: at(30), step_id: undefined };
