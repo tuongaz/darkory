@@ -45,7 +45,7 @@ const (
 type GitHub interface {
 	// CreatePR opens a pull request of head into base and returns its URL.
 	CreatePR(ctx context.Context, repo, base, head, title, body string) (string, error)
-	// PullRequests lists the repository's latest pull requests, in every state, newest first.
+	// PullRequests lists the repository's latest 200 pull requests, in every state, newest first.
 	PullRequests(ctx context.Context, repo string) ([]PullRequest, error)
 	// PullRequestsForBranch lists the pull requests whose head is branch, in every state, newest first.
 	PullRequestsForBranch(ctx context.Context, repo, branch string) ([]PullRequest, error)
@@ -121,7 +121,7 @@ func (g ghCLI) list(ctx context.Context, repo string, args ...string) ([]PullReq
 }
 
 func (g ghCLI) PullRequests(ctx context.Context, repo string) ([]PullRequest, error) {
-	return g.list(ctx, repo, "--state", "all", "--limit", "100")
+	return g.list(ctx, repo, "--state", "all", "--limit", "200")
 }
 
 func (g ghCLI) PullRequestsForBranch(ctx context.Context, repo, branch string) ([]PullRequest, error) {

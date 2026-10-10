@@ -77,7 +77,7 @@ esac`)
 	}
 
 	want := []string{
-		"pr list --state all --limit 100 --json " + prFields,
+		"pr list --state all --limit 200 --json " + prFields,
 		"pr list --head dark-3-fix --state all --json " + prFields,
 		"pr view 7 --json " + prFields,
 		"pr merge 7 --merge --match-head-commit abc123",
