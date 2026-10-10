@@ -365,16 +365,27 @@ function pickHeights(list: LaneTrack[], free: TrackEnd[], bound = Infinity): Stu
       if (c < cost) [best, cost] = [dys, c];
     }
   } else {
-    for (let changed = true; changed && cost > 0; ) {
-      changed = false;
-      for (let i = 0; i < free.length; i++) {
-        for (const h of heights) {
-          const dys = best.map((d, j) => (j === i ? h : d));
-          set(dys);
-          const c = trackCrossings(list, cost);
-          if (c < cost) [best, cost, changed] = [dys, c, true];
+    // One end at a time from each start (the defaults, every end at one height, the defaults
+    // turned over), the best kept: from one start alone the search sticks where moving any one
+    // end makes it no better but moving two would.
+    const starts: StubHeight[][] = [best, ...heights.map((h) => free.map(() => h)), best.map((d): StubHeight => (d === -1 ? 1 : -1))];
+    for (const start of starts) {
+      let at = start;
+      set(at);
+      let now = trackCrossings(list);
+      for (let changed = true; changed && now > 0; ) {
+        changed = false;
+        for (let i = 0; i < free.length; i++) {
+          for (const h of heights) {
+            const dys = at.map((d, j) => (j === i ? h : d));
+            set(dys);
+            const c = trackCrossings(list, now);
+            if (c < now) [at, now, changed] = [dys, c, true];
+          }
         }
       }
+      if (now < cost) [best, cost] = [at, now];
+      if (cost === 0) break;
     }
   }
   set(best);

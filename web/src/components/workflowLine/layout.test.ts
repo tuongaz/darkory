@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { wfId, wfStep } from "@/test/fixtures";
-import { BIG, DARK, DEFAULT, FIVE, MAIN, SACCA, SOFTWARE } from "./fixtures";
+import { BIG, DARK, DEFAULT, FIVE, HOTFIX, MAIN, SACCA, SOFTWARE } from "./fixtures";
 import { laneTracks, lineTopology, railOf, trackCrossings, tracks, type LineTopology } from "./layout";
 import { DONE_STATION, type LineConnector, type LineWorkflow } from "./model";
 
@@ -257,6 +257,19 @@ describe("the line down the page: returns as tracks in lanes beside the rail", (
       ["QA", 2],
     ]);
     expect(trackCrossings(list)).toBe(1);
+  });
+
+  // Each at the fewest crossings any lanes and stub heights give, found by trying every one.
+  it("lays the software Workflow's four tracks with one crossing at most: Build's long track (its loops and the skip past Design) cannot stand clear of every other", () => {
+    expect(trackCrossings(tracks(lineTopology(SOFTWARE)))).toBeLessThanOrEqual(1);
+  });
+
+  it("lays Support's three tracks with one crossing at most: Approve returns into Ops and into Support, and Support's own leave from the rows they end at", () => {
+    expect(trackCrossings(tracks(lineTopology(FIVE(wfId.support))))).toBeLessThanOrEqual(1);
+  });
+
+  it("lays BIG escalating's three tracks with one crossing at most, as BIG's: the exit out of QA is a chip, no track", () => {
+    expect(trackCrossings(tracks(lineTopology(HOTFIX())))).toBeLessThanOrEqual(1);
   });
 
   it("crosses nothing on MAIN, the default, the Sacca Workflow and Bug triage's shared track", () => {
