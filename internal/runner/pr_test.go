@@ -499,8 +499,8 @@ func pollRunner(t *testing.T, rec *taskRecord, gh GitHub, agents ...*taskRecord)
 }
 
 // The poller writes on a Task the pull request of its branch it reads on GitHub, open and then
-// merged, within one Poll each, opened or merged by hand on a Done Task; the newest of a Task's,
-// once per state. A Parent's own branch, a branch with no Task's key, one with a slash after the
+// merged, within one Poll each, opened or merged by hand on a Done Task; a merged one over an
+// open one, else the newest; once per state. A Parent's own branch, a branch with no Task's key, one with a slash after the
 // key, a closed pull request, one into another base, one from a fork, and a key only in a title
 // are not a Task's pull request.
 func TestPollerRecordsPullRequests(t *testing.T) {
@@ -530,7 +530,8 @@ func TestPollerRecordsPullRequests(t *testing.T) {
 	gh.merge(PullRequest{Number: 10, HeadRefName: "dark-5-totals-again", BaseRefName: "dark-4", URL: url(10)})
 	gh.open(PullRequest{Number: 11, HeadRefName: "dark-5-totals-more", BaseRefName: "dark-4", URL: url(11)})
 	r.pollOnce(t.Context(), seen)
-	want := []string{"reader DARK-3 #7 merged", "reader DARK-3 #7 open", "reader DARK-5 #11 open"}
+	// DARK-5's #10 merged wins over its newer #11, open.
+	want := []string{"reader DARK-3 #7 merged", "reader DARK-3 #7 open", "reader DARK-5 #10 merged"}
 	sorted := func() []string { return slices.Sorted(slices.Values(rec.written())) }
 	if got := sorted(); !slices.Equal(got, want) {
 		t.Fatalf("after the merge: %v, want %v", got, want)
@@ -671,5 +672,38 @@ func TestPollerWaitsForTheTask(t *testing.T) {
 	r.pollOnce(t.Context(), seen)
 	if got := rec.written(); !slices.Equal(got, []string{"reader DARK-3 #7 open"}) {
 		t.Fatalf("written %v", got)
+	}
+}
+
+// A merged pull request of the Task's branch wins over a newer open one: the branch has landed.
+// Among open ones the newest by number; a closed one never.
+func TestNewestPullRequest(t *testing.T) {
+	for _, tc := range []struct {
+		prs  []PullRequest
+		want int64
+	}{
+		{[]PullRequest{{Number: 8, State: PROpen}, {Number: 7, State: PRMerged}}, 7},
+		{[]PullRequest{{Number: 7, State: PROpen}, {Number: 9, State: PROpen}, {Number: 8, State: PRClosed}}, 9},
+		{[]PullRequest{{Number: 6, State: PRMerged}, {Number: 7, State: PRMerged}, {Number: 9, State: PROpen}}, 7},
+		{[]PullRequest{{Number: 9, State: PRClosed}}, 0},
+	} {
+		got, ok := newestPullRequest(tc.prs)
+		if got.Number != tc.want || ok != (tc.want != 0) {
+			t.Errorf("newestPullRequest(%+v) = #%d, %v; want #%d", tc.prs, got.Number, ok, tc.want)
+		}
+	}
+
+	// On the Task: #8 opened, then #7 merged.
+	rec := mergeFixture()
+	gh := &recordingGitHub{}
+	r := pollRunner(t, rec, gh)
+	seen := map[string]bool{}
+	gh.open(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: "https://github.com/acme/web/pull/7"})
+	gh.open(PullRequest{Number: 8, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: "https://github.com/acme/web/pull/8"})
+	r.pollOnce(t.Context(), seen)
+	gh.merge(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: "https://github.com/acme/web/pull/7"})
+	r.pollOnce(t.Context(), seen)
+	if pr := rec.tasks[0].Task.PullRequest; pr == nil || pr.Number != 7 || pr.State != client.PullRequestMerged {
+		t.Fatalf("DARK-3 carries %+v", pr)
 	}
 }

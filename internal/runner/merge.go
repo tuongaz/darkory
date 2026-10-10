@@ -597,15 +597,23 @@ func (r *Runner) notLanding(ctx context.Context, d *client.TaskDetail, ws Worksp
 	return ""
 }
 
-// newestPullRequest is the newest of prs that is open or merged: a closed one is not the Task's.
+// newestPullRequest is the Task's pull request among prs, the pull requests of its branch: a merged
+// one wins, since the branch has landed (the newest merged by number); else the newest open one. A
+// closed one is never the Task's.
 func newestPullRequest(prs []PullRequest) (PullRequest, bool) {
-	var newest PullRequest
+	var merged, open PullRequest
 	for _, pr := range prs {
-		if (pr.State == PROpen || pr.State == PRMerged) && pr.Number > newest.Number {
-			newest = pr
+		switch {
+		case pr.State == PRMerged && pr.Number > merged.Number:
+			merged = pr
+		case pr.State == PROpen && pr.Number > open.Number:
+			open = pr
 		}
 	}
-	return newest, newest.Number > 0
+	if merged.Number > 0 {
+		return merged, true
+	}
+	return open, open.Number > 0
 }
 
 // recordPullRequests writes on each Task the newest open or merged pull request among prs, a
