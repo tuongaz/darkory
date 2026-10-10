@@ -133,4 +133,4 @@ The Workflow's page as where a Project opens: the owner's call, reverses round 3
 
 ## State
 
-Filled in as the tasks land.
+Landed on 2026-10-10 in one pull request, every task of this plan: the record (Task 1, with two review rounds and the security review's rules), the Runner (Task 2, with its review round), the docs (Task 3), the web (Tasks 4, 5, 6, each reviewed), the gate (Task 7). What the reviews added beyond the plan is one line each in `decisions.md` under "Dogfood follow-ups (2026-10-10)": the address names its number, the merge is recorded for its number under one lock per Task, a fork's pull request is never a Task's, one landing rule in `internal/branch`, `Evidence.claim_id`, an agent's `merged` write checked through the Runner beside the server. Not built: the Workflow's page as where a Project opens (the owner's call).
