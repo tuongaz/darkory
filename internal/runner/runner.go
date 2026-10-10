@@ -1,10 +1,13 @@
 // Package runner is the Runner of a Local Install (ADR 0013): for each agent Member it has a
-// token for, it pulls Tasks through `next`, prepares the Workspaces, starts the agent's command
-// with a prompt from the record, keeps the Claim's Heartbeats while the session shows progress,
-// nudges a session that stops without a decision, and ends the session when the Claim ends,
-// attaching its log as Evidence. It merges a Task's branch into its Parent's, or the default
-// branch, when the Task ends Done, and a Parent's into the default branch when it completes
-// (ADR 0015). It is a client of the record (plan invariant 9), never a second scheduler.
+// token for, it pulls Tasks through `next`, as many Shifts at once as the agent's settings say,
+// prepares the Workspaces, starts the agent's command with a prompt from the record, keeps the
+// Claim's Heartbeats while the session shows progress, nudges a session that stops without a
+// decision, and ends the session when the Claim ends, attaching its log to the Task as the
+// Claim's log. It merges a Task's branch into its Parent's, or the default branch, when the Task
+// ends Done, and a Parent's into the default branch when it completes (ADR 0015); in a Workspace
+// in pull_request mode it writes a Task's pull request on the Task as it reads it on GitHub, and
+// merges it when the server asks. It is a client of the record (plan invariant 9), never a
+// second scheduler.
 package runner
 
 import (

@@ -12,8 +12,9 @@ import (
 )
 
 // A Workspace in pull_request mode lands through GitHub: a Parent's Complete opens its branch's
-// pull request, and a merged pull request carrying a Task's key completes its review (D14). The runner
-// talks to GitHub through the gh CLI, behind GitHub so tests stand in for it.
+// pull request, a Task's pull request is written on the Task, open and then merged, and a merged
+// pull request carrying a Task's key completes its review (D14). The runner talks to GitHub
+// through the gh CLI, behind GitHub so tests stand in for it.
 
 // PullRequest is a pull request as gh lists it.
 type PullRequest struct {
