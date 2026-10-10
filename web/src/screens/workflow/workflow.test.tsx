@@ -281,6 +281,8 @@ describe("a Workflow's editor", () => {
     const { puts } = serve();
     await openEditor();
     const grip = screen.getByRole("button", { name: /^Move Build/ });
+    // Its name says its keys; nothing describes keys it does not take.
+    expect(grip).toHaveAccessibleDescription("");
     act(() => grip.focus());
     fireEvent.keyDown(grip, { key: "ArrowDown", altKey: true });
     expect(onRail()).toEqual(["Review", "Build", "Done"]);

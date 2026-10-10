@@ -135,6 +135,19 @@ describe("the rules on Workflows of other shapes", () => {
     expect(h.at.get(DONE_STATION)?.x).toBe(300);
   });
 
+  it("a new hold an editor placed stays where it was put though nothing joins it: on the rail, or among the Steps a Parent's end files into", () => {
+    const hold = (id: string, position: number) => ({ id, workflow_id: "work", name: id, position });
+    const base = wf(["a", "b"], [["a", "p", "b"], ["b", "p", null]]);
+    const parked = lineTopology({ ...base, steps: [...base.steps, hold("n", 3)] });
+    expect(parked.holds).toEqual(["n"]);
+    const onRail = lineTopology({ ...base, steps: [...base.steps, hold("n", 3)], placed: new Map([["n", "main"]]) });
+    expect(onRail.holds).toEqual([]);
+    expect(onRail.main).toEqual(["a", "b", "n", DONE_STATION]);
+    const after = lineTopology({ ...base, steps: [...base.steps, hold("n", 3)], placed: new Map([["n", "after"]]) });
+    expect(after.main).toEqual(["a", "b", DONE_STATION]);
+    expect(after.rows.flatMap((r) => r.stations)).toEqual(["n"]);
+  });
+
   it("two loops that would interleave under the line: one goes over", () => {
     const t = lineTopology(wf(["a", "b", "c", "d"], [["a", "p", "b"], ["b", "p", "c"], ["c", "p", "d"], ["c", "x", "a"], ["d", "y", "b"]]));
     expect(t.under).toHaveLength(1);

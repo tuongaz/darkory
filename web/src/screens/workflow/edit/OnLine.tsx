@@ -1,27 +1,7 @@
-import {
-  DndContext,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type Announcements, type DragEndEvent, type UniqueIdentifier } from "@dnd-kit/core";
 import { SortableContext, useSortable } from "@dnd-kit/sortable";
-import {
-  ArrowRightIcon,
-  MoreHorizontalIcon,
-  PlusIcon,
-  TriangleAlertIcon,
-  XIcon,
-} from "lucide-react";
-import {
-  useId,
-  useMemo,
-  useRef,
-  type KeyboardEvent,
-  type ReactNode,
-  type RefCallback,
-} from "react";
+import { ArrowRightIcon, MoreHorizontalIcon, PlusIcon, TriangleAlertIcon, XIcon } from "lucide-react";
+import { useId, useMemo, useRef, type KeyboardEvent, type ReactNode, type RefCallback } from "react";
 import type { Project, Skill } from "@/api/client";
 import { InfoTip } from "@/components/InfoTip";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -36,54 +16,17 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { lineTopology } from "@/components/workflowLine/layout";
-import {
-  DONE_STATION,
-  type LineWorkflow,
-} from "@/components/workflowLine/model";
+import { DONE_STATION, type LineWorkflow } from "@/components/workflowLine/model";
 import { railParts, type Seg } from "@/components/workflowLine/rails";
 import { RailLine } from "@/components/workflowLine/Vertical";
-import {
-  AFTER_HINT,
-  AFTER_LABEL,
-  ALSO_LABEL,
-  FILES_LABEL,
-  filesHint,
-  HAND_LABEL,
-  holdHint,
-  START_LABEL,
-} from "@/components/workflowLine/words";
+import { AFTER_HINT, AFTER_LABEL, ALSO_LABEL, FILES_LABEL, filesHint, HAND_LABEL, holdHint, START_LABEL } from "@/components/workflowLine/words";
 import { cn } from "@/lib/utils";
-import {
-  same,
-  type RecordConnector,
-  type RecordStep,
-  type WorkflowRecord,
-} from "../bind";
+import { same, type RecordConnector, type RecordStep, type WorkflowRecord } from "../bind";
 import { nameMax } from "../edits";
-import {
-  asLine,
-  isNewSkill,
-  outcomes,
-  stepsIn,
-  wasTarget,
-  workflowsOf,
-  type Draft,
-  type Group,
-} from "./draft";
+import { asLine, isNewSkill, outcomes, stepsIn, wasTarget, workflowsOf, type Draft, type Group } from "./draft";
 import type { Holder, Roster } from "./holders";
 import type { OrgFacts } from "./reach";
 import { SkillPicker, type SkillChoice } from "./SkillPicker";
@@ -122,8 +65,7 @@ export type OnLineActions = {
   main: (id: string) => void;
 };
 
-const stepWord = (s: Pick<RecordStep, "name">) =>
-  s.name.trim() || "the new Step";
+const stepWord = (s: Pick<RecordStep, "name">) => s.name.trim() || "the new Step";
 
 export function OnLine({
   project,
@@ -160,29 +102,16 @@ export function OnLine({
   note?: ReactNode;
 }) {
   const wf = draft.wf;
-  const skillMap = useMemo(
-    () => new Map(skills.map((s) => [s.id, s])),
-    [skills],
-  );
+  const skillMap = useMemo(() => new Map(skills.map((s) => [s.id, s])), [skills]);
   const workflows = workflowsOf(wf);
   const order = useMemo(() => stepsIn(wf, workflowId), [wf, workflowId]);
-  const steps = useMemo(
-    () => new Map(wf.steps.map((s) => [s.id, s])),
-    [wf.steps],
-  );
-  const baseSteps = useMemo(
-    () => new Map(base.steps.map((s) => [s.id, s])),
-    [base.steps],
-  );
+  const steps = useMemo(() => new Map(wf.steps.map((s) => [s.id, s])), [wf.steps]);
+  const baseSteps = useMemo(() => new Map(base.steps.map((s) => [s.id, s])), [base.steps]);
 
   // The line as the live page draws it, but a new Step stays where it was put though nothing joins it yet.
   const line = useMemo<LineWorkflow>(() => {
     const drawn = workflows.length > 1 ? workflowId : undefined;
-    const placed = new Map(
-      order
-        .filter((s) => !baseSteps.has(s.id))
-        .map((s) => [s.id, groups(s)] as const),
-    );
+    const placed = new Map(order.filter((s) => !baseSteps.has(s.id)).map((s) => [s.id, groups(s)] as const));
     return { ...asLine(wf, skillMap, drawn), placed };
   }, [wf, skillMap, workflows.length, workflowId, order, baseSteps, groups]);
   const t = useMemo(() => lineTopology(line), [line]);
@@ -192,70 +121,37 @@ export function OnLine({
   const changedStep = (id: string) => {
     const b = baseSteps.get(id);
     const s = steps.get(id);
-    return (
-      !!s &&
-      (!b ||
-        b.name !== s.name.trim() ||
-        b.skill_id !== s.skill_id ||
-        b.workflow_id !== s.workflow_id)
-    );
+    return !!s && (!b || b.name !== s.name.trim() || b.skill_id !== s.skill_id || b.workflow_id !== s.workflow_id);
   };
   const changedOutcome = useMemo(() => {
     const was = new Map(base.connectors.map((c) => [c.id, c]));
-    return new Set(
-      wf.connectors
-        .filter(
-          (c) =>
-            !was.get(c.id) ||
-            was.get(c.id)!.to_step_id !== c.to_step_id ||
-            was.get(c.id)!.name !== c.name.trim(),
-        )
-        .map((c) => c.id),
-    );
+    return new Set(wf.connectors.filter((c) => !was.get(c.id) || was.get(c.id)!.to_step_id !== c.to_step_id || was.get(c.id)!.name !== c.name.trim()).map((c) => c.id));
   }, [wf.connectors, base.connectors]);
 
-  const nameOf = (id: string | null | undefined) =>
-    id && id !== DONE_STATION
-      ? steps.get(id)?.name.trim() || "New Step"
-      : "Done";
-  const workflowName = (id: string) =>
-    workflows.find((w) => w.id === id)?.name.trim() || "New Workflow";
+  const nameOf = (id: string | null | undefined) => (id && id !== DONE_STATION ? steps.get(id)?.name.trim() || "New Step" : "Done");
+  const workflowName = (id: string) => workflows.find((w) => w.id === id)?.name.trim() || "New Workflow";
   // Where a Step's name is used already: another Step of the Project called the same, whatever its case.
-  const clash = (s: RecordStep) =>
-    s.name.trim()
-      ? wf.steps.find((o) => o.id !== s.id && same(o.name, s.name))
-      : undefined;
+  const clash = (s: RecordStep) => (s.name.trim() ? wf.steps.find((o) => o.id !== s.id && same(o.name, s.name)) : undefined);
 
-  const onRail = useMemo(
-    () =>
-      new Set(
-        [...parts.mainSegs, ...parts.quietSegs].flatMap((s) =>
-          s?.connector ? [s.connector.id] : [],
-        ),
-      ),
-    [parts],
-  );
-  const holderNames = useMemo(
-    () =>
-      new Map(
-        [...(holders ?? new Map<string, Holder[]>())].map(([id, list]) => [
-          id,
-          list.map((h) => h.name),
-        ]),
-      ),
-    [holders],
-  );
+  const onRail = useMemo(() => new Set([...parts.mainSegs, ...parts.quietSegs].flatMap((s) => (s?.connector ? [s.connector.id] : []))), [parts]);
+  const holderNames = useMemo(() => new Map([...(holders ?? new Map<string, Holder[]>())].map(([id, list]) => [id, list.map((h) => h.name)])), [holders]);
 
   // Order: a Step dragged by its grip onto another's place in its group. Only the one dragged moves.
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
     const a = steps.get(String(active.id));
     const o = steps.get(String(over.id));
     if (!a || !o || groups(a) !== groups(o)) return;
     actions.moveTo(a.id, o.id);
+  };
+  // What a drag says to a screen reader, in the Steps' names; the grip's own name says its keys.
+  const dragName = (id: UniqueIdentifier | undefined) => (id === undefined ? "" : nameOf(String(id)));
+  const announcements: Announcements = {
+    onDragStart: ({ active }) => `Picked up ${dragName(active.id)}`,
+    onDragOver: ({ active, over }) => (over && over.id !== active.id ? `${dragName(active.id)} over ${dragName(over.id)}` : undefined),
+    onDragEnd: ({ active, over }) => (over && over.id !== active.id ? `Moved ${dragName(active.id)} to ${dragName(over.id)}'s place` : `${dragName(active.id)} stays`),
+    onDragCancel: ({ active }) => `${dragName(active.id)} stays`,
   };
   const grips = useRef(new Map<string, HTMLButtonElement>());
   const canMove = (s: RecordStep, by: -1 | 1) => {
@@ -271,11 +167,7 @@ export function OnLine({
       wf={wf}
       base={base}
       step={steps.get(c.from_step_id)!}
-      main={
-        outcomes(wf, c.from_step_id).length > 1
-          ? outcomes(wf, c.from_step_id)[0]?.id === c.id
-          : undefined
-      }
+      main={outcomes(wf, c.from_step_id).length > 1 ? outcomes(wf, c.from_step_id)[0]?.id === c.id : undefined}
       glyph={glyph}
       changed={changedOutcome.has(c.id)}
       invalid={invalid}
@@ -288,10 +180,7 @@ export function OnLine({
   /** How an outcome beside its Step reads: back along the line, on along it, into Done, off it. */
   const glyphOf = (c: RecordConnector, stations: readonly string[]) => {
     if (!c.to_step_id) return undefined;
-    const [a, b] = [
-      stations.indexOf(c.from_step_id),
-      stations.indexOf(c.to_step_id),
-    ];
+    const [a, b] = [stations.indexOf(c.from_step_id), stations.indexOf(c.to_step_id)];
     if (a < 0 || b < 0) return "↗";
     return b < a ? "↩" : "↪";
   };
@@ -301,15 +190,10 @@ export function OnLine({
     const out = outcomes(wf, s.id);
     return (
       <>
-        {out
-          .filter((c) => !onRail.has(c.id))
-          .map((c) => outcomeField(c, glyphOf(c, stations)))}
+        {out.filter((c) => !onRail.has(c.id)).map((c) => outcomeField(c, glyphOf(c, stations)))}
         {out.length === 0 && s.skill_id && (
           <Tip label="Tasks here can only be moved by hand">
-            <span
-              tabIndex={0}
-              className="inline-flex items-center gap-1 rounded-sm px-1 text-xs font-medium text-state-claimed outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
+            <span tabIndex={0} className="inline-flex items-center gap-1 rounded-sm px-1 text-xs font-medium text-state-claimed outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
               <TriangleAlertIcon aria-hidden className="size-3.5" />
               No way out
             </span>
@@ -333,11 +217,7 @@ export function OnLine({
     t.entries
       .filter((e) => e.stepId === id)
       .map((e) => (
-        <span
-          key={e.connector.id}
-          data-chip="entry"
-          className="inline-flex h-5 items-center gap-1 rounded-full border px-[7px] text-[11px] font-medium whitespace-nowrap text-muted-foreground"
-        >
+        <span key={e.connector.id} data-chip="entry" className="inline-flex h-5 items-center gap-1 rounded-full border px-[7px] text-[11px] font-medium whitespace-nowrap text-muted-foreground">
           {e.text.replace(/^from /, "")}
           <span aria-hidden>↙</span>
         </span>
@@ -363,9 +243,7 @@ export function OnLine({
       canDown={canMove(s, 1)}
       actions={actions}
       inputRef={inputRef}
-      gripRef={(el) =>
-        el ? grips.current.set(s.id, el) : grips.current.delete(s.id)
-      }
+      gripRef={(el) => (el ? grips.current.set(s.id, el) : grips.current.delete(s.id))}
       onGripKey={(e) => {
         if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
         e.preventDefault();
@@ -387,11 +265,7 @@ export function OnLine({
 
   // ---- Also starts here: the Steps before the start, the breakdown Step, the parked holds.
   const sideIds = (() => {
-    const ids = new Set([
-      ...parts.lead,
-      ...(t.before ? [t.before] : []),
-      ...t.holds,
-    ]);
+    const ids = new Set([...parts.lead, ...(t.before ? [t.before] : []), ...t.holds]);
     return order.filter((s) => ids.has(s.id));
   })();
   // What the live line says of a Step there, read: a parked hold moved on by hand into the start, the breakdown Step's Subtasks filed at it.
@@ -406,9 +280,7 @@ export function OnLine({
           data-mark={hold ? "hand" : "files"}
           className={cn(
             "inline-flex items-center gap-1 rounded-[5px] px-[7px] py-0.5 text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-            hold
-              ? "border border-dashed border-muted-foreground px-1.5 py-px text-muted-foreground"
-              : "bg-muted",
+            hold ? "border border-dashed border-muted-foreground px-1.5 py-px text-muted-foreground" : "bg-muted",
           )}
         >
           <span aria-hidden className="font-semibold text-muted-foreground">
@@ -421,26 +293,14 @@ export function OnLine({
   };
   const group = sideIds.length > 0 && (
     <div className="flex w-full min-w-0 basis-full items-start @3xl:basis-auto">
-      <span
-        aria-hidden
-        className="relative mt-3 mr-2 hidden h-[1.5px] w-7 flex-none bg-muted-foreground @3xl:block"
-      >
+      <span aria-hidden className="relative mt-3 mr-2 hidden h-[1.5px] w-7 flex-none bg-muted-foreground @3xl:block">
         <span className="absolute top-[-4px] left-[-2px] border-y-[4.5px] border-r-[7px] border-y-transparent border-r-muted-foreground" />
       </span>
-      <section
-        aria-label={ALSO_LABEL}
-        className="min-w-0 flex-1 rounded-md border px-2.5 pt-1 pb-1.5"
-      >
-        <div className="text-[11px] font-medium text-muted-foreground">
-          {ALSO_LABEL}
-        </div>
+      <section aria-label={ALSO_LABEL} className="min-w-0 flex-1 rounded-md border px-2.5 pt-1 pb-1.5">
+        <div className="text-[11px] font-medium text-muted-foreground">{ALSO_LABEL}</div>
         <div className="flex flex-col gap-1.5">
           {sideIds.map((s) => (
-            <div
-              key={s.id}
-              data-side={s.id}
-              className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-            >
+            <div key={s.id} data-side={s.id} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               {head(s)}
               {entries(s.id)}
               {sideMark(s)}
@@ -452,14 +312,10 @@ export function OnLine({
     </div>
   );
 
-  const { rail, mainSegs, mainTracks, quietStations, quietSegs, quietTracks } =
-    parts;
+  const { rail, mainSegs, mainTracks, quietStations, quietSegs, quietTracks } = parts;
   const first = rail[0];
   const startRow = first !== DONE_STATION && (
-    <div
-      data-start-row
-      className="flex min-h-6 flex-wrap items-center gap-x-2.5 gap-y-1 pb-0.5"
-    >
+    <div data-start-row className="flex min-h-6 flex-wrap items-center gap-x-2.5 gap-y-1 pb-0.5">
       <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
         <span aria-hidden>↓</span>
         {t.afterOnly ? AFTER_LABEL : START_LABEL}
@@ -470,54 +326,41 @@ export function OnLine({
   );
   // The Retrospective a Parent's end files, where this Workflow does not hold the Project's retro Step.
   const retro = (() => {
-    if (
-      line.drawn === undefined ||
-      line.steps.some(
-        (s) => s.workflow_id === line.drawn && s.skill?.name === "retro",
-      )
-    )
-      return undefined;
+    if (line.drawn === undefined || line.steps.some((s) => s.workflow_id === line.drawn && s.skill?.name === "retro")) return undefined;
     const s = line.steps.find((x) => x.skill?.name === "retro");
     return s ? `${workflowName(s.workflow_id)} › ${s.name}` : undefined;
   })();
 
-  const row =
-    (stations: readonly string[], withGroup: boolean) =>
-    (id: string, i: number) => {
-      if (id === DONE_STATION) {
-        return {
-          name: <span className="text-sm font-semibold">Done</span>,
-          tasks: null,
-          marks: withGroup && retro && (
-            <span
-              data-retro
-              className="inline-flex items-center gap-1 rounded-[5px] bg-muted px-[7px] py-0.5 text-xs"
-            >
-              <span aria-hidden className="font-semibold text-muted-foreground">
-                ↗
-              </span>
-              {retro}
-            </span>
-          ),
-        };
-      }
-      const s = steps.get(id)!;
+  const row = (stations: readonly string[], withGroup: boolean) => (id: string, i: number) => {
+    if (id === DONE_STATION) {
       return {
-        name: head(s),
+        name: <span className="text-sm font-semibold">Done</span>,
         tasks: null,
-        marks: (
-          <>
-            {(i > 0 || !withGroup) && entries(id)}
-            {besides(s, stations)}
-            {withGroup && i === 0 && group}
-          </>
+        marks: withGroup && retro && (
+          <span data-retro className="inline-flex items-center gap-1 rounded-[5px] bg-muted px-[7px] py-0.5 text-xs">
+            <span aria-hidden className="font-semibold text-muted-foreground">
+              ↗
+            </span>
+            {retro}
+          </span>
         ),
       };
+    }
+    const s = steps.get(id)!;
+    return {
+      name: head(s),
+      tasks: null,
+      marks: (
+        <>
+          {(i > 0 || !withGroup) && entries(id)}
+          {besides(s, stations)}
+          {withGroup && i === 0 && group}
+        </>
+      ),
     };
+  };
 
-  const quietOnes = quietStations
-    .filter((id) => id !== DONE_STATION)
-    .map((id) => steps.get(id)!);
+  const quietOnes = quietStations.filter((id) => id !== DONE_STATION).map((id) => steps.get(id)!);
   const lastAfter = order.filter((s) => groups(s) === "after").at(-1);
   const branch = !t.afterOnly && quietOnes.length > 0 && (
     <section aria-label={AFTER_LABEL} className="mt-3 border-t pt-2">
@@ -535,9 +378,7 @@ export function OnLine({
         row={row(quietStations, false)}
         onTip={() => {}}
         name={nameOf}
-        tone={(ids) =>
-          ids.some((x) => changedOutcome.has(x)) ? "changed" : "plain"
-        }
+        tone={(ids) => (ids.some((x) => changedOutcome.has(x)) ? "changed" : "plain")}
         holdAt={(id) => !!steps.get(id) && !steps.get(id)!.skill_id}
         isStart={() => false}
         changed={changedStep}
@@ -557,15 +398,8 @@ export function OnLine({
   );
 
   return (
-    <section
-      aria-label="The line, editing"
-      className="@container relative flex min-w-0 flex-col"
-    >
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={onDragEnd}
-      >
+    <section aria-label="The line, editing" className="@container relative flex min-w-0 flex-col">
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd} accessibility={{ screenReaderInstructions: { draggable: "" }, announcements }}>
         <SortableContext items={order.map((s) => s.id)} strategy={() => null}>
           <RailLine
             label="Steps on the line"
@@ -577,9 +411,7 @@ export function OnLine({
             row={row(rail, true)}
             onTip={() => {}}
             name={nameOf}
-            tone={(ids) =>
-              ids.some((x) => changedOutcome.has(x)) ? "changed" : "plain"
-            }
+            tone={(ids) => (ids.some((x) => changedOutcome.has(x)) ? "changed" : "plain")}
             holdAt={(id) => !!steps.get(id) && !steps.get(id)!.skill_id}
             isStart={(id) => id === first && id !== DONE_STATION}
             changed={changedStep}
@@ -640,31 +472,14 @@ function StepHead({
   gripRef: (el: HTMLButtonElement | null) => void;
   onGripKey: (e: KeyboardEvent) => void;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    setActivatorNodeRef,
-    transform,
-    isDragging,
-    isOver,
-  } = useSortable({ id: step.id });
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging, isOver } = useSortable({ id: step.id });
   const word = stepWord(step);
   const clashId = useId();
   const empty = !step.name.trim();
-  const skill =
-    step.skill_id && !isNewSkill(step.skill_id)
-      ? skillMap.get(step.skill_id)
-      : undefined;
-  const pendingName = isNewSkill(step.skill_id)
-    ? pending[step.skill_id!]?.name
-    : undefined;
+  const skill = step.skill_id && !isNewSkill(step.skill_id) ? skillMap.get(step.skill_id) : undefined;
+  const pendingName = isNewSkill(step.skill_id) ? pending[step.skill_id!]?.name : undefined;
   // The Skill who takes it is about: one that exists, or the new one made on Save.
-  const stepSkill: StepSkill | undefined =
-    skill ??
-    (pendingName
-      ? { id: step.skill_id!, name: pendingName, builtin: false }
-      : undefined);
+  const stepSkill: StepSkill | undefined = skill ?? (pendingName ? { id: step.skill_id!, name: pendingName, builtin: false } : undefined);
   const { onKeyDown: dndKey, ...gripListeners } = listeners ?? {};
   // An item that puts the focus in a field (a Step added, the Step moved to another Workflow): the menu leaves it there as it closes.
   const focused = useRef(false);
@@ -674,16 +489,12 @@ function StepHead({
       data-step-head={step.id}
       data-changed={changed ? "" : undefined}
       style={{
-        transform: transform
-          ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
-          : undefined,
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
       }}
       className={cn(
         "relative flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1",
         isDragging && "z-20 rounded-md bg-background shadow-soft",
-        isOver &&
-          !isDragging &&
-          "before:absolute before:inset-x-0 before:-top-1 before:h-0.5 before:rounded-full before:bg-ring",
+        isOver && !isDragging && "before:absolute before:inset-x-0 before:-top-1 before:h-0.5 before:rounded-full before:bg-ring",
       )}
     >
       <button
@@ -699,8 +510,7 @@ function StepHead({
         aria-label={`Move ${word}: drag, or Alt+↑ and Alt+↓`}
         onKeyDown={(e) => {
           onGripKey(e);
-          if (!e.defaultPrevented)
-            (dndKey as ((e: KeyboardEvent) => void) | undefined)?.(e);
+          if (!e.defaultPrevented) (dndKey as ((e: KeyboardEvent) => void) | undefined)?.(e);
         }}
         className="-ml-1 flex h-6 w-3 flex-none cursor-grab touch-none items-center justify-center rounded-sm text-[13px] font-semibold tracking-[-3px] text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
@@ -775,16 +585,10 @@ function StepHead({
             focused.current = false;
           }}
         >
-          <DropdownMenuItem
-            disabled={!canUp}
-            onSelect={() => actions.reorder(step.id, -1)}
-          >
+          <DropdownMenuItem disabled={!canUp} onSelect={() => actions.reorder(step.id, -1)}>
             Move up
           </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!canDown}
-            onSelect={() => actions.reorder(step.id, 1)}
-          >
+          <DropdownMenuItem disabled={!canDown} onSelect={() => actions.reorder(step.id, 1)}>
             Move down
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -816,10 +620,7 @@ function StepHead({
             </DropdownMenuSub>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            onSelect={() => actions.deleteStep(step.id)}
-          >
+          <DropdownMenuItem variant="destructive" onSelect={() => actions.deleteStep(step.id)}>
             Delete {word}
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -865,27 +666,14 @@ function Takers({
           {!takers ? (
             <span className="px-1 text-xs text-muted-foreground">…</span>
           ) : takers.length === 0 ? (
-            <span className="px-1 text-xs font-medium text-state-claimed">
-              Nobody
-            </span>
+            <span className="px-1 text-xs font-medium text-state-claimed">Nobody</span>
           ) : (
             <>
               {takers.slice(0, 3).map((m, i) => (
-                <MemberAvatar
-                  key={m.id}
-                  member={m}
-                  card={false}
-                  className={cn(i > 0 && "-ml-0.5")}
-                />
+                <MemberAvatar key={m.id} member={m} card={false} className={cn(i > 0 && "-ml-0.5")} />
               ))}
-              {takers.length > 3 && (
-                <span className="pl-1 text-[11px] text-muted-foreground">
-                  +{takers.length - 3}
-                </span>
-              )}
-              <span className="sr-only">
-                {takers.map((m) => m.name).join(", ")}
-              </span>
+              {takers.length > 3 && <span className="pl-1 text-[11px] text-muted-foreground">+{takers.length - 3}</span>}
+              <span className="sr-only">{takers.map((m) => m.name).join(", ")}</span>
             </>
           )}
         </button>
@@ -894,12 +682,8 @@ function Takers({
         align="start"
         className="w-[360px] max-w-[calc(100vw-32px)] p-3"
         // A dialog it opens (Remove asks first, New agent) is outside it: it stays open behind.
-        onInteractOutside={(e) =>
-          (e.target as Element | null)?.closest?.(
-            "[role=dialog],[role=alertdialog]",
-          ) && e.preventDefault()
-        }
-        onFocusOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => (e.target as Element | null)?.closest?.("[role=dialog],[role=alertdialog]") && e.preventDefault()}
+        onFocusOutside={(e) => (e.target as Element | null)?.closest?.("[role=dialog],[role=alertdialog]") && e.preventDefault()}
       >
         <TakenBy
           project={project}
@@ -953,27 +737,11 @@ function OutcomeField({
   const word = stepWord(step);
   const name = c.name.trim();
   const was = wasTarget(base, c);
-  const wasName =
-    was &&
-    ((was.to &&
-      (
-        wf.steps.find((s) => s.id === was.to) ??
-        base.steps.find((s) => s.id === was.to)
-      )?.name.trim()) ||
-      (was.to ? "New Step" : "Done"));
+  const wasName = was && ((was.to && (wf.steps.find((s) => s.id === was.to) ?? base.steps.find((s) => s.id === was.to))?.name.trim()) || (was.to ? "New Step" : "Done"));
   return (
-    <span
-      data-outcome={c.id}
-      data-changed={changed ? "" : undefined}
-      className={cn(
-        "inline-flex max-w-full flex-wrap items-center gap-1 rounded-md px-0.5 text-xs",
-        changed && "ring-1 ring-ring",
-      )}
-    >
+    <span data-outcome={c.id} data-changed={changed ? "" : undefined} className={cn("inline-flex max-w-full flex-wrap items-center gap-1 rounded-md px-0.5 text-xs", changed && "ring-1 ring-ring")}>
       {main !== undefined && (
-        <Tip
-          label={main ? "Main: the line follows it" : "Make it the main way on"}
-        >
+        <Tip label={main ? "Main: the line follows it" : "Make it the main way on"}>
           <button
             type="button"
             aria-pressed={main}
@@ -981,12 +749,7 @@ function OutcomeField({
             onClick={() => actions.main(c.id)}
             className="flex size-4 flex-none items-center justify-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            <span
-              className={cn(
-                "size-2.5 rounded-full border-[1.5px] border-muted-foreground",
-                main && "border-foreground bg-foreground",
-              )}
-            />
+            <span className={cn("size-2.5 rounded-full border-[1.5px] border-muted-foreground", main && "border-foreground bg-foreground")} />
           </button>
         </Tip>
       )}
@@ -1000,9 +763,7 @@ function OutcomeField({
         value={c.name}
         placeholder="outcome"
         maxLength={nameMax}
-        aria-label={
-          name ? `Outcome ${name} out of ${word}` : `Outcome out of ${word}`
-        }
+        aria-label={name ? `Outcome ${name} out of ${word}` : `Outcome out of ${word}`}
         aria-invalid={(invalid && !name) || undefined}
         onChange={(e) => actions.renameOutcome(c.id, e.target.value)}
         onBlur={actions.settle}
@@ -1012,14 +773,8 @@ function OutcomeField({
           "focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive",
         )}
       />
-      <ArrowRightIcon
-        aria-hidden
-        className="size-3 flex-none text-muted-foreground"
-      />
-      <Select
-        value={toValue(c.to_step_id)}
-        onValueChange={(v) => actions.target(c.id, fromValue(v))}
-      >
+      <ArrowRightIcon aria-hidden className="size-3 flex-none text-muted-foreground" />
+      <Select value={toValue(c.to_step_id)} onValueChange={(v) => actions.target(c.id, fromValue(v))}>
         <SelectTrigger
           size="sm"
           aria-label={`Where ${name || "the outcome"} out of ${word} leads`}
@@ -1030,11 +785,7 @@ function OutcomeField({
           <SelectValue>{nameOf(c.to_step_id)}</SelectValue>
         </SelectTrigger>
         <SelectContent position="popper" align="start">
-          <StepOptions
-            wf={wf}
-            first={step.workflow_id}
-            offered={(s) => s.id !== step.id}
-          />
+          <StepOptions wf={wf} first={step.workflow_id} offered={(s) => s.id !== step.id} />
           <SelectSeparator />
           <SelectItem value={DONE}>Done</SelectItem>
         </SelectContent>
