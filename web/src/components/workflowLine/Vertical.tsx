@@ -598,8 +598,10 @@ export function VerticalLine({
 
   const retro = retroAt(facts.steps, facts.drawn, (s) => s.skill?.name, (id) => facts.workflows.find((w) => w.id === id)?.name);
 
-  const returns = (id: string, list: readonly LaneTrack[], line: readonly string[]) =>
-    list.flatMap((k) =>
+  const returns = (id: string, list: readonly LaneTrack[], line: readonly string[]) => {
+    // Narrow, beside the name, a lone label leaves its target to its track (vf-8's columns); two or more keep theirs, to read apart.
+    const short = narrow && list.flatMap((k) => k.connectors).filter((c) => c.from === id).length === 1;
+    return list.flatMap((k) =>
       k.connectors
         .filter((c) => c.from === id)
         .map((c) => {
@@ -617,12 +619,12 @@ export function VerticalLine({
               <span aria-hidden className="mr-[3px] font-semibold text-muted-foreground">
                 {back ? "↩" : "↪"}
               </span>{" "}
-              {/* Narrow, beside the name, the track beside it says where it leads (vf-8's columns). */}
-              {narrow ? c.name : `${c.name} → ${name(k.target)}`}
+              {short ? c.name : `${c.name} → ${name(k.target)}`}
             </span>
           );
         }),
     );
+  };
 
   const mainRow = (id: string, i: number) => {
     const terminal = id === DONE_STATION;

@@ -529,6 +529,15 @@ describe("a narrow line (a list column, a phone: under 768px)", () => {
     expect(document.querySelector('[data-side="plan"] [data-facts]')).toHaveClass("contents");
   });
 
+  it("keeps each label's target beside the name when a Step has two tracks, so the two read apart (MAIN's Review)", () => {
+    atWidth(390);
+    render(<WorkflowLine workflow={MAIN} tasks={[]} now={0} />);
+    const labels = [...nameRow("review").querySelectorAll("[data-return]")].map((el) => el.textContent?.replace(/\s+/g, " ").trim());
+    expect(labels).toEqual(["↩ needs changes → Build", "↩ needs QA → QA"]);
+    // One track: the target is the track's to say.
+    expect(nameRow("build").querySelector("[data-return]")).toHaveTextContent(/^↪ no UI change$/);
+  });
+
   it("wide, keeps the facts beside the name and the label with the marks", () => {
     atWidth(1100);
     render(<WorkflowLine workflow={DARK("impl")} tasks={[]} now={0} doneToday={3} />);
