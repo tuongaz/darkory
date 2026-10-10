@@ -309,6 +309,22 @@ describe("the Workflows page of a Project of several", () => {
     expect(await screen.findByRole("dialog", { name: "Delete Triage" })).toBeInTheDocument();
   });
 
+  it("draws a row's acts muted at rest and full while the row is hovered or focused, with ⋯ after them at every width", async () => {
+    serve([]);
+    renderApp("/projects/WEB/workflows");
+    const row = within(await table()).getByRole("row", { name: "Bugs" });
+    expect(row).toHaveClass("group/row", "hover:bg-accent/60", "focus-within:bg-accent/60");
+    for (const name of ["Move Bugs earlier", "Move Bugs later", "Edit Bugs", "Delete Bugs"]) {
+      const act = within(row).getByRole(name.startsWith("Edit") ? "link" : "button", { name });
+      expect(act).toHaveClass("size-7", "text-muted-foreground", "group-hover/row:text-foreground", "group-focus-within/row:text-foreground");
+    }
+    // The ⋯ is the row's last cell, shown at every width, not only on a phone.
+    const more = within(row).getByRole("button", { name: "More for Bugs" });
+    const cell = more.closest('[role="cell"]')!;
+    expect(within(row).getAllByRole("cell").at(-1)).toBe(cell);
+    expect(cell.className).not.toMatch(/(^|\s)(sm:)?hidden(\s|$)/);
+  });
+
   it("opens a Workflow's editor from its row's pencil", async () => {
     serve([]);
     renderWithAddress("/projects/WEB/workflows");
