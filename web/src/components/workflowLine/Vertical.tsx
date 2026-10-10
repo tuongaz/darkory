@@ -177,6 +177,7 @@ export function VerticalLine({
 }) {
   const steps = useMemo(() => new Map(facts.steps.map((s) => [s.id, s])), [facts.steps]);
   const { lead, rail, mainTracks, mainSegs, carried, quietStations, quietTracks, quietSegs, lastRow } = useMemo(() => railParts(t), [t]);
+  const besides = useMemo(() => new Set([...lead, ...(t.before ? [t.before] : []), ...t.holds]), [lead, t]);
 
   // What a line or a word means, in a sentence, while the pointer is on it or it has the focus.
   const [tip, setTip] = useState<Tip | null>(null);
@@ -712,6 +713,8 @@ export function VerticalLine({
         holdAt={() => false}
         isStart={() => false}
         picked={(id) => way?.stepId === id}
+        travelling={flow.tokens}
+        outcomeOf={(id) => facts.connectors.find((c) => c.id === id)?.name}
         measureKey={[tasks, t, trace, open]}
       />
     </section>
@@ -737,6 +740,7 @@ export function VerticalLine({
         picked={(id) => way?.stepId === id}
         visited={(id) => !!trace?.stays.some((x) => x.stepId === id)}
         travelling={flow.tokens}
+        besides={besides}
         outcomeOf={(id) => facts.connectors.find((c) => c.id === id)?.name}
         measureKey={[tasks, t, trace, done, ghosts, hidden, open]}
       />
@@ -782,6 +786,7 @@ export function RailLine({
   isStart,
   visited,
   travelling,
+  besides,
   outcomeOf,
   measureKey,
   segment,
@@ -804,6 +809,8 @@ export function RailLine({
   visited?: (id: string) => boolean;
   /** The tokens travelling now, carried along this rail: by their Connector, by hand along it, or off it. */
   travelling?: readonly FlowToken[];
+  /** The Steps standing beside the rail's top ("Also starts here"): a token leaving one enters the rail there. */
+  besides?: ReadonlySet<string>;
   outcomeOf?: (connectorId: string) => string | undefined;
   measureKey: unknown[];
   /** What a segment carries under the station it leaves, in place of its outcome's name (an editor's fields). */
@@ -946,11 +953,12 @@ export function RailLine({
     );
   });
 
-  // A move along the rail: its segment, its track, straight down by hand, or off the line to the right.
+  // A move along the rail: its segment, its track, straight down by hand, or off the line to the
+  // right; from a Step beside the rail's top, down the rail from its top.
   const routeOf = (tk: FlowToken): string | undefined => {
     if (tk.travel.to === DROPPED) return undefined;
     const to = tk.travel.to === DONE ? DONE_STATION : tk.travel.to;
-    const [a, b] = [y(tk.travel.from), y(to)];
+    const [a, b] = [y(tk.travel.from) ?? (besides?.has(tk.travel.from) ? 0 : undefined), y(to)];
     if (a === undefined) return undefined;
     const id = tk.travel.connectorId;
     const track = id ? tracks.find((k) => k.connectors.some((c) => c.id === id)) : undefined;
