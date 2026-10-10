@@ -242,6 +242,17 @@ describe("the Claim trail", () => {
     expect(trails.get("k-1")).toEqual({ lapsedAt: undefined, lastLapseAt: iso(now - 2 * hour) });
     expect(trails.get("k-2")).toEqual({ completedBy: ada.id });
   });
+
+  it("counts the Evidence attached, never a Shift's log, nor one attached before logs had a kind", () => {
+    const attached = (seq: number, payload: Record<string, unknown>) => ({ ...entry(seq, "task.evidence_attached", "k-1", now), payload });
+    const trails = claimTrails([
+      attached(1, { kind: "evidence", filename: "pw-all.log" }),
+      attached(2, { kind: "log", filename: "shift-WEB-1-builder-101000.log" }),
+      attached(3, { filename: "shift-WEB-1-builder-091500.log" }),
+      attached(4, { filename: "screenshot.png" }),
+    ]);
+    expect(trails.get("k-1")).toEqual({ evidence: 2 });
+  });
 });
 
 describe("old links", () => {

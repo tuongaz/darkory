@@ -5,6 +5,7 @@ import {
   CircleHelpIcon,
   EyeIcon,
   FileDiffIcon,
+  GitMergeIcon,
   HashIcon,
   LinkIcon,
   ListPlusIcon,
@@ -87,6 +88,7 @@ const labels: Record<TaskAction, { label: string; icon: LucideIcon }> = {
   "ask-question": { label: "Ask a question", icon: CircleHelpIcon },
   propose: { label: "Propose a Skill version", icon: FileDiffIcon },
   "take-back": { label: "Take back", icon: RotateCcwIcon },
+  merge: { label: "Merge", icon: GitMergeIcon },
   drop: { label: "Drop Task", icon: BanIcon },
 };
 

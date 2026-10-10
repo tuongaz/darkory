@@ -8,8 +8,8 @@ import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const startTimeoutMs = 60_000;
 
-/** An Install started for the tests: its address, the startup login link, ada's token, what init printed. */
-export type Install = { base: string; link: string; token: string; data: string; init: string; stop: () => Promise<void> };
+/** An Install started for the tests: its address, the startup login link, ada's token, what init printed, the binary it runs. */
+export type Install = { base: string; link: string; token: string; data: string; init: string; bin: string; stop: () => Promise<void> };
 
 /**
  * Builds the darkory binary from this checkout (embedding web/dist/app, which `npm run e2e` has
@@ -47,7 +47,7 @@ export async function startInstall(opts: { roster?: boolean } = {}): Promise<Ins
     const running = server;
     process.once("exit", () => running.kill("SIGKILL"));
     const link = await loginLink(server);
-    return { base: new URL(link).origin, link, token, data, init, stop };
+    return { base: new URL(link).origin, link, token, data, init, bin: exe, stop };
   } catch (err) {
     await stop();
     throw err;
@@ -56,8 +56,9 @@ export async function startInstall(opts: { roster?: boolean } = {}): Promise<Ins
 
 /**
  * The shared Install every spec talks to unless it starts its own: `startInstall()`, whose startup
- * login link, address, data directory and admin token reach the tests through the environment
- * (DARKORY_E2E_LOGIN_LINK, _BASE_URL, _DATA and _ADMIN_TOKEN). The returned function stops it.
+ * login link, address, data directory, admin token and binary reach the tests through the
+ * environment (DARKORY_E2E_LOGIN_LINK, _BASE_URL, _DATA, _ADMIN_TOKEN and _BIN, for a spec that
+ * runs the `darkory` CLI against it). The returned function stops it.
  */
 export default async function startServer(): Promise<() => Promise<void>> {
   const install = await startInstall();
@@ -65,6 +66,7 @@ export default async function startServer(): Promise<() => Promise<void>> {
   process.env.DARKORY_E2E_BASE_URL = install.base;
   process.env.DARKORY_E2E_DATA = install.data;
   process.env.DARKORY_E2E_ADMIN_TOKEN = install.token;
+  process.env.DARKORY_E2E_BIN = install.bin;
   return install.stop;
 }
 

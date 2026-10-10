@@ -172,6 +172,11 @@ export function VerticalLine({
             <span className="ml-auto flex flex-none flex-col items-end gap-0.5">
               {token(list[0])}
               {trace?.stays.at(-1) && trace.stays.at(-1)!.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {spanText(trace.stays.at(-1)!.waited)}</span>}
+              {trace?.waitsFor && (
+                <span aria-hidden className="text-[11px] whitespace-nowrap text-muted-foreground">
+                  {trace.waitsFor}
+                </span>
+              )}
             </span>
           )}
         </div>

@@ -203,7 +203,7 @@ export function Picker({
 }
 
 /** A row's or a page's ⋯ menu: the rare actions. Pass `DropdownMenuItem`s. */
-export function MoreMenu({ label, children, size = "icon" }: { label: string; children: ReactNode; size?: "icon" | "icon-xs" }) {
+export function MoreMenu({ label, children, size = "icon", className }: { label: string; children: ReactNode; size?: "icon" | "icon-xs"; className?: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -211,7 +211,7 @@ export function MoreMenu({ label, children, size = "icon" }: { label: string; ch
           variant={size === "icon" ? "outline" : "ghost"}
           size={size}
           aria-label={label}
-          className={cn(size === "icon-xs" && "text-muted-foreground")}
+          className={cn(size === "icon-xs" && "text-muted-foreground", className)}
         >
           <MoreHorizontalIcon />
         </Button>

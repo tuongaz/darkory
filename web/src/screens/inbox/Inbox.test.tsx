@@ -1,9 +1,10 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import type { TaskDetail } from "@/api/client";
+import type { Task, TaskDetail } from "@/api/client";
 import { ada, bob, builder, engineer, ops, parentTask, step, subtask, task } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
+import { refuse } from "@/test/api";
 import { awaitingComplete, lapsesOn, staleProposals, takeableNow } from "./derive";
 import { claim, entry, minutes, recordApi } from "./testing";
 
@@ -135,6 +136,90 @@ describe("the Inbox", () => {
     renderApp("/inbox");
     const take = await section("Takeable by you");
     expect(within(take).getByRole("link", { name: "Build the cart" })).toHaveAttribute("href", "/inbox?task=WEB-4");
+  });
+
+  describe("the merge row", () => {
+    const url = "https://github.com/o/r/pull/7";
+    const doneAt = minutes(-8);
+    const landed = (n: number, state: "open" | "merged", extra: Partial<Task> = {}) =>
+      task(n, { title: `Landed ${n}`, state: "done", step_id: undefined, ended_at: doneAt, pull_request: { number: 7, url, state }, ...extra });
+    const runner = (on: boolean) => ({ "GET /v1/runner/sessions": { items: [], runner: on } });
+
+    it("lists my Done Task whose pull request is open, not one merged nor someone else's; without a Runner its act is the link", async () => {
+      const { calls } = recordApi({ tasks: [landed(1, "open"), landed(2, "merged"), landed(3, "open", { owner_id: bob.id })], extra: runner(false) });
+      renderApp("/inbox");
+      const needs = await section("Needs you");
+      await waitFor(() => expect([...needs.querySelectorAll("[data-task]")].map((r) => r.getAttribute("data-task"))).toEqual(["WEB-1"]));
+      const r = row(needs, "WEB-1");
+      expect(r).toHaveTextContent("Landed 1");
+      expect(r).toHaveTextContent("Awaits your merge");
+      // The chip: in its column on a desktop, on the second line on a phone.
+      for (const chip of within(r).getAllByRole("link", { name: "#7 open" })) expect(chip).toHaveAttribute("href", url);
+      const open = within(r).getByRole("link", { name: "Open #7" });
+      expect(open).toHaveAttribute("href", url);
+      expect(open).toHaveAttribute("rel", "noreferrer noopener");
+      expect(within(r).queryByRole("button", { name: /Merge/ })).not.toBeInTheDocument();
+      for (const time of within(r).getAllByRole("time")) expect(time).toHaveAttribute("datetime", doneAt);
+      // A phone's second line carries the chip and the why with the Done time; the act stays at the row's end.
+      const phone = r.querySelector<HTMLElement>("[data-phone-line]")!;
+      expect(within(phone).getByRole("link", { name: "#7 open" })).toHaveAttribute("href", url);
+      expect(phone).toHaveTextContent(/Awaits your merge\s*·\s*\d{2}:\d{2}/);
+      // The read asks /v1 for exactly these: my Done Tasks whose pull request is open.
+      const read = calls.find((c) => c.path === "/v1/tasks" && c.query.get("state") === "done");
+      expect(read?.query.getAll("filter")).toEqual([`owner:is:${ada.id}`, "pull_request:is:open"]);
+    });
+
+    it("merges through the Runner after the confirm, and the row leaves once it is merged", async () => {
+      const t = landed(1, "open");
+      const { calls } = recordApi({
+        tasks: [t],
+        extra: {
+          ...runner(true),
+          "POST /v1/tasks/:task/pull-request/merge": () => {
+            t.pull_request = { ...t.pull_request!, state: "merged" };
+            return t;
+          },
+        },
+      });
+      renderApp("/inbox");
+      const needs = await section("Needs you");
+      await userEvent.click(await within(needs).findByRole("button", { name: "Merge WEB-1" }));
+      const dialog = await screen.findByRole("dialog", { name: "Merge #7 into main" });
+      await userEvent.click(within(dialog).getByRole("button", { name: "Merge" }));
+      await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/v1/tasks/k-1/pull-request/merge")).toBe(true));
+      expect(await screen.findByRole("heading", { name: "Nothing needs you" })).toBeInTheDocument();
+    });
+
+    it("shows Merge pending while it reads the Task, and a failed read in a toast", async () => {
+      let answer: (r: Response) => void = () => {};
+      recordApi({
+        tasks: [landed(1, "open")],
+        extra: { ...runner(true), "GET /v1/tasks/:task": () => new Promise<Response>((r) => (answer = r)) },
+      });
+      renderApp("/inbox");
+      const needs = await section("Needs you");
+      const merge = await within(needs).findByRole("button", { name: "Merge WEB-1" });
+      await userEvent.click(merge);
+      await waitFor(() => expect(merge).toBeDisabled());
+      expect(merge).toHaveAttribute("aria-busy", "true");
+      answer(refuse(500, "internal", "The record could not be read"));
+      expect(await screen.findByText("The record could not be read")).toBeInTheDocument();
+      await waitFor(() => expect(merge).toBeEnabled());
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("says GitHub's refusal in a toast", async () => {
+      recordApi({
+        tasks: [landed(1, "open")],
+        extra: { ...runner(true), "POST /v1/tasks/:task/pull-request/merge": refuse(409, "conflict", "Pull request #7 is not mergeable: checks failing") },
+      });
+      renderApp("/inbox");
+      const needs = await section("Needs you");
+      await userEvent.click(await within(needs).findByRole("button", { name: "Merge WEB-1" }));
+      const dialog = await screen.findByRole("dialog", { name: "Merge #7 into main" });
+      await userEvent.click(within(dialog).getByRole("button", { name: "Merge" }));
+      expect(await screen.findByText("Pull request #7 is not mergeable: checks failing")).toBeInTheDocument();
+    });
   });
 
   it("says so when nothing needs me", async () => {

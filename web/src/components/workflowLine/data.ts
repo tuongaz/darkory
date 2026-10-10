@@ -259,6 +259,8 @@ export type Trace = {
   next: string[];
   current?: string;
   end?: "done" | "dropped" | "parent";
+  /** "waits for builder": said under the token at its current Step while every taker is busy. */
+  waitsFor?: string;
 };
 
 /**

@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { EllipsisIcon, ExternalLinkIcon, MessageSquareIcon, SearchXIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Link, useLocation, useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import { api, ApiError, call, isUnauthenticated, type RunnerSession, type TaskDetail } from "@/api/client";
 import { useRunnerSession, useTask } from "@/api/queries";
 import { projectPath, useReportProject } from "@/app/currentProject";
@@ -32,6 +32,7 @@ import { Subtasks } from "./Subtasks";
 import { TaskLine } from "./TaskLine";
 import { useTaskActionsUI, type TaskActionsUI } from "./TaskActions";
 import { Branch, ParentLink, Standing, TaskProperties } from "./TaskProperties";
+import { PullRequestChip } from "@/components/PullRequestChip";
 import { TaskRecord } from "./TaskRecord";
 import { Markdown } from "@/components/Markdown";
 
@@ -85,8 +86,6 @@ export function TaskPeek({ taskKey, onClose }: { taskKey: string; onClose: () =>
   const q = useTask(taskKey);
   const d = q.data;
   useReportProject(d?.task.project_id);
-  // Opened to answer it (the Inbox's Answer claims it first): the Note composer takes the focus.
-  const answering = (useLocation().state as { note?: boolean } | null)?.note === true;
   const ui = useTaskActionsUI(d, "xs");
   const session = useRunnerSession(d?.task.id);
   const runner = useSessionActions(d, session);
@@ -119,7 +118,6 @@ export function TaskPeek({ taskKey, onClose }: { taskKey: string; onClose: () =>
             ui={ui}
             heading="h2"
             properties={<TaskProperties detail={d} steps={steps} />}
-            focusNote={answering}
             session={session}
             steps={steps}
           />
@@ -227,6 +225,12 @@ function TaskHeader({ detail, ui, heading, steps, path }: { detail: TaskDetail; 
             </span>
           </>
         )}
+        {task.pull_request && (
+          <>
+            <Sep />
+            <PullRequestChip pr={task.pull_request} />
+          </>
+        )}
       </div>
       <LabelsEditor detail={detail} editable={ui.actions.labels} />
       {task.subtask_counts || detail.subtasks.length > 0 ? (
@@ -254,7 +258,6 @@ function TaskBody({
   ui,
   heading,
   properties,
-  focusNote,
   session,
   steps,
 }: {
@@ -262,7 +265,6 @@ function TaskBody({
   ui: TaskActionsUI;
   heading: "h1" | "h2";
   properties?: ReactNode;
-  focusNote?: boolean;
   session: RunnerSession | undefined;
   steps: Parameters<typeof Stepper>[0]["steps"];
 }) {
@@ -283,7 +285,7 @@ function TaskBody({
       <section aria-label="Record" className="flex flex-col gap-2">
         <SectionHeader title="Record" />
         <TaskRecord detail={detail} path={path} steps={steps} />
-        {actions.notes && "composer" in actions.notes && <NoteComposer detail={detail} autoFocus={focusNote} />}
+        {actions.notes && "composer" in actions.notes && <NoteComposer detail={detail} />}
         {actions.notes && "onlyHolder" in actions.notes && <OnlyHolder holder={actions.notes.onlyHolder} />}
       </section>
     </div>
@@ -291,7 +293,7 @@ function TaskBody({
 }
 
 /** A Note: the holder's running log a Handover carries on, or a Project Member's on a Task nobody holds. */
-function NoteComposer({ detail, autoFocus }: { detail: TaskDetail; autoFocus?: boolean }) {
+function NoteComposer({ detail }: { detail: TaskDetail }) {
   const [body, setBody] = useState("");
   const add = useMutation({
     mutationFn: () => call(api.POST("/v1/tasks/{task}/notes", { params: { path: { task: detail.task.id } }, body: { body: body.trim() } })),
@@ -307,7 +309,6 @@ function NoteComposer({ detail, autoFocus }: { detail: TaskDetail; autoFocus?: b
     >
       <Textarea
         aria-label="Note"
-        autoFocus={autoFocus}
         value={body}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => {

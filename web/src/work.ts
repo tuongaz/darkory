@@ -1,6 +1,14 @@
 import type { Claim, Member, Task } from "./api/client";
 import { glyphFor, type MemberKind, type SessionState, type WorkGlyph } from "./lib/work";
 
+/**
+ * Whether a Claim shows its Heartbeat and Session: always an agent's, and a human's that can
+ * lapse. A human's own Claim with no timeout is held until they let it go, its Session theirs.
+ */
+export function showsHeartbeat(claim: Pick<Claim, "expires_at" | "heartbeat_timeout_seconds">, holderKind: string | undefined): boolean {
+  return !!(claim.expires_at || claim.heartbeat_timeout_seconds) || holderKind !== "human";
+}
+
 /** The Task's Claim while it holds at `now` (Unix ms): not ended and not past its expiry. */
 export function liveClaim(task: Task, now: number): Claim | undefined {
   const c = task.claim;
@@ -61,4 +69,14 @@ export function liveAgents(tasks: Task[], members: Map<string, Member>, now: num
     if (c && members.get(c.holder_id)?.kind === "agent") ids.add(c.holder_id);
   }
   return ids;
+}
+
+/** How many Shifts a Member works at once: an agent's settings say (1 unless set); a human works one. */
+export function shiftsOf(member: Pick<Member, "agent"> | undefined): number {
+  return member?.agent?.shifts ?? 1;
+}
+
+/** Whether a Member holding `held` Tasks has every Shift busy, so nothing more is taken now. */
+export function allShiftsBusy(member: Pick<Member, "agent"> | undefined, held: number): boolean {
+  return held > 0 && held >= shiftsOf(member);
 }

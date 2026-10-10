@@ -32,9 +32,11 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { aboutProject, count, groupByDay, matchesFilter, sizeText, type ActivityFilter } from "./derive";
+import { sizeText } from "@/screens/task/format";
+import { aboutProject, count, groupByDay, matchesFilter, type ActivityFilter } from "./derive";
+import { foldActivity, type ActivityRow } from "./fold";
 import { activityHistoryPage, useStepNames, useTaskMap } from "./queries";
-import { describe, isKnown, kindChoices, kindName, markWords, type Lookup, type Part, type Sentence } from "./wording";
+import { chipText, isKnown, kindChoices, kindName, markWords, rowSentence, type FileChip, type Lookup, type Part, type Sentence } from "./wording";
 import { toShort } from "@/lib/shortid";
 
 const pageSize = 100;
@@ -107,6 +109,10 @@ export function ActivityPage() {
     }),
     [dir.members, dir.skills, dir.projects, tasks, steps, labels, entries],
   );
+  // The filters apply to the entries; what one actor writes on a Task inside a Claim then folds
+  // into the row that ends it.
+  const rows = foldActivity(entries);
+  const rowOf = new Map(rows.map((r) => [r.entry.seq, r]));
 
   const set = (key: string, value: string | undefined) =>
     setParams((p) => {
@@ -188,12 +194,15 @@ export function ActivityPage() {
           </EmptyState>
         ) : (
           <ol aria-label="Activity" aria-live="polite" aria-relevant="additions">
-            {groupByDay(entries, now).map((g) => (
+            {groupByDay(
+              rows.map((r) => r.entry),
+              now,
+            ).map((g) => (
               <li key={g.key}>
                 <h2 className="sticky top-0 z-10 flex h-[34px] items-center border-b bg-muted pr-4 pl-4 font-medium md:pl-6">{g.label}</h2>
                 <ol>
                   {g.entries.map((e) => (
-                    <EntryRow key={e.seq} entry={e} lookup={lookup} project={project} />
+                    <EntryRow key={e.seq} row={rowOf.get(e.seq)!} lookup={lookup} project={project} />
                   ))}
                 </ol>
               </li>
@@ -204,7 +213,10 @@ export function ActivityPage() {
       {history.isSuccess && entries.length > 0 && (
         // The same words whether or not there is more: "100 entries · Load older".
         <footer className="flex h-10 flex-none items-center gap-1.5 border-t pr-4 pl-4 text-xs text-muted-foreground md:pl-6">
-          <span>{count(entries.length, "entry", "entries")}</span>
+          <span>
+            {count(entries.length, "entry", "entries")}
+            {rows.length < entries.length && ` · ${count(rows.length, "row")}`}
+          </span>
           {history.hasNextPage && (
             <>
               <span aria-hidden>·</span>
@@ -355,9 +367,10 @@ function StreamMark() {
 const seconds = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
 const full = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium" });
 
-/** One entry: who, what in words, when. */
-function EntryRow({ entry, lookup, project }: { entry: Activity; lookup: Lookup; project: Project }) {
-  const s = describe(entry, lookup);
+/** One row: who, what in words (with what the Claim it ends carried), when. */
+function EntryRow({ row, lookup, project }: { row: ActivityRow; lookup: Lookup; project: Project }) {
+  const entry = row.entry;
+  const s = rowSentence(row, lookup);
   if (!s) return null;
   const actor = s.actorId ? lookup.members.get(s.actorId) : undefined;
   const at = new Date(entry.at);
@@ -406,6 +419,11 @@ function Words({ s, project }: { s: Sentence; project: Project }) {
   return (
     <span className="min-w-0 truncate md:whitespace-nowrap">
       <b className="font-medium">{s.actorName}</b>{" "}
+      {s.log && (
+        <>
+          <span className="text-muted-foreground">·</span> <FileLink chip={{ id: s.log.id, filename: "", size: s.log.size, log: true }} /> on{" "}
+        </>
+      )}
       {s.mark && Icon && (
         <>
           <Pill tone={markTones[s.mark]} className="align-[1px]">
@@ -453,6 +471,28 @@ function Words({ s, project }: { s: Sentence; project: Project }) {
         </a>
       )}
       {s.details.length > 0 && <span className="text-muted-foreground">· {s.details.join(" · ")}</span>}
+      {s.files?.map((f) => (
+        <span key={f.id}>
+          {" "}
+          <span className="text-muted-foreground">·</span> <FileLink chip={f} />
+        </span>
+      ))}
     </span>
+  );
+}
+
+/** A file a row links, as a chip: "📎 wc.log 753 B", "📎 Shift log · 56.8 kB". */
+function FileLink({ chip: c }: { chip: FileChip }) {
+  return (
+    <a
+      href={evidenceURL(c.id)}
+      target="_blank"
+      rel="noreferrer"
+      title={c.log ? c.filename || undefined : undefined}
+      className="inline-flex h-[22px] items-center gap-1 rounded-md border px-2 align-middle text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+    >
+      <PaperclipIcon className="size-3" aria-hidden />
+      {chipText(c)}
+    </a>
   );
 }

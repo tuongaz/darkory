@@ -1,8 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, type ReactNode } from "react";
-import { Link, useNavigate, type To } from "react-router";
-import { api, call, type Project, type Task } from "@/api/client";
-import { useDirectory, useLabels, useRunnerSessions } from "@/api/queries";
+import { GitMergeIcon, LoaderIcon } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Link, type To } from "react-router";
+import { api, call, type Project, type Task, type TaskDetail } from "@/api/client";
+import { keys, useDirectory, useLabels, useRunnerSessions } from "@/api/queries";
 import { usePeekLink } from "@/app/peek";
 import { useSelectedTask } from "@/app/selection";
 import { useNow } from "@/clock";
@@ -14,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { cn } from "@/lib/utils";
 import { kindLabel, taskWorkGlyph } from "@/work";
+import { MergeDialog } from "@/screens/task/dialogs";
+import { AnswerDialog } from "./AnswerDialog";
 import { startOfDay } from "./derive";
 import type { StepName } from "./queries";
 import { refusalToast } from "./toast";
@@ -114,9 +117,12 @@ export function TaskRow({
   when,
   whenWhat,
   action,
+  phone,
 }: {
   task: Task;
   project: Project | undefined;
+  /** What a phone's second line says after the key, where the wide columns fold away. */
+  phone?: ReactNode;
   stands?: ReactNode;
   marks?: ReactNode;
   by?: ReactNode;
@@ -139,11 +145,12 @@ export function TaskRow({
       <span className="flex min-w-0 flex-col md:flex-row md:items-center md:gap-2">
         <RowLink to={peek(task.key)}>{task.title}</RowLink>
         {project && <LabelPills ids={task.labels} labels={labels} className="hidden md:flex" />}
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground md:hidden">
+        <span data-phone-line className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground md:hidden">
           {project && <ProjectMark project={project} />}
-          {task.key}
+          <span className="flex-none whitespace-nowrap">{task.key}</span>
           {stands && <span aria-hidden>·</span>}
           {stands}
+          {phone}
         </span>
       </span>
       <span className={cn(wide, "items-center gap-1.5")}>{marks}</span>
@@ -175,34 +182,16 @@ export function ClaimButton({ task, primary }: { task: Task; primary?: boolean }
   );
 }
 
-/**
- * Answers a question aimed at me: claims it, then opens its peek with the Note composer focused.
- * A refusal is a toast.
- */
+/** Answers a question aimed at me: opens the dialog that claims it and completes it with the answer. */
 export function AnswerButton({ task, primary }: { task: Task; primary?: boolean }) {
-  const qc = useQueryClient();
-  const navigate = useNavigate();
-  const peek = usePeekLink();
-  const answer = useMutation({
-    mutationFn: () => call(api.POST("/v1/tasks/{task}/claim", { params: { path: { task: task.key } }, body: {} })),
-    onSuccess: () => {
-      // The Claim's Activity refreshes these too; not waiting for it puts the composer up at once.
-      for (const root of ["tasks", "task", "takeable"]) void qc.invalidateQueries({ queryKey: [root] });
-      void navigate(peek(task.key), { state: { note: true } });
-    },
-    onError: refusalToast,
-  });
+  const [open, setOpen] = useState(false);
   return (
-    <Button
-      size="xs"
-      variant={primary ? "default" : "outline"}
-      className="relative z-10"
-      disabled={answer.isPending}
-      aria-label={`Answer ${task.key}`}
-      onClick={() => answer.mutate()}
-    >
-      Answer
-    </Button>
+    <>
+      <Button size="xs" variant={primary ? "default" : "outline"} className="relative z-10" aria-label={`Answer ${task.key}`} onClick={() => setOpen(true)}>
+        Answer
+      </Button>
+      <AnswerDialog task={task} open={open} onOpenChange={setOpen} />
+    </>
   );
 }
 
@@ -235,5 +224,52 @@ export function OpenButton({ task, label = "Open" }: { task: Task; label?: strin
         {label}
       </Link>
     </Button>
+  );
+}
+
+/**
+ * The act on a Done Task whose pull request is open. With a Runner attached to the server, Merge:
+ * it reads the Task's record for the branch it lands on (pending meanwhile; a failed read is a
+ * toast), then the confirm names that branch, the Runner merges on GitHub, and a refusal is a
+ * toast in GitHub's words. Without one, the act is the pull request itself, opened on GitHub.
+ */
+export function MergeAct({ task, primary }: { task: Task; primary?: boolean }) {
+  const runner = useRunnerSessions().data?.runner;
+  const qc = useQueryClient();
+  const [loading, setLoading] = useState(false);
+  const [record, setRecord] = useState<TaskDetail>();
+  const read = () => {
+    setLoading(true);
+    qc.fetchQuery({ queryKey: keys.task(task.key), queryFn: () => call(api.GET("/v1/tasks/{task}", { params: { path: { task: task.key } } })) })
+      .then(setRecord, refusalToast)
+      .finally(() => setLoading(false));
+  };
+  const pr = task.pull_request;
+  if (!pr) return null;
+  if (!runner) {
+    return (
+      <Button asChild size="xs" variant={primary ? "default" : "outline"} className="relative z-10">
+        <a href={pr.url} target="_blank" rel="noreferrer noopener">
+          Open #{pr.number}
+        </a>
+      </Button>
+    );
+  }
+  return (
+    <>
+      <Button
+        size="xs"
+        variant={primary ? "default" : "outline"}
+        className="relative z-10"
+        aria-label={`Merge ${task.key}`}
+        aria-busy={loading || undefined}
+        disabled={loading}
+        onClick={read}
+      >
+        {loading ? <LoaderIcon aria-hidden className="animate-spin" /> : <GitMergeIcon />}
+        Merge
+      </Button>
+      {record && <MergeDialog detail={record} open onOpenChange={(o) => !o && setRecord(undefined)} onRefused={refusalToast} />}
+    </>
   );
 }

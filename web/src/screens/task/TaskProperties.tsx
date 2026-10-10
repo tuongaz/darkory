@@ -1,16 +1,18 @@
 import { FolderGit2Icon, GitBranchIcon } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import type { TaskDetail, WorkflowStep } from "@/api/client";
+import { useDirectory } from "@/api/queries";
 import { useNow } from "@/clock";
 import { CopyValue, SessionId } from "@/components/CopyValue";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
+import { PullRequestChip } from "@/components/PullRequestChip";
 import { Pill } from "@/components/Pill";
 import { Property, PropertiesRail } from "@/components/PropertiesRail";
 import { ClockTime } from "@/components/Time";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { taskBranch } from "@/lib/branch";
-import { liveClaim } from "@/work";
+import { liveClaim, showsHeartbeat } from "@/work";
 import { useMemberName, useSkillName } from "./format";
 import { MemberName, SkillPill, TaskLink } from "./parts";
 import { lapsedClaim } from "./record";
@@ -60,6 +62,7 @@ export function Branch({ name }: { name: string }) {
 export function TaskProperties({ detail, steps, grouped }: { detail: TaskDetail; steps: readonly WorkflowStep[]; grouped?: boolean }) {
   const now = useNow();
   const skill = useSkillName();
+  const { members } = useDirectory();
   const { task } = detail;
   const claim = liveClaim(task, now);
   const lapsed = claim ? undefined : lapsedClaim(detail);
@@ -70,8 +73,12 @@ export function TaskProperties({ detail, steps, grouped }: { detail: TaskDetail;
   if (claim) {
     hold.push({ label: "Held by", value: <MemberName id={claim.holder_id} /> });
     if (claim.skill_id) hold.push({ label: "Under", value: <span>{skill(claim.skill_id)}{claim.skill_version !== undefined && ` version ${claim.skill_version}`}</span> });
-    hold.push({ label: "Heartbeat", value: <HeartbeatMeter claim={claim} /> });
-    hold.push({ label: "Session", value: <SessionId id={claim.session_id} /> });
+    // A human's own Claim with no expiry is held until they let it go: no Heartbeat to read, and
+    // its Session is theirs, not a Shift's. An agent's keeps both, for whoever debugs the Shift.
+    if (showsHeartbeat(claim, members.get(claim.holder_id)?.kind)) {
+      hold.push({ label: "Heartbeat", value: <HeartbeatMeter claim={claim} /> });
+      hold.push({ label: "Session", value: <SessionId id={claim.session_id} /> });
+    }
     if (claim.model_label) hold.push({ label: "Model", value: <span className="truncate font-mono text-xs">{claim.model_label}</span> });
   } else if (open && !parent) {
     hold.push({
@@ -136,6 +143,7 @@ export function TaskProperties({ detail, steps, grouped }: { detail: TaskDetail;
     work.push({ label: "Branch", value: <Branch name={taskBranch(task.key, task.title)} /> });
     if (detail.parent) work.push({ label: "Merges into", value: <Branch name={taskBranch(detail.parent.key, detail.parent.title)} /> });
   }
+  if (task.pull_request) work.push({ label: "Pull request", value: <PullRequestChip pr={task.pull_request} /> });
 
   const openBlockers = detail.blockers.filter((b) => b.state === "open");
   const openBlocking = detail.blocking.filter((b) => b.state === "open");

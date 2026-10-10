@@ -2,12 +2,14 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { Skill, SkillProposal } from "@/api/client";
-import { json, mockApi, type Handler } from "@/test/api";
-import { ada, bob, builder, detail, engineer, memberDetail, review, signedIn, skills, skillVersion, task } from "@/test/fixtures";
+import { json, mockApi, refuse, type Handler } from "@/test/api";
+import { ada, bob, builder, detail, engineer, memberDetail, review, signedIn, skills, skillVersion, task, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 
 const at = "2026-10-01T09:00:00Z";
-const webEngineer: Skill = { id: "s-web-engineer", name: "web-engineer", kind: "company", base_skill_id: engineer.id, builtin: false, current_version: 2, created_at: at };
+const webEngineer: Skill = { id: "s-web-engineer", name: "web-engineer", kind: "company", base_skill_id: engineer.id, project_id: web.id, builtin: false, current_version: 2, created_at: at };
+/** A company Skill of the whole Organisation. */
+const playbook: Skill = { id: "s-playbook", name: "playbook", kind: "company", base_skill_id: engineer.id, builtin: false, current_version: 1, created_at: at };
 const proposal = (id: string, retroId: string, body: string, created_at: string, author = builder.id): SkillProposal => ({
   id,
   skill_id: webEngineer.id,
@@ -30,7 +32,7 @@ const p2 = proposal("p-2", retro2.id, "1. Reuse the cart component.\n", "2026-10
 const old: SkillProposal = { ...p1, id: "p-0", state: "superseded", body: "never mind" };
 
 function routes(extra: Record<string, Handler> = {}): Record<string, Handler> {
-  const all = [...skills, webEngineer];
+  const all = [...skills, webEngineer, playbook];
   return {
     ...signedIn(),
     "GET /v1/skills": { items: all },
@@ -71,6 +73,54 @@ describe("Settings › Skills", () => {
     expect(within(within(table).getByRole("row", { name: "acceptance" })).getByText("Built in")).toBeInTheDocument();
   });
 
+  it("says the Project a company Skill belongs to: its key, or Organisation; a generic Skill has none", async () => {
+    mockApi(routes());
+    renderApp("/settings/organisation/skills");
+    const table = await screen.findByRole("table", { name: "Skills" });
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toContain("Project");
+    const column = within(table)
+      .getAllByRole("columnheader")
+      .findIndex((h) => h.textContent === "Project");
+    const cell = (name: string) => within(within(table).getByRole("row", { name })).getAllByRole("cell")[column];
+    expect(await within(cell("web-engineer")).findByText("WEB")).toBeInTheDocument();
+    expect(cell("playbook")).toHaveTextContent("Organisation");
+    expect(cell("engineer")).toHaveTextContent("—");
+  });
+
+  it("an admin moves a company Skill to a Project from its page", async () => {
+    const user = userEvent.setup();
+    const api = mockApi(routes({ "PATCH /v1/skills/:skill": { skill: { ...playbook, project_id: web.id }, current: skillVersion(playbook) } }));
+    renderApp("/settings/organisation/skills/playbook");
+    const about = await screen.findByRole("complementary", { name: "About the Skill" });
+    const select = await within(about).findByRole("combobox", { name: "Project" });
+    expect(select).toHaveTextContent("Organisation");
+    await user.click(select);
+    await user.click(await screen.findByRole("option", { name: "WEB Web" }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === "PATCH")).toBe(true));
+    expect(api.calls.find((c) => c.method === "PATCH")).toMatchObject({ path: "/v1/skills/playbook", body: { project: web.id } });
+  });
+
+  it("a refusal to move a company Skill says why under its Project", async () => {
+    const user = userEvent.setup();
+    const api = mockApi(routes({ "PATCH /v1/skills/:skill": refuse(400, "invalid", "WEB's Workflow carries web-engineer at Build") }));
+    renderApp("/settings/organisation/skills/web-engineer");
+    const about2 = await screen.findByRole("complementary", { name: "About the Skill" });
+    const select2 = await within(about2).findByRole("combobox", { name: "Project" });
+    await waitFor(() => expect(select2).toHaveTextContent("WEB"));
+    await user.click(select2);
+    await user.click(await screen.findByRole("option", { name: "Organisation" }));
+    expect(await within(about2).findByText(/WEB's Workflow carries web-engineer at Build/)).toBeInTheDocument();
+    // The Organisation is sent as "".
+    expect(api.calls.find((c) => c.method === "PATCH")).toMatchObject({ path: "/v1/skills/web-engineer", body: { project: "" } });
+  });
+
+  it("a generic Skill's page names no Project", async () => {
+    mockApi(routes());
+    renderApp("/settings/organisation/skills/engineer");
+    const generic = await screen.findByRole("complementary", { name: "About the Skill" });
+    expect(within(generic).queryByText("Project")).not.toBeInTheDocument();
+  });
+
   it("a Skill's page shows each pending proposal, oldest first, against the version it was written on", async () => {
     mockApi(routes());
     renderApp("/settings/organisation/skills/web-engineer");
@@ -109,12 +159,34 @@ describe("Settings › Skills", () => {
     await user.click(within(dialog).getByRole("radio", { name: "Company" }));
     await user.type(within(dialog).getByLabelText("Text"), "Run the playbook.");
     expect(within(dialog).getByRole("button", { name: "Create Skill" })).toBeDisabled();
-    await user.click(within(dialog).getByRole("combobox"));
+    await user.click(within(dialog).getByRole("combobox", { name: "Builds on" }));
     await user.click(await screen.findByRole("option", { name: "engineer" }));
     await user.click(within(dialog).getByRole("button", { name: "Create Skill" }));
 
     await waitFor(() => expect(api.calls.some((c) => c.method === "POST")).toBe(true));
     expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ name: "ops-engineer", kind: "company", base_skill: "engineer", body: "Run the playbook." });
     expect(await screen.findByRole("heading", { name: "ops-engineer" })).toBeInTheDocument();
+  });
+
+  it("New Skill asks a company Skill's Project, Organisation unless picked, and a generic one none", async () => {
+    const user = userEvent.setup();
+    const api = mockApi(routes({ "POST /v1/skills": json(201, { skill: { ...webEngineer, id: "s-ops", name: "ops-engineer", current_version: 1 }, current: v1 }) }));
+    renderApp("/settings/organisation/skills");
+    await user.click(await screen.findByRole("button", { name: "New Skill" }));
+    const dialog = await screen.findByRole("dialog", { name: "New Skill" });
+    expect(within(dialog).queryByRole("combobox", { name: "Project" })).not.toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText("Name"), "ops-engineer");
+    await user.click(within(dialog).getByRole("radio", { name: "Company" }));
+    await user.type(within(dialog).getByLabelText("Text"), "Run the playbook.");
+    await user.click(within(dialog).getByRole("combobox", { name: "Builds on" }));
+    await user.click(await screen.findByRole("option", { name: "engineer" }));
+    const project = within(dialog).getByRole("combobox", { name: "Project" });
+    expect(project).toHaveTextContent("Organisation");
+    await user.click(project);
+    await user.click(await screen.findByRole("option", { name: "WEB Web" }));
+    await user.click(within(dialog).getByRole("button", { name: "Create Skill" }));
+
+    await waitFor(() => expect(api.calls.some((c) => c.method === "POST")).toBe(true));
+    expect(api.calls.find((c) => c.method === "POST")?.body).toEqual({ name: "ops-engineer", kind: "company", base_skill: "engineer", project: web.id, body: "Run the playbook." });
   });
 });

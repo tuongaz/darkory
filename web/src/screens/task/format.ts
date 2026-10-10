@@ -19,11 +19,11 @@ export function taskPath(key: string): string {
   return `/tasks/${encodeURIComponent(key)}`;
 }
 
-/** "70 B", "12 KB", "3.4 MB". */
+/** A file's size in decimal units, one decimal below 100: "753 B", "56.8 kB", "229 kB", "1.2 MB". */
 export function sizeText(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1000) return `${bytes} B`;
+  const [value, unit] = bytes < 1_000_000 ? [bytes / 1000, "kB"] : [bytes / 1_000_000, "MB"];
+  return `${value < 100 ? value.toFixed(1) : Math.round(value)} ${unit}`;
 }
 
 const day = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short" });

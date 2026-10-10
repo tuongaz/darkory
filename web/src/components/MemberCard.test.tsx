@@ -35,7 +35,7 @@ async function openCard(name: RegExp) {
   return within(await findCard());
 }
 
-const builderAgent = { ...builder, agent: { command: "claude", args: [], model: "claude-opus-5-5", env: {}, unattended: true, paused: false } };
+const builderAgent = { ...builder, agent: { command: "claude", args: [], model: "claude-opus-5-5", env: {}, unattended: true, paused: false, shifts: 1 } };
 
 describe("MemberCard", () => {
   it("shows an agent's kind, Skills, model, manager and Projects, and that it is not working", async () => {

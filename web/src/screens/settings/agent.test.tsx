@@ -15,6 +15,7 @@ const settings: AgentSettings = {
   env: { HTTP_PROXY: "http://proxy:3128" },
   unattended: true,
   paused: false,
+  shifts: 1,
 };
 const runBuilder: Member = { ...builder, agent: settings };
 const pausedReviewer: Member = { id: "m-reviewer", name: "reviewer", kind: "agent", admin: false, created_at: at, agent: { ...settings, model: "claude-opus-5-5", paused: true } };
@@ -168,6 +169,43 @@ describe("an agent's settings", () => {
     expect(patches(api.calls).map((c) => c.body)).toEqual([{ paused: true }, { unattended: false }]);
     // Paused shows on the page's head.
     expect(await screen.findByText("Paused", { selector: "[data-tone]" })).toBeInTheDocument();
+  });
+
+  it("sets how many Shifts the agent runs at once, between Model and Unattended, 1 to 8", async () => {
+    const user = typist();
+    const api = mockApi(routes([ada, bob, runBuilder]));
+    renderApp("/settings/organisation/agents/m-builder");
+    const card = await screen.findByRole("group", { name: "Agent settings of builder" });
+    const shifts = within(card).getByRole("spinbutton", { name: "Shifts" });
+    expect(shifts).toHaveValue(1);
+    expect(shifts).toHaveAttribute("min", "1");
+    expect(shifts).toHaveAttribute("max", "8");
+    expect(within(card).getByText("at once")).toBeInTheDocument();
+    const labels = within(card)
+      .getAllByText(/^(Model|Shifts|Unattended)$/)
+      .map((n) => n.textContent);
+    expect(labels).toEqual(["Model", "Shifts", "Unattended"]);
+
+    await user.clear(shifts);
+    await user.type(shifts, "2");
+    await user.tab();
+    await waitFor(() => expect(patches(api.calls)).toHaveLength(1));
+    expect(patches(api.calls)[0].body).toEqual({ shifts: 2 });
+
+    // Out of bounds: nothing is sent; the field keeps what was typed and says what /v1 takes.
+    await waitFor(() => expect(within(card).getByRole("spinbutton", { name: "Shifts" })).toHaveValue(2));
+    const again = within(card).getByRole("spinbutton", { name: "Shifts" });
+    await user.clear(again);
+    await user.type(again, "9");
+    await user.tab();
+    expect(await within(card).findByRole("alert")).toHaveTextContent("1 to 8");
+    expect(again).toHaveValue(9);
+    expect(again).toHaveAttribute("aria-invalid", "true");
+    expect(patches(api.calls)).toHaveLength(1);
+    // Escape puts the saved count back.
+    await user.type(again, "{Escape}");
+    expect(again).toHaveValue(2);
+    expect(within(card).queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("sends nothing for a field left as it was, a blank command or a line /v1 would refuse", async () => {

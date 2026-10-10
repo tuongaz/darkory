@@ -71,6 +71,9 @@ let agent: APIRequestContext;
 let cart: Task;
 let discount: Task;
 let checkout: Task;
+/** PRQ's Done Task whose pull request #7 waits for ada's merge, from the merge row's test on. */
+let merging: Task;
+const prURL = "https://github.com/o/r/pull/7";
 
 test.beforeAll(async () => {
   admin = await as(process.env.DARKORY_E2E_ADMIN_TOKEN!, "e2e-inbox-ada");
@@ -118,9 +121,8 @@ test("a question the agent aims at the human lands in the Inbox, live, with its 
   await expect(page).toHaveURL(`${base()}/inbox?task=${key}`);
   await expect(page.getByRole("dialog", { name: new RegExp(key) })).toBeVisible();
 
-  // Answer claims it; it moves to My work, held by me.
-  await page.goto(`${base()}/inbox`);
-  await page.getByRole("button", { name: `Answer ${key}` }).click();
+  // Claimed, it moves to My work, held by me.
+  await v1(admin, "POST", `/v1/tasks/${key}/claim`, {});
   await page.goto(`${base()}/my-work`);
   await expect(page.getByRole("region", { name: "Held by you" }).locator(`[data-task="${key}"]`)).toBeVisible();
   // The question joined the Parent beside the Task it blocks (scenario 5), so it owns three.
@@ -134,6 +136,38 @@ test("a question the agent aims at the human lands in the Inbox, live, with its 
   await expect(subtasks.getByRole("link", { name: /Stripe keys for staging\?/ })).toBeVisible();
   await expect(subtasks.getByRole("link", { name: /Build the cart page/ })).toContainText("Blocked");
   await shot(page, "question-beside-its-task");
+  expect(errors).toEqual([]);
+});
+
+test("Answer is one act: the dialog shows the question, claims it, writes the answer as its Note and ends it", async ({ page }) => {
+  const errors = consoleErrors(page);
+  const blocked = (await v1<TaskDetail>(admin, "POST", "/v1/tasks", { project: "INB", title: "Cannot delete a Workflow in a Project" })).task;
+  await v1(agent, "POST", `/v1/tasks/${blocked.key}/claim`, { heartbeat_timeout_seconds: 900 });
+  const title = "Should an admin also be able to delete a Workflow from its own page, and should a non-admin be told who can delete?";
+  const asked = (await v1<TaskDetail>(agent, "POST", "/v1/tasks", { title, description: "Today only the list row has it (`decision 633`).", aim: "ada", blocks: blocked.key })).task;
+  await v1(agent, "POST", `/v1/tasks/${blocked.key}/release`, {});
+
+  await signIn(page, admin, "ada");
+  const row = page.getByRole("region", { name: "Needs you" }).locator(`[data-task="${asked.key}"]`);
+  await row.getByRole("button", { name: `Answer ${asked.key}` }).click();
+  const dialog = page.getByRole("dialog", { name: `Answer ${asked.key}` });
+  await expect(dialog).toContainText(title);
+  await expect(dialog.locator("code", { hasText: "decision 633" })).toBeVisible();
+  await expect(dialog).toContainText(`From inbox-builder · blocks ${blocked.key} Cannot delete a Workflow in a Project`);
+  await expect(dialog).toContainText(`Answers and ends ${asked.key}`);
+  await expect(dialog.getByRole("button", { name: "Answer" })).toBeDisabled();
+  await dialog.getByRole("textbox", { name: "Your answer" }).fill("Yes from its page; no line for a non-admin.");
+  await shot(page, "answer-dialog");
+  await dialog.getByRole("button", { name: "Answer" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(row).toHaveCount(0);
+
+  // The answer is the question's Note, and the question is Done: the Task it blocked is free.
+  const done = await v1<{ task: { state: string }; notes: { body: string }[] }>(admin, "GET", `/v1/tasks/${asked.key}`);
+  expect(done.task.state).toBe("done");
+  expect(done.notes.map((n) => n.body)).toContain("Yes from its page; no line for a non-admin.");
+  const freed = await v1<{ task: { blocked: boolean } }>(admin, "GET", `/v1/tasks/${blocked.key}`);
+  expect(freed.task.blocked).toBe(false);
   expect(errors).toEqual([]);
 });
 
@@ -242,6 +276,32 @@ test("a lapse on my Task that its Step's agent can take up clears itself; Activi
   expect(errors).toEqual([]);
 });
 
+test("my Done Task whose pull request is open waits in Needs you for my merge; with no Runner its act opens the pull request", async ({ page }) => {
+  const errors = consoleErrors(page);
+  // PRQ lands its branches through pull requests: its default Workspace is in pull_request mode.
+  await v1(admin, "POST", "/v1/workspaces", { name: "prq-repo", path: "/srv/prq", mode: "pull_request", default_branch: "main" });
+  await v1(admin, "POST", "/v1/projects", { key: "PRQ", name: "Pull requests", members: ["ada", "inbox-builder"], default_workspace: "prq-repo" });
+  const filed = (merging = (await v1<TaskDetail>(admin, "POST", "/v1/tasks", { project: "PRQ", title: "A sidebar trigger on desktop" })).task);
+  // The agent builds it; at Review nobody in PRQ has review, so its Owner, ada, takes it into Done.
+  await v1(agent, "POST", `/v1/tasks/${filed.id}/claim`, {});
+  await v1(agent, "POST", `/v1/tasks/${filed.id}/advance`, { outcome: "pass" });
+  await v1(admin, "POST", `/v1/tasks/${filed.id}/claim`, {});
+  await v1(admin, "POST", `/v1/tasks/${filed.id}/advance`, { outcome: "pass" });
+  await v1(admin, "PUT", `/v1/tasks/${filed.id}/pull-request`, { number: 7, url: prURL, state: "open" });
+
+  await signIn(page, admin, "ada");
+  const row = page.getByRole("region", { name: "Needs you" }).locator(`[data-task="${filed.key}"]`);
+  await expect(row).toContainText("A sidebar trigger on desktop");
+  await expect(row).toContainText("Awaits your merge");
+  await expect(row.getByRole("link", { name: "#7 open" }).first()).toHaveAttribute("href", prURL);
+  // --runner=off: nothing beside the server merges, so the act is the pull request on GitHub.
+  await expect(row.getByRole("link", { name: "Open #7" })).toHaveAttribute("href", prURL);
+  await expect(row.getByRole("button", { name: /Merge/ })).toHaveCount(0);
+  await shot(page, "merge-row");
+
+  expect(errors).toEqual([]);
+});
+
 test("Inbox, My work, Agents and Activity fit a phone without a sideways scroll", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
@@ -256,12 +316,30 @@ test("Inbox, My work, Agents and Activity fit a phone without a sideways scroll"
   for (const { path, ready } of screens) {
     await page.goto(`${base()}${path}`);
     await expect(ready()).toBeVisible();
+    if (path === "/inbox") {
+      // The merge row's second line: the chip, the why with the Done time; the act at the row's end.
+      const row = page.locator(`[data-task="${merging.key}"]`);
+      const line = row.locator("[data-phone-line]");
+      await expect(line.getByRole("link", { name: "#7 open" })).toBeVisible();
+      await expect(line).toContainText(/Awaits your merge\s*·\s*\d{2}:\d{2}/);
+      await expect(row.getByRole("link", { name: "Open #7" })).toBeVisible();
+    }
     const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
     expect(widths.scroll, path).toBe(widths.client);
     await shot(page, `phone${path.replaceAll("/", "-")}`);
   }
   expect(errors).toEqual([]);
   await context.close();
+});
+
+test("a merged pull request takes its row out of Needs you", async ({ page }) => {
+  const errors = consoleErrors(page);
+  await v1(admin, "PUT", `/v1/tasks/${merging.id}/pull-request`, { number: 7, url: prURL, state: "merged" });
+  await signIn(page, admin, "ada");
+  const loaded = page.getByRole("region", { name: "Needs you" }).or(page.getByRole("region", { name: "Takeable by you" })).or(page.getByRole("heading", { name: "Nothing needs you" }));
+  await expect(loaded.first()).toBeVisible();
+  await expect(page.locator(`[data-task="${merging.key}"]`)).toHaveCount(0);
+  expect(errors).toEqual([]);
 });
 
 test("a Project's Agents table fits a 1280px laptop beside the sidebar, with no sideways scroll", async ({ browser }) => {

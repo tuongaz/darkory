@@ -19,14 +19,16 @@ export type TaskAction =
   | "ask-question"
   | "propose"
   | "take-back"
+  | "merge"
   | "drop";
 
 export type TaskActions = {
   /**
    * The screen's one primary: Claim; for the holder, Advance along the first Connector out of the
-   * Task's Step (or Complete for a Task aimed at them, at no Step); for a Parent's Owner, Complete.
+   * Task's Step (or Complete for a Task aimed at them, at no Step); for a Parent's Owner, Complete;
+   * for the Owner of a Task whose pull request is open, with a Runner attached, Merge.
    */
-  primary?: { kind: "claim" } | { kind: "advance"; connector: Connector } | { kind: "complete" };
+  primary?: { kind: "claim" } | { kind: "advance"; connector: Connector } | { kind: "complete" } | { kind: "merge" };
   /** Beside the primary, in its caret: the other Connectors, then Release. */
   caret: ({ kind: "advance"; connector: Connector } | { kind: "release" })[];
   /** The ⋯ menu: the rest, Drop last. */
@@ -50,10 +52,12 @@ export type ActionInput = {
   /** The ids of the signed-in Member's Projects. */
   projects: Set<string>;
   now: number;
+  /** Whether a Runner is attached to the server (`GET /v1/runner/sessions`): it merges a pull request. */
+  runner?: boolean;
 };
 
 /** The actions a Member sees on a Task, by their part in it: holder, Owner, Reporting line, Project. */
-export function taskActions({ me, detail, members, takeable, projects, now }: ActionInput): TaskActions {
+export function taskActions({ me, detail, members, takeable, projects, now, runner }: ActionInput): TaskActions {
   const { task, connectors } = detail;
   const open = task.state === "open";
   const parent = isParent(task);
@@ -108,6 +112,16 @@ export function taskActions({ me, detail, members, takeable, projects, now }: Ac
   if (open) {
     out.menu.push("drop");
     if (!owner) out.dimmed.drop = "Owner only";
+  }
+  // The Owner lands the Task's pull request through the Runner, open or Done alike; a Dropped
+  // Task's is the Owner's to close on GitHub. Holding the Task, the Owner's work comes first and
+  // Merge waits in the menu; Claim gives way to it.
+  if (owner && runner && task.state !== "dropped" && task.pull_request?.state === "open") {
+    if (out.primary?.kind === "advance" || out.primary?.kind === "complete") out.menu.unshift("merge");
+    else {
+      if (out.primary?.kind === "claim") out.menu.unshift("claim");
+      out.primary = { kind: "merge" };
+    }
   }
   return out;
 }
