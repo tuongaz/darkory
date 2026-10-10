@@ -13,7 +13,7 @@ const never: Seen = { seq: null, at: null };
 
 export const seenKey = (project: string) => ["seen", project] as const;
 
-/** The mark, or none when it cannot be read (the caller is not in the Project). */
+/** The mark, or none when it is refused. */
 export async function readSeen(project: string): Promise<Seen> {
   try {
     return await call(api.GET("/v1/projects/{project}/seen", { params: { path: { project } } }));

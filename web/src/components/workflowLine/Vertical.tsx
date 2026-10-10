@@ -363,14 +363,14 @@ export function VerticalLine({
     return out;
   };
 
-  const facts1 = (s: LineStepFacts | undefined, small = false) => {
+  const facts1 = (s: LineStepFacts | undefined, small = false, inline = false) => {
     if (!s) return null;
     const takers = s.takers ?? [];
     const paused = takers.length > 0 && takers.every((m) => m.paused);
     if (!s.skill && s.medianMs === undefined && !paused && takers.length === 0) return null;
     return (
-      // Narrow, a row of its own under the name (vf-10); wide, beside it.
-      <span data-facts className={narrow ? "flex basis-full flex-wrap items-center gap-x-2.5 gap-y-1" : "contents"}>
+      // Narrow, a row of its own under the name (vf-10); wide, and in "Also starts here", beside it.
+      <span data-facts className={narrow && !inline ? "flex basis-full flex-wrap items-center gap-x-2.5 gap-y-1" : "contents"}>
         {s.skill && (
           <span {...hover(SKILL_HINT)} className="inline-flex items-center gap-[3px] font-mono text-[11px] font-normal text-muted-foreground">
             <TagIcon aria-hidden className="size-[11px]" />
@@ -583,7 +583,7 @@ export function VerticalLine({
                     {filesHint(s.name, start)}
                   </InfoTip>
                 ) : null}
-                {!hold && facts1(s, true)}
+                {!hold && facts1(s, true, true)}
                 {tasksHere}
                 {entryChips(id)}
                 {sideMarks(id)}

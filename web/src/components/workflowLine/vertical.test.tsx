@@ -510,6 +510,8 @@ describe("a narrow line (a list column, a phone: under 768px)", () => {
     expect(nameRow("review").querySelector("[data-facts]")).toHaveTextContent("review");
     expect(kinds(nameRow("done"))).toEqual(["Done", "today"]);
     expect(nameRow("done").querySelector("[data-today]")).toHaveTextContent("3 today");
+    // "Also starts here" keeps a Step's facts on its name's row, as the column draws Plan.
+    expect(document.querySelector('[data-side="plan"] [data-facts]')).toHaveClass("contents");
   });
 
   it("wide, keeps the facts beside the name and the label with the marks", () => {
