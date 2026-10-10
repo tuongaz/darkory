@@ -1,7 +1,6 @@
 import type { Claim, Member, Task } from "./api/client";
 import { glyphFor, type MemberKind, type SessionState, type WorkGlyph } from "./lib/work";
 
-/** The Task's Claim while it holds at `now` (Unix ms): not ended and not past its expiry. */
 /**
  * Whether a Claim shows its Heartbeat and Session: always an agent's, and a human's that can
  * lapse. A human's own Claim with no timeout is held until they let it go, its Session theirs.
@@ -10,6 +9,7 @@ export function showsHeartbeat(claim: Pick<Claim, "expires_at" | "heartbeat_time
   return !!(claim.expires_at || claim.heartbeat_timeout_seconds) || holderKind !== "human";
 }
 
+/** The Task's Claim while it holds at `now` (Unix ms): not ended and not past its expiry. */
 export function liveClaim(task: Task, now: number): Claim | undefined {
   const c = task.claim;
   if (!c || c.ended_at || task.state !== "open") return undefined;
