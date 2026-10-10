@@ -656,6 +656,8 @@
   .wl-dim { opacity: 0.3; transition: opacity 200ms; }
   /* Off a selected Task's way (vf-7): faded, still there to hover and click. */
   [data-line-root] [data-dim] { opacity: 0.25; transition: opacity 200ms; }
+  /* Inside a faded group a faded chip fades once, not twice. */
+  [data-line-root] [data-dim] [data-dim] { opacity: 1; }
   .wl-chain { stroke-dasharray: 2000; animation: wl-draw 200ms ease-out; }
   .wl-travel {
     offset-rotate: 0deg;
