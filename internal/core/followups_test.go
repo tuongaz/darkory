@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -572,4 +574,80 @@ func TestPullRequestAddressSegments(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Evidence belongs to the Claim it was attached under: the holder's own Claim by default, the
+// Claim named when it is the caller's on the Task, ended or not, and none for a Member who does
+// not hold the Task. A Claim named that is not the caller's on the Task is refused forbidden,
+// before the upload and under the counter.
+func TestEvidenceClaim(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.project("WEB")
+		f.chain("WEB", [2]string{"Build", core.SkillEngineer})
+		lead := f.member("lead", []string{"WEB"}, []string{core.SkillEngineer})
+		builder := f.member("builder", []string{"WEB"}, []string{core.SkillEngineer})
+		task := f.task(lead, "WEB", "Ship it", "Build")
+		other := f.task(lead, "WEB", "Other", "Build")
+		n := 0
+		attach := func(c *auth.Caller, claim, kind string) (core.Evidence, error) {
+			n++
+			id := fmt.Sprintf("00000000-0000-4000-8000-%012d", n)
+			return f.svc.AttachEvidence(ctx, c, core.EvidenceTarget{Task: task.Key, Claim: claim},
+				core.NewEvidence{ID: id, Kind: kind, BlobKey: id, Filename: "f.txt", ContentType: "text/plain", Size: 1, SHA256: "x"}, core.Idem{})
+		}
+		claimOf := func(e core.Evidence) string {
+			if e.ClaimID == nil {
+				return "none"
+			}
+			return *e.ClaimID
+		}
+
+		// The holder's attach belongs to its Claim.
+		held := f.claim(builder, task.Key, noTimeout).Task.Claim.ID
+		e, err := attach(builder, "", "")
+		if err != nil || claimOf(e) != held {
+			t.Fatalf("the holder's attach: %s, %v", claimOf(e), err)
+		}
+		// Another Member's Claim on another Task cannot be named.
+		otherClaim := f.claim(lead, other.Key, noTimeout).Task.Claim.ID
+		if _, err := attach(builder, otherClaim, ""); codeOf(err) != core.CodeForbidden || !strings.Contains(err.Error(), "the Claim is not yours") {
+			t.Errorf("naming another Task's Claim: %v", err)
+		}
+		if _, err := f.svc.Release(ctx, builder, task.Key, nil, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		// The Runner's case: the Shift's log names the Claim it ran under, ended now.
+		if e, err := attach(builder, shortid.Of(held).String(), core.EvidenceKindLog); err != nil || claimOf(e) != held || e.Kind != core.EvidenceKindLog {
+			t.Fatalf("the log of an ended Claim: %s %s, %v", claimOf(e), e.Kind, err)
+		}
+		// A Member who does not hold the Task attaches under no Claim, and cannot name another's.
+		if e, err := attach(lead, "", ""); err != nil || e.ClaimID != nil {
+			t.Fatalf("a Member's attach: %s, %v", claimOf(e), err)
+		}
+		if _, err := attach(lead, held, core.EvidenceKindLog); codeOf(err) != core.CodeForbidden {
+			t.Errorf("naming another Member's Claim: %v", err)
+		}
+		if _, err := attach(lead, "00000000-0000-4000-8000-999999999999", ""); codeOf(err) != core.CodeForbidden {
+			t.Errorf("naming no Claim at all: %v", err)
+		}
+		if err := f.svc.MayAttachEvidence(ctx, lead, core.EvidenceTarget{Task: task.Key, Claim: held}); codeOf(err) != core.CodeForbidden {
+			t.Errorf("before the upload, naming another Member's Claim: %v", err)
+		}
+		var got []string
+		for _, a := range f.activity("task.evidence_attached") {
+			got = append(got, fmt.Sprint(a.Payload["claim_id"]))
+		}
+		if want := fmt.Sprint([]string{held, held, "<nil>"}); fmt.Sprint(got) != want {
+			t.Errorf("payload claim_ids %v, want %s", got, want)
+		}
+		var listed []string
+		for _, e := range f.get(task.Key).Evidence {
+			listed = append(listed, claimOf(e))
+		}
+		if want := fmt.Sprint([]string{held, held, "none"}); fmt.Sprint(listed) != want {
+			t.Errorf("the Task's Evidence %v, want %s", listed, want)
+		}
+	})
 }

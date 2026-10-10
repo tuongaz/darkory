@@ -15,9 +15,12 @@ import (
 // The file goes to the Evidence store before the write that records it, so no upload holds the
 // Organisation's counter (ADR 0011); only its metadata is written here.
 
-// EvidenceTarget names the Task Evidence is attached to.
+// EvidenceTarget names the Task Evidence is attached to and, when Claim is set, the Claim it
+// belongs to: one on that Task whose holder is the caller, ended or not, as the Runner names the
+// Claim a Shift's log belongs to after the Shift has ended.
 type EvidenceTarget struct {
-	Task string
+	Task  string
+	Claim string
 }
 
 // NewEvidence is a file already in the Evidence store, under BlobKey, to record. Kind is
@@ -35,25 +38,47 @@ type NewEvidence struct {
 // MayAttachEvidence refuses a caller who may not attach Evidence to target, before the file is
 // uploaded; AttachEvidence checks again under the counter.
 func (s *Service) MayAttachEvidence(ctx context.Context, c *auth.Caller, target EvidenceTarget) error {
-	_, err := evidenceTarget(ctx, s.store, c, target, s.clock.Now())
+	_, _, err := evidenceTarget(ctx, s.store, c, target, s.clock.Now())
 	return err
 }
 
 // evidenceTarget resolves target and checks the caller may attach to it: a held Task needs its
-// Claim (plan invariant 6); a Task nobody holds, its Owner or a Member of its Project.
-func evidenceTarget(ctx context.Context, r store.Reader, c *auth.Caller, target EvidenceTarget, now time.Time) (Task, error) {
+// Claim (plan invariant 6); a Task nobody holds, its Owner or a Member of its Project. It returns
+// the Claim the Evidence belongs to: the one target names, which must be the caller's on the Task,
+// else the caller's current Claim when it holds the Task, else nil.
+func evidenceTarget(ctx context.Context, r store.Reader, c *auth.Caller, target EvidenceTarget, now time.Time) (Task, *string, error) {
 	id, err := resolveTask(ctx, r, c.OrgID, target.Task)
 	if err != nil {
-		return Task{}, err
+		return Task{}, nil, err
 	}
 	t, err := getTask(ctx, r, c.OrgID, id, now)
 	if err != nil {
-		return Task{}, err
+		return Task{}, nil, err
 	}
 	if t.Claim != nil {
-		return t, holds(c, t)
+		err = holds(c, t)
+	} else {
+		err = inProjectOrOwner(ctx, r, c, t, "attach Evidence, while nobody holds it, to")
 	}
-	return t, inProjectOrOwner(ctx, r, c, t, "attach Evidence, while nobody holds it, to")
+	if err != nil {
+		return t, nil, err
+	}
+	if target.Claim != "" {
+		claim := shortid.Canonical(target.Claim) // either form (ADR 0017)
+		var mine int
+		if err := r.QueryRow(ctx, `SELECT COUNT(*) FROM claims WHERE org_id = $1 AND id = $2 AND task_id = $3 AND holder_id = $4`,
+			c.OrgID, claim, t.ID, c.MemberID).Scan(&mine); err != nil {
+			return t, nil, err
+		}
+		if mine == 0 {
+			return t, nil, refuse(CodeForbidden, "the Claim is not yours: name a Claim of yours on %s", t.Key)
+		}
+		return t, &claim, nil
+	}
+	if t.Claim != nil {
+		return t, &t.Claim.ID, nil
+	}
+	return t, nil, nil
 }
 
 // AttachEvidence records Evidence whose file is already in the Evidence store. When it fails, the
@@ -67,16 +92,16 @@ func (s *Service) AttachEvidence(ctx context.Context, c *auth.Caller, target Evi
 		return Evidence{}, refuse(CodeInvalid, "Evidence is of kind evidence or log, not %q", ne.Kind)
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
-		task, err := evidenceTarget(ctx, t, c, target, t.now)
+		task, claim, err := evidenceTarget(ctx, t, c, target, t.now)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := t.Exec(ctx, `INSERT INTO evidence (id, org_id, task_id, kind, filename, content_type, size, sha256, blob_key, attached_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, ne.ID, c.OrgID, task.ID, ne.Kind, ne.Filename, ne.ContentType, ne.Size, ne.SHA256,
+		if _, err := t.Exec(ctx, `INSERT INTO evidence (id, org_id, task_id, kind, claim_id, filename, content_type, size, sha256, blob_key, attached_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, ne.ID, c.OrgID, task.ID, ne.Kind, claim, ne.Filename, ne.ContentType, ne.Size, ne.SHA256,
 			ne.BlobKey, c.MemberID, ms(t.now)); err != nil {
 			return nil, err
 		}
-		payload := map[string]any{"evidence_id": ne.ID, "filename": ne.Filename, "size": ne.Size, "kind": ne.Kind}
+		payload := map[string]any{"evidence_id": ne.ID, "filename": ne.Filename, "size": ne.Size, "kind": ne.Kind, "claim_id": claim}
 		if err := t.recordByCaller("task.evidence_attached", task.ID, payload); err != nil {
 			return nil, err
 		}

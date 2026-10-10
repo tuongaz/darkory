@@ -16,3 +16,9 @@ ALTER TABLE skills ADD COLUMN project_id TEXT REFERENCES projects (id);
 -- shift-<KEY>-<agent>-<HHMMSS>.log since it first attached them, so those already here are logs.
 ALTER TABLE evidence ADD COLUMN kind TEXT NOT NULL DEFAULT 'evidence' CHECK (kind IN ('evidence', 'log'));
 UPDATE evidence SET kind = 'log' WHERE filename LIKE 'shift-%-%.log';
+
+-- The Claim a piece of Evidence was attached under: the attacher's own when it held the Task, or
+-- the Claim a Shift's log belongs to, which the Runner names after the Shift has ended. Null for
+-- Evidence attached by a Member who did not hold the Task. No backfill: Evidence already here
+-- belongs to no Claim.
+ALTER TABLE evidence ADD COLUMN claim_id TEXT REFERENCES claims (id);
