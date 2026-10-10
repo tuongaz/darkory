@@ -749,7 +749,7 @@ type Activity struct {
 	// Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
 	// Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
 	// `holder_id` and `nudge`, 1 or 2. `task.evidence_attached` carries `evidence_id`,
-	// `filename`, `size` and `kind`. `task.pull_request_opened` and `task.pull_request_merged` carry the
+	// `filename`, `size`, `kind` and `claim_id`, null when the Evidence belongs to no Claim. `task.pull_request_opened` and `task.pull_request_merged` carry the
 	// pull request's `number` and `url`. `skill.created` carries `name`, `kind`, `builtin` and
 	// `project_id`, null for a Skill of the whole Organisation; `skill.changed` carries
 	// `project_id`, null when the Skill became the Organisation's.
@@ -786,7 +786,7 @@ type Activity struct {
 // Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
 // Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
 // `holder_id` and `nudge`, 1 or 2. `task.evidence_attached` carries `evidence_id`,
-// `filename`, `size` and `kind`. `task.pull_request_opened` and `task.pull_request_merged` carry the
+// `filename`, `size`, `kind` and `claim_id`, null when the Evidence belongs to no Claim. `task.pull_request_opened` and `task.pull_request_merged` carry the
 // pull request's `number` and `url`. `skill.created` carries `name`, `kind`, `builtin` and
 // `project_id`, null for a Skill of the whole Organisation; `skill.changed` carries
 // `project_id`, null when the Skill became the Organisation's.
@@ -1120,7 +1120,13 @@ type ErrorCode string
 // Evidence A report, screenshot or log attached to a Task, recording who attached it; Evidence
 // about a Parent as a whole is attached to the Parent.
 type Evidence struct {
-	AttachedBy  string    `json:"attached_by"`
+	AttachedBy string `json:"attached_by"`
+
+	// ClaimID The Claim the Evidence was attached under: the attacher's Claim when the attacher held
+	// the Task, or the Claim a Shift's log belongs to, named by the Runner. Absent for
+	// Evidence attached by a Member who did not hold the Task, and for Evidence from before
+	// this field.
+	ClaimID     *string   `json:"claim_id,omitempty"`
 	ContentType string    `json:"content_type"`
 	CreatedAt   time.Time `json:"created_at"`
 	Filename    string    `json:"filename"`
@@ -2336,6 +2342,9 @@ type BlockerRef = string
 // Cursor defines model for Cursor.
 type Cursor = string
 
+// EvidenceClaim defines model for EvidenceClaim.
+type EvidenceClaim = string
+
 // EvidenceFilename defines model for EvidenceFilename.
 type EvidenceFilename = string
 
@@ -2843,6 +2852,10 @@ type AttachTaskEvidenceParams struct {
 
 	// Kind What the file is; `evidence` unless given.
 	Kind *EvidenceKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Claim The Claim the Evidence belongs to: one on this Task whose holder is the caller, ended or
+	// not. Without it, the caller's Claim when the caller holds the Task, else none.
+	Claim *EvidenceClaim `form:"claim,omitempty" json:"claim,omitempty"`
 
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
@@ -4366,8 +4379,12 @@ type ClientInterface interface {
 	// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
 	// Claim while it is held, else its ownership or membership of its Project. Evidence about a
 	// Parent as a whole is attached to the Parent. `kind=log` is a Shift's terminal log, which
-	// the Runner attaches when the Shift ends. Records `task.evidence_attached` with `kind`.
-	// Errors: `not_holder`, `forbidden`, `too_large`.
+	// the Runner attaches when the Shift ends. `claim` names the Claim the Evidence belongs to:
+	// a Claim on this Task whose holder is the caller, ended or not; the Runner names the Claim a
+	// Shift's log belongs to. Without it the Evidence belongs to the caller's Claim when the
+	// caller holds the Task, else to none. Records `task.evidence_attached` with `kind` and
+	// `claim_id`. Errors: `not_holder`, `forbidden` (also: the Claim named is not the caller's
+	// on this Task), `too_large`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -6930,8 +6947,12 @@ func (c *Client) DropTask(ctx context.Context, task TaskRef, params *DropTaskPar
 // `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
 // Claim while it is held, else its ownership or membership of its Project. Evidence about a
 // Parent as a whole is attached to the Parent. `kind=log` is a Shift's terminal log, which
-// the Runner attaches when the Shift ends. Records `task.evidence_attached` with `kind`.
-// Errors: `not_holder`, `forbidden`, `too_large`.
+// the Runner attaches when the Shift ends. `claim` names the Claim the Evidence belongs to:
+// a Claim on this Task whose holder is the caller, ended or not; the Runner names the Claim a
+// Shift's log belongs to. Without it the Evidence belongs to the caller's Claim when the
+// caller holds the Task, else to none. Records `task.evidence_attached` with `kind` and
+// `claim_id`. Errors: `not_holder`, `forbidden` (also: the Claim named is not the caller's
+// on this Task), `too_large`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -11482,6 +11503,18 @@ func NewAttachTaskEvidenceRequestWithBody(server string, task TaskRef, params *A
 
 		}
 
+		if params.Claim != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "claim", *params.Claim, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "id"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -14143,8 +14176,12 @@ type ClientWithResponsesInterface interface {
 	// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
 	// Claim while it is held, else its ownership or membership of its Project. Evidence about a
 	// Parent as a whole is attached to the Parent. `kind=log` is a Shift's terminal log, which
-	// the Runner attaches when the Shift ends. Records `task.evidence_attached` with `kind`.
-	// Errors: `not_holder`, `forbidden`, `too_large`.
+	// the Runner attaches when the Shift ends. `claim` names the Claim the Evidence belongs to:
+	// a Claim on this Task whose holder is the caller, ended or not; the Runner names the Claim a
+	// Shift's log belongs to. Without it the Evidence belongs to the caller's Claim when the
+	// caller holds the Task, else to none. Records `task.evidence_attached` with `kind` and
+	// `claim_id`. Errors: `not_holder`, `forbidden` (also: the Claim named is not the caller's
+	// on this Task), `too_large`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -20746,8 +20783,12 @@ func (c *ClientWithResponses) DropTaskWithResponse(ctx context.Context, task Tas
 // `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
 // Claim while it is held, else its ownership or membership of its Project. Evidence about a
 // Parent as a whole is attached to the Parent. `kind=log` is a Shift's terminal log, which
-// the Runner attaches when the Shift ends. Records `task.evidence_attached` with `kind`.
-// Errors: `not_holder`, `forbidden`, `too_large`.
+// the Runner attaches when the Shift ends. `claim` names the Claim the Evidence belongs to:
+// a Claim on this Task whose holder is the caller, ended or not; the Runner names the Claim a
+// Shift's log belongs to. Without it the Evidence belongs to the caller's Claim when the
+// caller holds the Task, else to none. Records `task.evidence_attached` with `kind` and
+// `claim_id`. Errors: `not_holder`, `forbidden` (also: the Claim named is not the caller's
+// on this Task), `too_large`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //

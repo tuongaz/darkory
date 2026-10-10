@@ -747,7 +747,7 @@ type Activity struct {
 	// Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
 	// Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
 	// `holder_id` and `nudge`, 1 or 2. `task.evidence_attached` carries `evidence_id`,
-	// `filename`, `size` and `kind`. `task.pull_request_opened` and `task.pull_request_merged` carry the
+	// `filename`, `size`, `kind` and `claim_id`, null when the Evidence belongs to no Claim. `task.pull_request_opened` and `task.pull_request_merged` carry the
 	// pull request's `number` and `url`. `skill.created` carries `name`, `kind`, `builtin` and
 	// `project_id`, null for a Skill of the whole Organisation; `skill.changed` carries
 	// `project_id`, null when the Skill became the Organisation's.
@@ -784,7 +784,7 @@ type Activity struct {
 // Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
 // Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
 // `holder_id` and `nudge`, 1 or 2. `task.evidence_attached` carries `evidence_id`,
-// `filename`, `size` and `kind`. `task.pull_request_opened` and `task.pull_request_merged` carry the
+// `filename`, `size`, `kind` and `claim_id`, null when the Evidence belongs to no Claim. `task.pull_request_opened` and `task.pull_request_merged` carry the
 // pull request's `number` and `url`. `skill.created` carries `name`, `kind`, `builtin` and
 // `project_id`, null for a Skill of the whole Organisation; `skill.changed` carries
 // `project_id`, null when the Skill became the Organisation's.
@@ -1118,11 +1118,17 @@ type ErrorCode string
 // Evidence A report, screenshot or log attached to a Task, recording who attached it; Evidence
 // about a Parent as a whole is attached to the Parent.
 type Evidence struct {
-	AttachedBy  shortid.ID `json:"attached_by"`
-	ContentType string     `json:"content_type"`
-	CreatedAt   time.Time  `json:"created_at"`
-	Filename    string     `json:"filename"`
-	ID          shortid.ID `json:"id"`
+	AttachedBy shortid.ID `json:"attached_by"`
+
+	// ClaimID The Claim the Evidence was attached under: the attacher's Claim when the attacher held
+	// the Task, or the Claim a Shift's log belongs to, named by the Runner. Absent for
+	// Evidence attached by a Member who did not hold the Task, and for Evidence from before
+	// this field.
+	ClaimID     *shortid.ID `json:"claim_id,omitempty"`
+	ContentType string      `json:"content_type"`
+	CreatedAt   time.Time   `json:"created_at"`
+	Filename    string      `json:"filename"`
+	ID          shortid.ID  `json:"id"`
 
 	// Kind `evidence`: attached by the Task's holder or a Member about the work. `log`: a Shift's
 	// terminal log, attached by the Runner when the Shift ends; it belongs to the Claim the Shift
@@ -2334,6 +2340,9 @@ type BlockerRef = string
 // Cursor defines model for Cursor.
 type Cursor = string
 
+// EvidenceClaim defines model for EvidenceClaim.
+type EvidenceClaim = shortid.ID
+
 // EvidenceFilename defines model for EvidenceFilename.
 type EvidenceFilename = string
 
@@ -2841,6 +2850,10 @@ type AttachTaskEvidenceParams struct {
 
 	// Kind What the file is; `evidence` unless given.
 	Kind *EvidenceKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Claim The Claim the Evidence belongs to: one on this Task whose holder is the caller, ended or
+	// not. Without it, the caller's Claim when the caller holds the Task, else none.
+	Claim *EvidenceClaim `form:"claim,omitempty" json:"claim,omitempty"`
 
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
@@ -6473,6 +6486,19 @@ func (siw *ServerInterfaceWrapper) AttachTaskEvidence(w http.ResponseWriter, r *
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "claim" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "claim", r.URL.Query(), &params.Claim, runtime.BindQueryParameterOptions{Type: "string", Format: "id"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "claim"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "claim", Err: err})
 		}
 		return
 	}
