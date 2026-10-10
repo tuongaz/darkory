@@ -420,10 +420,10 @@ func ensureSkill(t *tx, name string) (string, error) {
 	}
 	for _, b := range seededSkills {
 		if b.name == name {
-			return createSkill(t, b.name, "generic", nil, b.body, b.builtin)
+			return createSkill(t, b.name, "generic", nil, nil, b.body, b.builtin)
 		}
 	}
-	return createSkill(t, name, "generic", nil, name, false)
+	return createSkill(t, name, "generic", nil, nil, name, false)
 }
 
 func codeOf(err error) Code {
@@ -520,7 +520,7 @@ func (s *Service) SetWorkflow(ctx context.Context, c *auth.Caller, projectRef st
 			return nil, err
 		}
 		for _, sk := range w.Skills {
-			if _, err := createSkill(t, sk.Name, "generic", nil, sk.Body, false); err != nil {
+			if _, err := createSkill(t, sk.Name, "generic", nil, nil, sk.Body, false); err != nil {
 				return nil, err
 			}
 		}

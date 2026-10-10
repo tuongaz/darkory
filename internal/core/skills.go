@@ -36,7 +36,7 @@ func (s *Service) CreateSkill(ctx context.Context, c *auth.Caller, ns NewSkill, 
 		return SkillDetail{}, refuse(CodeInvalid, "a company Skill names the generic Skill it builds on in base_skill")
 	case ns.Kind != "generic" && ns.Kind != "company":
 		return SkillDetail{}, refuse(CodeInvalid, "kind must be generic or company")
-	case ns.Kind == "generic" && ns.Project != nil:
+	case ns.Kind == "generic" && ns.Project != nil && *ns.Project != "":
 		return SkillDetail{}, refuse(CodeInvalid, "a generic Skill belongs to no Project; only a company Skill names one")
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
@@ -55,18 +55,17 @@ func (s *Service) CreateSkill(ctx context.Context, c *auth.Caller, ns NewSkill, 
 			}
 			base = &id
 		}
-		id, err := createSkill(t, ns.Name, ns.Kind, base, ns.Body, false)
-		if err != nil {
-			return nil, err
-		}
+		var project *string
 		if ns.Project != nil && *ns.Project != "" {
-			project, err := resolveProject(ctx, t, c.OrgID, *ns.Project)
+			id, err := resolveProject(ctx, t, c.OrgID, *ns.Project)
 			if err != nil {
 				return nil, err
 			}
-			if _, err := t.Exec(ctx, `UPDATE skills SET project_id = $1 WHERE org_id = $2 AND id = $3`, project, c.OrgID, id); err != nil {
-				return nil, err
-			}
+			project = &id
+		}
+		id, err := createSkill(t, ns.Name, ns.Kind, base, project, ns.Body, false)
+		if err != nil {
+			return nil, err
 		}
 		return getSkillDetail(ctx, t, c.OrgID, id)
 	})
@@ -76,7 +75,9 @@ func (s *Service) CreateSkill(ctx context.Context, c *auth.Caller, ns NewSkill, 
 	return res.(SkillDetail), nil
 }
 
-func createSkill(t *tx, name, kind string, base *string, body string, builtin bool) (string, error) {
+// createSkill creates a Skill and its version 1 inside a write, recording skill.created with the
+// Project it belongs to, project_id null for the whole Organisation's.
+func createSkill(t *tx, name, kind string, base, project *string, body string, builtin bool) (string, error) {
 	var n int
 	if err := t.QueryRow(t.ctx, `SELECT COUNT(*) FROM skills WHERE org_id = $1 AND name = $2`, t.caller.OrgID, name).Scan(&n); err != nil {
 		return "", err
@@ -89,15 +90,19 @@ func createSkill(t *tx, name, kind string, base *string, body string, builtin bo
 	if !builtin {
 		by = &t.caller.MemberID
 	}
-	if _, err := t.Exec(t.ctx, `INSERT INTO skills (id, org_id, name, kind, base_skill_id, builtin, current_version, created_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, 1, $7, $8)`, id, t.caller.OrgID, name, kind, base, builtin, by, ms(t.now)); err != nil {
+	if _, err := t.Exec(t.ctx, `INSERT INTO skills (id, org_id, name, kind, base_skill_id, project_id, builtin, current_version, created_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8, $9)`, id, t.caller.OrgID, name, kind, base, project, builtin, by, ms(t.now)); err != nil {
 		return "", err
 	}
 	if _, err := t.Exec(t.ctx, `INSERT INTO skill_versions (org_id, skill_id, version, body, published_by, published_at)
 VALUES ($1, $2, 1, $3, $4, $5)`, t.caller.OrgID, id, body, by, ms(t.now)); err != nil {
 		return "", err
 	}
-	return id, t.record(by, "skill.created", id, map[string]any{"name": name, "kind": kind, "builtin": builtin})
+	var projectID any
+	if project != nil {
+		projectID = *project
+	}
+	return id, t.record(by, "skill.created", id, map[string]any{"name": name, "kind": kind, "builtin": builtin, "project_id": projectID})
 }
 
 // ListSkills lists the Skills by name, optionally of one kind.

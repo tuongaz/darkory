@@ -220,6 +220,20 @@ func TestCompanySkillProject(t *testing.T) {
 		if _, err := create(core.NewSkill{Name: "h", Kind: "company", BaseSkill: ptrStr("qa"), Project: ptrStr("NOPE"), Body: "x"}); codeOf(err) != core.CodeNotFound {
 			t.Errorf("no such Project: %v", err)
 		}
+		if _, err := create(core.NewSkill{Name: "plain", Kind: "generic", Project: ptrStr(""), Body: "x"}); err != nil {
+			t.Errorf("a generic Skill whose Project is empty: %v", err)
+		}
+		created := map[string]any{}
+		for _, a := range f.activity("skill.created") {
+			if p, ok := a.Payload["project_id"]; ok {
+				created[fmt.Sprint(a.Payload["name"])] = p
+			} else {
+				created[fmt.Sprint(a.Payload["name"])] = "absent"
+			}
+		}
+		if created["web-qa"] != web || created["org-qa"] != nil || created["plain"] != nil {
+			t.Errorf("skill.created project_id %v", created)
+		}
 
 		// A Step of WEB may carry WEB's and the Organisation's; API's Step may not carry WEB's.
 		f.chain("WEB", [2]string{"Verify", "web-qa"}, [2]string{"Check", "org-qa"})

@@ -166,7 +166,7 @@ VALUES ($1, $2, $3, 'human', TRUE, $4, $4)`, memberID, orgID, memberName, ms(now
 			return err
 		}
 		for _, b := range seededSkills {
-			if _, err := createSkill(t, b.name, "generic", nil, b.body, b.builtin); err != nil {
+			if _, err := createSkill(t, b.name, "generic", nil, nil, b.body, b.builtin); err != nil {
 				return err
 			}
 		}
