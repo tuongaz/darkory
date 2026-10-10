@@ -3,12 +3,14 @@ import { useSearchParams } from "react-router";
 import type { Project, Task } from "@/api/client";
 import { useLiveEntries } from "@/api/live";
 import { useMembers } from "@/api/queries";
+import { projectPath } from "@/app/currentProject";
 import { peekParam } from "@/app/peek";
+import { stepFilterSearch, useFilterState } from "@/components/filters/filterState";
 import { Refusal } from "@/components/Refusal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { BlockingView } from "@/components/workflow/blocking";
-import { useLineData, WorkflowLine, type Chain, type LineData } from "@/components/workflowLine";
+import { scopePills, useLineData, WorkflowLine, type Chain, type LineData } from "@/components/workflowLine";
 import { branchSkills } from "@/components/workflowLine/model";
 import { useNow } from "@/clock";
 import { AnswerButton, ClaimButton } from "@/screens/inbox/parts";
@@ -135,6 +137,7 @@ function LiveLine({
     return { projectId: project.id, workflow: data.facts, drawn: data.drawnSteps, task: (id) => tasks.get(id), member: (id) => byId.get(id) };
   }, [project.id, data.facts, data.drawnSteps, data.records, members.data]);
   const flow = useLiveFlow(ctx, reduced);
+  const filter = useFilterState("tasks");
   const announced = useAnnouncement(ctx);
   const recordOf = useMemo(() => new Map<string, Task>(data.records.map((t) => [t.id, t])), [data.records]);
   const actionFor = (first: Chain["first"]) => {
@@ -144,6 +147,8 @@ function LiveLine({
     return first.kind === "answer" ? <AnswerButton task={task} /> : <ClaimButton task={task} />;
   };
   const s = data.scoped;
+  // A Step's list links to the Tasks list at the Step, under the scope and Filter its count was made under.
+  const narrowed = [...scopePills(data.scope), ...filter.pills];
   return (
     <>
       <WorkflowLine
@@ -166,6 +171,7 @@ function LiveLine({
         onOpenTask={onOpenTask}
         me={data.me}
         actionFor={actionFor}
+        stepHref={(stepId) => `${projectPath(project, "tasks")}?${stepFilterSearch(stepId, narrowed)}`}
       />
       {/* The tags are drawn for the eye; a screen reader hears each move as it arrives. */}
       <p role="status" className="sr-only">

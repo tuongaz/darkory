@@ -128,7 +128,8 @@ describe("the Workflows page of a Project of several", () => {
     expect(link).toHaveAttribute("href", `/projects/WEB/workflows/${wfId.bugs}`);
     await userEvent.click(link);
     expect(await screen.findByRole("button", { name: "Workflow: Bugs" })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("region", { name: "Workflow" }).querySelector('button[data-task="WEB-2"]')).not.toBeNull());
+    // WEB-2 waits at Investigate: counted there.
+    expect(await within(screen.getByRole("region", { name: "Workflow" })).findByRole("button", { name: "Investigate: 1 waiting" })).toBeInTheDocument();
     const crumbs = screen.getByRole("navigation", { name: "Breadcrumb" });
     expect(within(crumbs).getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/projects/WEB/workflows");
     expect(screen.getByRole("link", { name: "Edit Bugs" })).toHaveAttribute("href", `/projects/WEB/workflows/${wfId.bugs}/edit`);
@@ -384,7 +385,7 @@ describe("the Workflows page of a Project of one", () => {
     serve([task(2)], workflow());
     renderApp("/projects/WEB/workflows");
     await userEvent.click(within(await table()).getByRole("link", { name: "Work" }));
-    await waitFor(() => expect(screen.getByRole("region", { name: "Workflow" }).querySelector('button[data-task="WEB-2"]')).not.toBeNull());
+    expect(await within(await screen.findByRole("region", { name: "Workflow" })).findByRole("button", { name: "Build: 1 waiting" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Workflow: / })).toBeNull();
     const crumbs = within(screen.getByRole("navigation", { name: "Breadcrumb" }));
     expect(crumbs.getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/projects/WEB/workflows");

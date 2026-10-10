@@ -342,7 +342,8 @@ describe("a Parent's page", () => {
     renderApp("/tasks/WEB-3?view=line");
     const section = await screen.findByRole("region", { name: "Subtasks" });
     const line = await within(section).findByRole("region", { name: "Subtask line" });
-    await waitFor(() => expect(line.querySelector('button[data-task="WEB-5"]')).not.toBeNull());
+    // WEB-5 waits at Review: counted there.
+    expect(await within(line).findByRole("button", { name: "Review: 1 waiting" })).toBeInTheDocument();
     expect([...line.querySelectorAll("[data-head]")].map((e) => e.getAttribute("data-head"))).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]);
     expect(line.querySelector('button[data-task="WEB-4"]')).toBeNull();
     // WEB-4 does not vanish: the header says it is on Features' line.

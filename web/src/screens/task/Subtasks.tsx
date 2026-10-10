@@ -6,7 +6,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import type { Task, TaskDetail } from "@/api/client";
 import { useDirectory, useProjects, useRunnerSessions } from "@/api/queries";
-import { findProject } from "@/app/currentProject";
+import { findProject, projectPath } from "@/app/currentProject";
 import { usePeekLink } from "@/app/peek";
 import { useSelectedTask } from "@/app/selection";
 import { useNow } from "@/clock";
@@ -16,7 +16,8 @@ import { SectionHeader } from "@/components/PageHeader";
 import { Pill } from "@/components/Pill";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { BlockingView } from "@/components/workflow/blocking";
-import { useLineData, WorkflowLine } from "@/components/workflowLine";
+import { stepFilterSearch } from "@/components/filters/filterState";
+import { scopePills, useLineData, WorkflowLine } from "@/components/workflowLine";
 import { workflowsInOrder } from "@/components/workflowLine/model";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -170,6 +171,7 @@ function ParentLine({ detail, workflow }: { detail: TaskDetail; workflow: string
   const now = useNow();
   const navigate = useNavigate();
   const peek = usePeekLink();
+  const project = findProject(useProjects().data ?? [], detail.task.project_id);
   const [selected, setSelected] = useState<string | null>(null);
   if (!data) return <div aria-busy className="h-[320px] rounded-md border" />;
   const s = data.scoped;
@@ -189,6 +191,7 @@ function ParentLine({ detail, workflow }: { detail: TaskDetail; workflow: string
       onSelect={setSelected}
       onOpenTask={(key) => navigate(peek(key))}
       me={data.me}
+      stepHref={project && ((stepId) => `${projectPath(project, "tasks")}?${stepFilterSearch(stepId, scopePills(data.scope))}`)}
     />
   );
 }
