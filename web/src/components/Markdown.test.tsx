@@ -82,4 +82,11 @@ describe("Markdown", () => {
     expect(el.querySelector("strong")).toHaveTextContent("b");
     expect(el.querySelector("del")).toHaveTextContent("c");
   });
+
+  // The Install's CSP is style-src 'self' (csp.test.tsx): nothing here may add a <style> or a style attribute.
+  it("adds no style at run time", () => {
+    const el = md("# H\n\n- `a`\n\n```\nb\n```\n\n[l](https://x.y) ![i](https://x.y/i.png) | t |\n| - |\n| 1 |");
+    expect(document.querySelectorAll("style")).toHaveLength(0);
+    expect(el.querySelectorAll("[style]")).toHaveLength(0);
+  });
 });
