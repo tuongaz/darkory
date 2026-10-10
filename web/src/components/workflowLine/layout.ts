@@ -116,8 +116,9 @@ export type LineTopology = {
   /** Where new Tasks start (on the main line), when the Workflow has a Step. */
   start?: string;
   /**
-   * Every Step drawn carries a branch Skill (a Workflow of a Parent's own Subtasks, the
-   * Retrospective): they are the main line, which a Parent's end starts, and there is no quiet row.
+   * Every Step drawn is a branch Step as `sideSteps` reads it (a Workflow of a Parent's own
+   * Subtasks, the Retrospective): they are the main line, which a Parent's end starts, and there
+   * is no quiet row. A branch Step a worked Step leads into is worked, so its Workflow is not this.
    */
   afterOnly: boolean;
   /** The breakdown Step on the branch "Break down", off the line before the start Step. */
@@ -276,7 +277,9 @@ export function lineTopology(workflow: LineWorkflow): LineTopology {
   const ordered = (workflow.drawn === undefined ? [...workflow.steps] : workflow.steps.filter((s) => s.workflow_id === workflow.drawn)).sort(inOrder);
   const steps = new Map(ordered.map((s) => [s.id, s]));
   const sides = sideSteps(workflow);
-  const afterOnly = ordered.length > 0 && ordered.every((s) => !!s.skill && branchSkills.includes(s.skill.name));
+  // Every drawn Step is a branch Step as `sideSteps` reads it (one a worked Step leads into is worked),
+  // or the Project's start, when it has nothing but branch Steps.
+  const afterOnly = ordered.length > 0 && ordered.every((s) => sides.after.has(s.id) || (s.id === sides.start && !!s.skill && branchSkills.includes(s.skill.name)));
   const sideIds = new Set(afterOnly ? [] : [...sides.after].filter((id) => steps.has(id)));
   const before = [...sides.before].find((id) => steps.has(id));
   const start = sides.start !== undefined && steps.has(sides.start) ? sides.start : undefined;
