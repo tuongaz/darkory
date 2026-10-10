@@ -129,7 +129,8 @@ export function StepHead({
             actions.reorder(step.id, e.key === "ArrowUp" ? -1 : 1);
           }
         }}
-        style={{ width: `calc(${Math.max(step.name.length, 9)}ch + 18px)` }}
+        // As wide as its name (vf-9: "QA" a small field), the placeholder's width while empty.
+        style={{ width: `calc(${step.name ? Math.max(step.name.length + 1, 3) : 13}ch + 16px)` }}
         className={cn(
           "h-7 max-w-[200px] min-w-0 rounded-md border border-input bg-background px-2 text-sm font-semibold outline-none placeholder:font-normal placeholder:text-muted-foreground",
           "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive dark:bg-input/30",
