@@ -25,6 +25,13 @@ type PullRequest struct {
 	URL         string `json:"url"`
 	// State is as gh gives it: OPEN, MERGED or CLOSED.
 	State string `json:"state"`
+	// HeadRefOid is the commit its head is at.
+	HeadRefOid string `json:"headRefOid"`
+	// IsCrossRepository says its head is in a fork, HeadRepositoryOwner's: never a Task's.
+	IsCrossRepository   bool `json:"isCrossRepository"`
+	HeadRepositoryOwner struct {
+		Login string `json:"login"`
+	} `json:"headRepositoryOwner"`
 }
 
 // Pull request states as gh gives them.
@@ -44,12 +51,13 @@ type GitHub interface {
 	PullRequestsForBranch(ctx context.Context, repo, branch string) ([]PullRequest, error)
 	// PullRequest reads pull request n.
 	PullRequest(ctx context.Context, repo string, n int64) (PullRequest, error)
-	// MergePR merges pull request n with a merge commit; GitHub's refusal is the error, in its words.
-	MergePR(ctx context.Context, repo string, n int64) error
+	// MergePR merges pull request n with a merge commit, only while its head is at the commit
+	// head; GitHub's refusal is the error, in its words.
+	MergePR(ctx context.Context, repo string, n int64, head string) error
 }
 
 // prFields are the fields the Runner reads of a pull request.
-const prFields = "number,title,headRefName,baseRefName,url,state"
+const prFields = "number,title,headRefName,baseRefName,url,state,headRefOid,isCrossRepository,headRepositoryOwner"
 
 // ghCLI is GitHub through the gh CLI, signed in as the person running the Install.
 type ghCLI struct{}
@@ -105,15 +113,15 @@ func (g ghCLI) PullRequest(ctx context.Context, repo string, n int64) (PullReque
 	return pr, nil
 }
 
-func (g ghCLI) MergePR(ctx context.Context, repo string, n int64) error {
-	_, err := g.gh(ctx, repo, "pr", "merge", strconv.FormatInt(n, 10), "--merge")
+func (g ghCLI) MergePR(ctx context.Context, repo string, n int64, head string) error {
+	_, err := g.gh(ctx, repo, "pr", "merge", strconv.FormatInt(n, 10), "--merge", "--match-head-commit", head)
 	return err
 }
 
 var keyPattern = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]*-[0-9]+)(?:[-/:\s]|$)`)
 
-// KeyOf is the Task key a branch or pull request title starts with, in upper case, as
-// web-12-cart-page, web-12 (a Parent's branch) or "WEB-12: Cart page"; empty when it carries none.
+// KeyOf is the Task key a pull request's title starts with, in upper case, as "WEB-12: Cart page";
+// empty when it carries none. Which Task a branch belongs to is branch.KeyOf's rule alone.
 func KeyOf(s string) string {
 	if m := keyPattern.FindStringSubmatch(s); m != nil {
 		return strings.ToUpper(m[1])

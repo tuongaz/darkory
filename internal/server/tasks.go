@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
@@ -261,8 +260,12 @@ func (s *Server) mergedOnGitHub(ctx context.Context, c *auth.Caller, ref string,
 		return err
 	}
 	key := d.Task.Key
-	pr, err := run.PullRequest(shortid.Of(d.Task.ID).String(), body.Number) // the Runner has ids as the API writes them
+	rctx, cancel := context.WithTimeout(ctx, s.runnerTimeout)
+	defer cancel()
+	pr, err := run.PullRequest(rctx, shortid.Of(d.Task.ID).String(), body.Number) // the Runner has ids as the API writes them
 	switch {
+	case err != nil && rctx.Err() == context.DeadlineExceeded:
+		return &core.Error{Code: core.CodeConflict, Message: fmt.Sprintf("the Runner did not answer in %s", inSeconds(s.runnerTimeout))}
 	case errors.Is(err, runnerapi.ErrNoPullRequest):
 		return &core.Error{Code: core.CodeConflict, Message: fmt.Sprintf("GitHub has no pull request #%d in %s's Workspaces", body.Number, key)}
 	case err != nil:
@@ -289,7 +292,12 @@ func (s *Server) MergeTaskPullRequest(w http.ResponseWriter, r *http.Request, ta
 		return
 	}
 	// One merge of a Task at a time: a second request waits, then finds the pull request merged.
-	unlock := s.lockMerge(d.Task.ID)
+	// A request whose client goes away while it waits stops waiting.
+	unlock, err := s.lockMerge(ctx, d.Task.ID)
+	if err != nil {
+		writeError(w, http.StatusConflict, gen.ErrorCodeConflict, fmt.Sprintf("stopped waiting for another merge of %s: %v", d.Task.Key, err))
+		return
+	}
 	defer unlock()
 	t, pr, err := s.core.MayMergePullRequest(ctx, c, d.Task.ID)
 	if err != nil {
@@ -302,7 +310,14 @@ func (s *Server) MergeTaskPullRequest(w http.ResponseWriter, r *http.Request, ta
 		return
 	}
 	// The Runner has ids as the API writes them.
-	if err := run.Merge(shortid.Of(t.ID).String(), pr.Number); err != nil {
+	rctx, cancel := context.WithTimeout(ctx, s.runnerTimeout)
+	defer cancel()
+	if err := run.Merge(rctx, shortid.Of(t.ID).String(), pr.Number); err != nil {
+		if rctx.Err() == context.DeadlineExceeded {
+			writeError(w, http.StatusConflict, gen.ErrorCodeConflict, fmt.Sprintf("the Runner did not answer in %s; look at the pull request "+
+				"on GitHub before trying again", inSeconds(s.runnerTimeout)))
+			return
+		}
 		if errors.Is(err, runnerapi.ErrNoPullRequest) {
 			writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, fmt.Sprintf("GitHub has no open pull request #%d for %s", pr.Number, t.Key))
 			return
@@ -321,10 +336,23 @@ func (s *Server) SetTaskLabels(w http.ResponseWriter, r *http.Request, task gen.
 }
 
 // lockMerge holds the merge of the Task taskID until the returned func is called, so two requests
-// cannot both find its pull request open and both have the Runner merge it.
-func (s *Server) lockMerge(taskID string) func() {
-	m, _ := s.merging.LoadOrStore(taskID, &sync.Mutex{})
-	mu := m.(*sync.Mutex)
-	mu.Lock()
-	return mu.Unlock
+// cannot both find its pull request open and both have the Runner merge it. It waits for another
+// merge of the Task while ctx lasts, and returns ctx's error when ctx ends first.
+func (s *Server) lockMerge(ctx context.Context, taskID string) (func(), error) {
+	m, _ := s.merging.LoadOrStore(taskID, make(chan struct{}, 1))
+	slot := m.(chan struct{})
+	select {
+	case slot <- struct{}{}:
+		return func() { <-slot }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// inSeconds says d in whole seconds, as "90 s"; a shorter d as it is.
+func inSeconds(d time.Duration) string {
+	if d < time.Second {
+		return d.String()
+	}
+	return fmt.Sprintf("%d s", int(d.Round(time.Second).Seconds()))
 }

@@ -226,7 +226,9 @@ func (*fakeGitHub) PullRequestsForBranch(context.Context, string, string) ([]Pul
 func (*fakeGitHub) PullRequest(_ context.Context, _ string, n int64) (PullRequest, error) {
 	return PullRequest{}, fmt.Errorf("no pull request #%d here", n)
 }
-func (*fakeGitHub) MergePR(context.Context, string, int64) error { return fmt.Errorf("no GitHub here") }
+func (*fakeGitHub) MergePR(context.Context, string, int64, string) error {
+	return fmt.Errorf("no GitHub here")
+}
 
 // ok runs a CLI command as member, in-process.
 func (f *fixture) ok(member string, args ...string) string {

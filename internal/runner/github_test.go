@@ -37,7 +37,8 @@ func ghArgs(t *testing.T, log string) []string {
 // words come back when GitHub refuses.
 func TestGhCLI(t *testing.T) {
 	const list = `[{"number":7,"title":"DARK-3: Fix","headRefName":"dark-3-fix","baseRefName":"main","url":"https://github.com/acme/web/pull/7","state":"MERGED"},
-{"number":8,"title":"Bump","headRefName":"chore/bump","baseRefName":"main","url":"https://github.com/acme/web/pull/8","state":"OPEN"}]`
+{"number":8,"title":"Bump","headRefName":"chore/bump","baseRefName":"main","url":"https://github.com/acme/web/pull/8","state":"OPEN",
+"headRefOid":"abc","isCrossRepository":true,"headRepositoryOwner":{"login":"mallory"}}]`
 	log := fakeGh(t, `case "$*" in
 pr\ list*) echo '`+list+`' ;;
 pr\ view*) echo '{"number":7,"headRefName":"dark-3-fix","baseRefName":"main","url":"https://github.com/acme/web/pull/7","state":"OPEN"}' ;;
@@ -50,7 +51,8 @@ esac`)
 		t.Fatal(err)
 	}
 	if len(prs) != 2 || prs[0] != (PullRequest{Number: 7, Title: "DARK-3: Fix", HeadRefName: "dark-3-fix", BaseRefName: "main",
-		URL: "https://github.com/acme/web/pull/7", State: "MERGED"}) || prs[1].State != "OPEN" {
+		URL: "https://github.com/acme/web/pull/7", State: "MERGED"}) || prs[1].State != "OPEN" || !prs[1].IsCrossRepository ||
+		prs[1].HeadRepositoryOwner.Login != "mallory" || prs[1].HeadRefOid != "abc" {
 		t.Fatalf("PullRequests: %+v", prs)
 	}
 	if _, err := g.PullRequestsForBranch(ctx, repo, "dark-3-fix"); err != nil {
@@ -63,16 +65,16 @@ esac`)
 	if pr.Number != 7 || pr.State != "OPEN" || pr.HeadRefName != "dark-3-fix" || pr.BaseRefName != "main" {
 		t.Fatalf("PullRequest: %+v", pr)
 	}
-	err = g.MergePR(ctx, repo, 7)
+	err = g.MergePR(ctx, repo, 7, "abc123")
 	if err == nil || !strings.Contains(err.Error(), "X Pull request acme/web#7 is not mergeable: the merge commit cannot be cleanly created.") {
 		t.Fatalf("MergePR's refusal: %v", err)
 	}
 
 	want := []string{
-		"pr list --state all --limit 100 --json number,title,headRefName,baseRefName,url,state",
-		"pr list --head dark-3-fix --state all --json number,title,headRefName,baseRefName,url,state",
-		"pr view 7 --json number,title,headRefName,baseRefName,url,state",
-		"pr merge 7 --merge",
+		"pr list --state all --limit 100 --json " + prFields,
+		"pr list --head dark-3-fix --state all --json " + prFields,
+		"pr view 7 --json " + prFields,
+		"pr merge 7 --merge --match-head-commit abc123",
 	}
 	if got := ghArgs(t, log); strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("gh was run as\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))

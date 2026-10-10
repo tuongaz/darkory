@@ -2,12 +2,12 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -75,7 +75,7 @@ func TestPullRequestThroughTheClient(t *testing.T) {
 			t.Fatalf("no open pull request: %s", res.Body)
 		}
 		// The Runner refuses, in its words.
-		fake.merge = func(string, int64) error {
+		fake.merge = func(context.Context, string, int64) error {
 			return errors.New("Pull request acme/web#7 is not mergeable: the base branch policy prohibits the merge")
 		}
 		res = got(ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusConflict)
@@ -84,7 +84,7 @@ func TestPullRequestThroughTheClient(t *testing.T) {
 		}
 		// The Runner merges, given the Task and the recorded number only; the server records the
 		// merge as the caller.
-		fake.merge = func(id string, number int64) error {
+		fake.merge = func(_ context.Context, id string, number int64) error {
 			asked = append(asked, fmt.Sprintf("%s #%d", id, number))
 			return nil
 		}
@@ -187,32 +187,97 @@ func TestMergeOneAtATime(t *testing.T) {
 		got(ada.SetTaskPullRequestWithResponse(ctx, task.Key, &client.SetTaskPullRequestParams{},
 			client.SetTaskPullRequestBody{Number: 7, URL: "https://github.com/acme/web/pull/7", State: client.PullRequestOpen})).want(t, http.StatusOK)
 
+		// The Runner's Merge says it has begun, then waits to be let go: the other requests arrive
+		// meanwhile, with no clock in the test.
 		var merges atomic.Int32
-		h.srv.AttachRunner(&fakeRunner{merge: func(string, int64) error {
+		entered, release := make(chan struct{}, 4), make(chan struct{})
+		h.srv.AttachRunner(&fakeRunner{merge: func(ctx context.Context, _ string, _ int64) error {
 			merges.Add(1)
-			time.Sleep(50 * time.Millisecond) // GitHub takes its time; the other request arrives meanwhile
-			return nil
+			entered <- struct{}{}
+			select {
+			case <-release:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}})
+		merge := func(ctx context.Context) (int, error) {
+			res, err := ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})
+			if err != nil {
+				return 0, err
+			}
+			return res.StatusCode(), nil
+		}
 		codes := make(chan int, 2)
-		var wg sync.WaitGroup
-		for range 2 {
-			wg.Go(func() {
-				res, err := ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})
-				if err != nil {
-					t.Error(err)
-					return
-				}
-				codes <- res.StatusCode()
-			})
+		go func() {
+			c, err := merge(ctx)
+			if err != nil {
+				t.Error(err)
+			}
+			codes <- c
+		}()
+		<-entered
+		// A waiter whose client goes away stops waiting, and leaves the lock as it was.
+		gone, cancel := context.WithCancel(ctx)
+		cancelled := make(chan error, 1)
+		go func() {
+			_, err := merge(gone)
+			cancelled <- err
+		}()
+		go func() {
+			c, err := merge(ctx)
+			if err != nil {
+				t.Error(err)
+			}
+			codes <- c
+		}()
+		time.Sleep(100 * time.Millisecond) // both waiters reach the lock; the test's outcome holds either way
+		cancel()
+		if err := <-cancelled; !errors.Is(err, context.Canceled) {
+			t.Fatalf("the cancelled waiter: %v", err)
 		}
-		wg.Wait()
-		close(codes)
-		got := map[int]int{}
-		for c := range codes {
-			got[c]++
-		}
+		close(release)
+		got := map[int]int{<-codes: 1}
+		got[<-codes]++
 		if merges.Load() != 1 || got[http.StatusOK] != 1 || got[http.StatusNotFound] != 1 {
 			t.Fatalf("%d merges, answers %v", merges.Load(), got)
+		}
+	})
+}
+
+// A Runner that does not answer in time: the merge is answered conflict, saying to look on GitHub,
+// and the Task's merge is free again for the next request.
+func TestMergeTimesOut(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		h := newHarness(t, st)
+		h.srv.runnerTimeout = 200 * time.Millisecond
+		ctx := t.Context()
+		ada := h.admin
+		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(ada.AddProjectMemberWithResponse(ctx, "WEB", "ada", &client.AddProjectMemberParams{})).want(t, http.StatusNoContent)
+		mode := client.WorkspaceModePullRequest
+		got(ada.CreateWorkspaceWithResponse(ctx, &client.CreateWorkspaceParams{}, client.CreateWorkspaceBody{Name: "web", Path: "/src/web", Mode: &mode})).
+			want(t, http.StatusCreated)
+		task := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Checkout",
+			Workspaces: &[]string{"web"}})).want(t, http.StatusCreated).JSON201.Task
+		got(ada.SetTaskPullRequestWithResponse(ctx, task.Key, &client.SetTaskPullRequestParams{},
+			client.SetTaskPullRequestBody{Number: 7, URL: "https://github.com/acme/web/pull/7", State: client.PullRequestOpen})).want(t, http.StatusOK)
+
+		var calls atomic.Int32
+		h.srv.AttachRunner(&fakeRunner{merge: func(ctx context.Context, _ string, _ int64) error {
+			if calls.Add(1) == 1 {
+				<-ctx.Done() // gh hangs
+				return ctx.Err()
+			}
+			return nil
+		}})
+		res := got(ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusConflict)
+		if !strings.Contains(res.JSONDefault.Message, "the Runner did not answer in 200ms; look at the pull request on GitHub before trying again") {
+			t.Fatalf("the refusal reads %q", res.JSONDefault.Message)
+		}
+		got(ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusOK)
+		if calls.Load() != 2 {
+			t.Fatalf("%d merges", calls.Load())
 		}
 	})
 }
@@ -251,7 +316,7 @@ func TestAgentMergedWriteIsCheckedOnGitHub(t *testing.T) {
 
 		var asked []string
 		github := runnerapi.PullRequest{Number: 7, URL: "https://github.com/acme/web/pull/7", State: "open", Head: "web-2-checkout", Base: "main"}
-		h.srv.AttachRunner(&fakeRunner{pullRequest: func(task string, number int64) (runnerapi.PullRequest, error) {
+		h.srv.AttachRunner(&fakeRunner{pullRequest: func(_ context.Context, task string, number int64) (runnerapi.PullRequest, error) {
 			asked = append(asked, fmt.Sprintf("%s #%d", task, number))
 			return github, nil
 		}})

@@ -471,8 +471,8 @@ func (r *Runner) Stop(task string) error {
 	return s.command(ctx, cmdStop)
 }
 
-// mergeTimeout bounds a merge: reading the pull request on GitHub, checking it, merging it.
-const mergeTimeout = 60 * time.Second
+// ghTimeout bounds what the Runner reads on GitHub on its own account, at a Shift's end.
+const ghTimeout = 60 * time.Second
 
 // errNotStarted is the server asking about pull requests before the Runner has its Record.
 var errNotStarted = errors.New("the Runner is starting; try again in a moment")
@@ -481,10 +481,10 @@ var errNotStarted = errors.New("the Runner is starting; try again in a moment")
 // has checked there that it is open, that its head is a branch of the Task (branch.Prefix of its
 // key, whatever the title said when the branch was made) and that its base is that branch's own:
 // the Parent's branch for a Subtask, else the Workspace's default branch. It records nothing: the
-// server records the merge as the Member who asked. GitHub's refusal is the error, as gh said it.
-func (r *Runner) Merge(taskID string, number int64) error {
-	ctx, cancel := context.WithTimeout(context.Background(), mergeTimeout)
-	defer cancel()
+// server records the merge as the Member who asked. It merges the commit it checked: GitHub
+// refuses when the head moved meanwhile. GitHub's refusal is the error, as gh said it. ctx bounds
+// it all; gh runs under it.
+func (r *Runner) Merge(ctx context.Context, taskID string, number int64) error {
 	d, ws, pr, err := r.findPullRequest(ctx, taskID, number)
 	if err != nil {
 		return err
@@ -493,14 +493,14 @@ func (r *Runner) Merge(taskID string, number int64) error {
 		return runnerapi.ErrNoPullRequest
 	}
 	key := d.Task.Key
-	if !strings.HasPrefix(pr.HeadRefName, branch.Prefix(key)) {
+	if !branch.IsTasks(pr.HeadRefName, key) {
 		return fmt.Errorf("pull request #%d's branch %s is not %s's", number, pr.HeadRefName, key)
 	}
 	base := ownBase(ctx, d, ws)
 	if pr.BaseRefName != base {
 		return fmt.Errorf("pull request #%d is into %s, not %s", number, pr.BaseRefName, base)
 	}
-	if err := r.gh.MergePR(ctx, ws.Path, number); err != nil {
+	if err := r.gh.MergePR(ctx, ws.Path, number, pr.HeadRefOid); err != nil {
 		r.log.Info("GitHub refused to merge a Task's pull request", "task", key, "workspace", ws.Name, "pr", number, "err", err)
 		return err
 	}
@@ -519,10 +519,9 @@ func ownBase(ctx context.Context, d *client.TaskDetail, ws Workspace) string {
 
 // PullRequest reads pull request number of a Task on GitHub, in the Task's Workspaces in
 // pull_request mode. The server calls it while a write of the Runner's own may wait on its
-// answer, so it takes no lock: it reads the record and runs gh, nothing more.
-func (r *Runner) PullRequest(taskID string, number int64) (runnerapi.PullRequest, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), mergeTimeout)
-	defer cancel()
+// answer, so it takes no lock: it reads the record and runs gh, nothing more. ctx bounds it; gh
+// runs under it.
+func (r *Runner) PullRequest(ctx context.Context, taskID string, number int64) (runnerapi.PullRequest, error) {
 	_, _, pr, err := r.findPullRequest(ctx, taskID, number)
 	if err != nil {
 		return runnerapi.PullRequest{}, err
@@ -536,8 +535,9 @@ func ghMissing(err error) bool {
 }
 
 // findPullRequest reads pull request number in each Workspace of the Task in pull_request mode:
-// the first whose head is a branch of the Task, else the first that has the number at all. It is
-// ErrNoPullRequest when none has it, or gh's error when it could not tell.
+// the first whose head is a branch of the Task, else the first that has the number at all. One
+// from a fork is never the Task's, whatever its branch is called. It is ErrNoPullRequest when
+// none has it, or gh's error when it could not tell.
 func (r *Runner) findPullRequest(ctx context.Context, taskID string, number int64) (*client.TaskDetail, Workspace, PullRequest, error) {
 	select {
 	case <-r.ready:
@@ -568,7 +568,11 @@ func (r *Runner) findPullRequest(ctx context.Context, taskID string, number int6
 		case err != nil:
 			failed = err
 			continue
-		case strings.HasPrefix(pr.HeadRefName, branch.Prefix(d.Task.Key)):
+		case pr.IsCrossRepository:
+			r.log.Info("a pull request from a fork is not a Task's", "task", d.Task.Key, "workspace", ws.Name, "pr", number,
+				"fork", pr.HeadRepositoryOwner.Login)
+			continue
+		case branch.IsTasks(pr.HeadRefName, d.Task.Key):
 			return d, ws, pr, nil
 		case first == nil:
 			first, firstWS = &pr, ws

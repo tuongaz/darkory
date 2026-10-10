@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,7 +47,7 @@ func TestFollowupCommands(t *testing.T) {
 		var asked []string
 		fake := &oneSession{session: runnerapi.Session{TaskID: task.Task.ID, MemberID: task.Task.OwnerID, SessionID: "run-1", Host: "box",
 			StartedAt: time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC), State: runnerapi.StateRunning}}
-		fake.merge = func(_ string, number int64) error {
+		fake.merge = func(_ context.Context, _ string, number int64) error {
 			asked = append(asked, fmt.Sprintf("#%d", number))
 			return nil
 		}

@@ -25,7 +25,9 @@ type recordingGitHub struct {
 	prs     []PullRequest
 	created []string
 	merges  []int64
-	refuse  string
+	// heads are the commits each merge was asked for, in turn.
+	heads  []string
+	refuse string
 }
 
 func (g *recordingGitHub) CreatePR(_ context.Context, repo, base, head, title, _ string) (string, error) {
@@ -59,9 +61,10 @@ func (g *recordingGitHub) PullRequest(_ context.Context, _ string, n int64) (Pul
 	return PullRequest{}, fmt.Errorf("gh pr view: exit status 1: GraphQL: Could not resolve to a PullRequest with the number of %d.", n)
 }
 
-func (g *recordingGitHub) MergePR(_ context.Context, _ string, n int64) error {
+func (g *recordingGitHub) MergePR(_ context.Context, _ string, n int64, head string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	g.heads = append(g.heads, head)
 	if g.refuse != "" {
 		return errors.New(g.refuse)
 	}
@@ -138,8 +141,8 @@ func TestRunnerPullRequestMode(t *testing.T) {
 	}
 	// A pull request with no Task's key, and the Parent's own, are not reviews.
 	gh.merge(PullRequest{Number: 5, Title: "Bump the linter", HeadRefName: "chore/lint", URL: "https://github.com/acme/web/pull/5"})
-	gh.merge(PullRequest{Number: 6, Title: "WEB-1: Checkout", HeadRefName: "web-1", URL: "https://github.com/acme/web/pull/6"})
-	gh.merge(PullRequest{Number: 7, Title: "WEB-2: Cart page", HeadRefName: "web-2-cart-page", URL: "https://github.com/acme/web/pull/7"})
+	gh.merge(PullRequest{Number: 6, Title: "WEB-1: Checkout", HeadRefName: "web-1", BaseRefName: "main", URL: "https://github.com/acme/web/pull/6"})
+	gh.merge(PullRequest{Number: 7, Title: "WEB-2: Cart page", HeadRefName: "web-2-cart-page", BaseRefName: "web-1", URL: "https://github.com/acme/web/pull/7"})
 	eventually(t, 20*time.Second, "WEB-2's review completed by its pull request", func() bool { return f.task("WEB-2").Task.State == client.TaskStateDone })
 	// The merged write goes through the server's check on GitHub, which asks this Runner.
 	eventually(t, 10*time.Second, "WEB-2's pull request merged on the Task", func() bool {
@@ -199,9 +202,11 @@ func TestPullRequestLineSaysWhenNothingLanded(t *testing.T) {
 // calls back into the Runner. Anything else panics on the nil Record it embeds.
 type taskRecord struct {
 	Record
-	name  string
-	tasks []*client.TaskDetail
-	wss   map[string][]Workspace // by Task id
+	name string
+	// projects are the Projects its agent is a Member of.
+	projects []client.Project
+	tasks    []*client.TaskDetail
+	wss      map[string][]Workspace // by Task id
 
 	mu      sync.Mutex
 	writes  []string
@@ -273,8 +278,8 @@ func (g byRepo) PullRequestsForBranch(ctx context.Context, repo, branch string) 
 func (g byRepo) PullRequest(ctx context.Context, repo string, n int64) (PullRequest, error) {
 	return g[repo].PullRequest(ctx, repo, n)
 }
-func (g byRepo) MergePR(ctx context.Context, repo string, n int64) error {
-	return g[repo].MergePR(ctx, repo, n)
+func (g byRepo) MergePR(ctx context.Context, repo string, n int64, head string) error {
+	return g[repo].MergePR(ctx, repo, n, head)
 }
 
 // mergeRunner is a Runner reading rec, started, with GitHub gh.
@@ -295,8 +300,8 @@ func mergeFixture() *taskRecord {
 	web := Workspace{ID: "w-web", Name: "web", Path: "/src/web", Mode: ModePullRequest, DefaultBranch: "main"}
 	return &taskRecord{name: "reader",
 		tasks: []*client.TaskDetail{
-			{Task: client.Task{ID: "t-3", Key: "DARK-3", Title: "Fix the cart", State: client.TaskStateDone}},
-			{Task: client.Task{ID: "t-5", Key: "DARK-5", Title: "Totals", State: client.TaskStateDone},
+			{Task: client.Task{ID: "t-3", Key: "DARK-3", Title: "Fix the cart", State: client.TaskStateDone, ProjectID: "p-dark"}},
+			{Task: client.Task{ID: "t-5", Key: "DARK-5", Title: "Totals", State: client.TaskStateDone, ProjectID: "p-dark"},
 				Parent: &client.TaskBrief{ID: "t-4", Key: "DARK-4", Title: "Checkout"}},
 		},
 		wss: map[string][]Workspace{"t-3": {web}, "t-5": {web}}}
@@ -304,9 +309,10 @@ func mergeFixture() *taskRecord {
 
 // Merge merges the Task's pull request when its head is the Task's branch, by its key's prefix
 // whatever the title says now, and its base the branch's own: the default branch for a Task
-// standing alone, the Parent's branch for a Subtask. It refuses a foreign head or base in words
-// the Owner reads, finds no pull request when GitHub has it closed, merged or not at all, and
-// passes GitHub's refusal on as GitHub said it. It writes nothing on the Task.
+// standing alone, the Parent's branch for a Subtask. It merges the commit it checked. It refuses a
+// foreign head or base in words the Owner reads, finds no pull request when GitHub has it closed,
+// merged, from a fork or not at all, and passes GitHub's refusal on as GitHub said it. It writes
+// nothing on the Task.
 func TestRunnerMerge(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -322,6 +328,8 @@ func TestRunnerMerge(t *testing.T) {
 			want: "pull request #7's branch dark-9-other is not DARK-3's"},
 		{name: "a longer key", task: "t-3", pr: PullRequest{HeadRefName: "dark-30-cart", BaseRefName: "main", State: PROpen},
 			want: "pull request #7's branch dark-30-cart is not DARK-3's"},
+		{name: "a slash after the key", task: "t-3", pr: PullRequest{HeadRefName: "dark-3/cart", BaseRefName: "main", State: PROpen},
+			want: "pull request #7's branch dark-3/cart is not DARK-3's"},
 		{name: "a foreign base", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-fix-the-cart", BaseRefName: "develop", State: PROpen},
 			want: "pull request #7 is into develop, not main"},
 		{name: "a Subtask into its Parent's branch", task: "t-5", pr: PullRequest{HeadRefName: "dark-5-totals", BaseRefName: "dark-4", State: PROpen}},
@@ -329,17 +337,19 @@ func TestRunnerMerge(t *testing.T) {
 			want: "pull request #7 is into main, not dark-4"},
 		{name: "closed", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PRClosed}, noPR: true},
 		{name: "merged already", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PRMerged}, noPR: true},
+		{name: "from a fork", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PROpen,
+			IsCrossRepository: true}, noPR: true},
 		{name: "GitHub refuses", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PROpen},
 			refuse: "gh pr merge 7: exit status 1: X Pull request acme/web#7 is not mergeable: the merge commit cannot be cleanly created.",
 			want:   "gh pr merge 7: exit status 1: X Pull request acme/web#7 is not mergeable: the merge commit cannot be cleanly created."},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			gh := &recordingGitHub{refuse: tc.refuse}
-			tc.pr.Number, tc.pr.URL = 7, "https://github.com/acme/web/pull/7"
+			tc.pr.Number, tc.pr.URL, tc.pr.HeadRefOid = 7, "https://github.com/acme/web/pull/7", "c0ffee"
 			gh.set(tc.pr)
 			rec := mergeFixture()
 			r := mergeRunner(t, rec, gh)
-			err := r.Merge(tc.task, 7)
+			err := r.Merge(t.Context(), tc.task, 7)
 			switch {
 			case tc.noPR:
 				if !errors.Is(err, runnerapi.ErrNoPullRequest) {
@@ -349,8 +359,8 @@ func TestRunnerMerge(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Merge: %v", err)
 				}
-				if !slices.Equal(gh.merges, []int64{7}) {
-					t.Fatalf("merged %v", gh.merges)
+				if !slices.Equal(gh.merges, []int64{7}) || !slices.Equal(gh.heads, []string{"c0ffee"}) {
+					t.Fatalf("merged %v at %v", gh.merges, gh.heads)
 				}
 			default:
 				if err == nil || err.Error() != tc.want {
@@ -370,13 +380,14 @@ func TestRunnerMerge(t *testing.T) {
 
 	// A number no Workspace of the Task has: no pull request.
 	r := mergeRunner(t, mergeFixture(), &recordingGitHub{})
-	if err := r.Merge("t-3", 8); !errors.Is(err, runnerapi.ErrNoPullRequest) {
+	if err := r.Merge(t.Context(), "t-3", 8); !errors.Is(err, runnerapi.ErrNoPullRequest) {
 		t.Fatalf("Merge of a missing pull request: %v", err)
 	}
 }
 
 // PullRequest reads the Task's pull request in its Workspaces in pull_request mode, its state in
-// lower case; of two Workspaces with the number, the one whose head is the Task's branch.
+// lower case; of two Workspaces with the number, the one whose head is the Task's branch; never one
+// from a fork.
 func TestRunnerPullRequest(t *testing.T) {
 	rec := mergeFixture()
 	plain := Workspace{ID: "w-docs", Name: "docs", Path: "/src/docs", Mode: ModePlain}
@@ -387,8 +398,9 @@ func TestRunnerPullRequest(t *testing.T) {
 	gh["/src/api"].set(PullRequest{Number: 7, HeadRefName: "chore/bump", BaseRefName: "main", State: PROpen, URL: "https://github.com/acme/api/pull/7"})
 	gh["/src/web"].set(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PRMerged, URL: "https://github.com/acme/web/pull/7"})
 	r := mergeRunner(t, rec, gh)
+	ctx := t.Context()
 
-	pr, err := r.PullRequest("t-3", 7)
+	pr, err := r.PullRequest(ctx, "t-3", 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,17 +410,26 @@ func TestRunnerPullRequest(t *testing.T) {
 	}
 	for state, lower := range map[string]string{PROpen: "open", PRClosed: "closed"} {
 		gh["/src/web"].set(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: state})
-		if pr, err := r.PullRequest("t-3", 7); err != nil || pr.State != lower {
+		if pr, err := r.PullRequest(ctx, "t-3", 7); err != nil || pr.State != lower {
 			t.Fatalf("PullRequest of a %s one: %+v, %v", state, pr, err)
 		}
+	}
+	// A fork's #7 on a branch named for the Task is not the Task's: the other Workspace's is found.
+	gh["/src/web"].set(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PRMerged, IsCrossRepository: true})
+	if pr, err := r.PullRequest(ctx, "t-3", 7); err != nil || pr.Head != "chore/bump" {
+		t.Fatalf("PullRequest with a fork's #7: %+v, %v", pr, err)
 	}
 	// Only another branch's #7 in a pull_request Workspace (the plain one's is not looked at): that
 	// one, for the server to refuse by its head.
 	gh["/src/web"].prs = nil
-	if pr, err := r.PullRequest("t-3", 7); err != nil || pr.Head != "chore/bump" {
+	if pr, err := r.PullRequest(ctx, "t-3", 7); err != nil || pr.Head != "chore/bump" {
 		t.Fatalf("PullRequest with only another branch's #7: %+v, %v", pr, err)
 	}
-	if _, err := r.PullRequest("t-3", 9); !errors.Is(err, runnerapi.ErrNoPullRequest) {
+	gh["/src/api"].set(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PROpen, IsCrossRepository: true})
+	if _, err := r.PullRequest(ctx, "t-3", 7); !errors.Is(err, runnerapi.ErrNoPullRequest) {
+		t.Fatalf("PullRequest with only a fork's #7: %v", err)
+	}
+	if _, err := r.PullRequest(ctx, "t-3", 9); !errors.Is(err, runnerapi.ErrNoPullRequest) {
 		t.Fatalf("PullRequest of a missing one: %v", err)
 	}
 }
@@ -427,22 +448,24 @@ func (f *taskRecord) AllWorkspaces(context.Context) ([]Workspace, error) {
 	return out, nil
 }
 
-// pollRunner is a Runner whose reader is rec, polling gh, with agents whose Records are agents.
+// pollRunner is a Runner whose reader is rec, the agent reader, polling gh, with more agents, each
+// of the Projects listed after it.
 func pollRunner(t *testing.T, rec *taskRecord, gh GitHub, agents ...*taskRecord) *Runner {
 	t.Helper()
 	r := mergeRunner(t, rec, gh)
 	r.log = slog.New(slog.NewTextHandler(&lockedBuffer{}, nil))
-	r.agents = append(r.agents, &agent{r: r, rec: rec, me: client.Me{Member: client.Member{ID: "m-reader", Name: rec.name}}})
+	r.agents = append(r.agents, &agent{r: r, rec: rec, me: client.Me{Member: client.Member{ID: "m-" + rec.name, Name: rec.name}}})
 	for _, a := range agents {
-		r.agents = append(r.agents, &agent{r: r, rec: a, me: client.Me{Member: client.Member{ID: "m-" + a.name, Name: a.name}}})
+		r.agents = append(r.agents, &agent{r: r, rec: a, me: client.Me{Member: client.Member{ID: "m-" + a.name, Name: a.name}, Projects: a.projects}})
 	}
 	return r
 }
 
 // The poller writes on a Task the pull request of its branch it reads on GitHub, open and then
 // merged, within one Poll each, opened or merged by hand on a Done Task; the newest of a Task's,
-// once per state. A Parent's own branch, a branch with no Task's key, a closed pull request and a
-// key only in a title are not a Task's pull request.
+// once per state. A Parent's own branch, a branch with no Task's key, one with a slash after the
+// key, a closed pull request, one into another base, one from a fork, and a key only in a title
+// are not a Task's pull request.
 func TestPollerRecordsPullRequests(t *testing.T) {
 	rec := mergeFixture()
 	gh := &recordingGitHub{}
@@ -450,10 +473,13 @@ func TestPollerRecordsPullRequests(t *testing.T) {
 	seen := map[string]bool{}
 	url := func(n int64) string { return fmt.Sprintf("https://github.com/acme/web/pull/%d", n) }
 
-	gh.open(PullRequest{Number: 6, HeadRefName: "dark-4", Title: "DARK-4: Checkout", URL: url(6)})
-	gh.open(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", Title: "Fix the cart", URL: url(7)})
-	gh.open(PullRequest{Number: 8, HeadRefName: "chore/bump", Title: "DARK-3: bump", URL: url(8)})
-	gh.set(PullRequest{Number: 9, HeadRefName: "dark-5-totals", State: PRClosed, URL: url(9)})
+	gh.open(PullRequest{Number: 6, HeadRefName: "dark-4", BaseRefName: "main", Title: "DARK-4: Checkout", URL: url(6)})
+	gh.open(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", Title: "Fix the cart", URL: url(7)})
+	gh.open(PullRequest{Number: 8, HeadRefName: "chore/bump", BaseRefName: "main", Title: "DARK-3: bump", URL: url(8)})
+	gh.open(PullRequest{Number: 12, HeadRefName: "dark-3/feature", BaseRefName: "main", URL: url(12)})
+	gh.set(PullRequest{Number: 9, HeadRefName: "dark-5-totals", BaseRefName: "dark-4", State: PRClosed, URL: url(9)})
+	gh.merge(PullRequest{Number: 13, HeadRefName: "dark-5-totals", BaseRefName: "develop", URL: url(13)})
+	gh.open(PullRequest{Number: 14, HeadRefName: "dark-5-totals", BaseRefName: "dark-4", URL: url(14), IsCrossRepository: true})
 	r.pollOnce(t.Context(), seen)
 	if got := rec.written(); !slices.Equal(got, []string{"reader DARK-3 #7 open"}) {
 		t.Fatalf("after the first Poll: %v", got)
@@ -463,9 +489,9 @@ func TestPollerRecordsPullRequests(t *testing.T) {
 		t.Fatalf("a second Poll wrote again: %v", got)
 	}
 
-	gh.merge(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", Title: "Fix the cart", URL: url(7)})
-	gh.merge(PullRequest{Number: 10, HeadRefName: "dark-5-totals-again", URL: url(10)})
-	gh.open(PullRequest{Number: 11, HeadRefName: "dark-5-totals-more", URL: url(11)})
+	gh.merge(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", Title: "Fix the cart", URL: url(7)})
+	gh.merge(PullRequest{Number: 10, HeadRefName: "dark-5-totals-again", BaseRefName: "dark-4", URL: url(10)})
+	gh.open(PullRequest{Number: 11, HeadRefName: "dark-5-totals-more", BaseRefName: "dark-4", URL: url(11)})
 	r.pollOnce(t.Context(), seen)
 	want := []string{"reader DARK-3 #7 merged", "reader DARK-3 #7 open", "reader DARK-5 #11 open"}
 	sorted := func() []string { return slices.Sorted(slices.Values(rec.written())) }
@@ -481,36 +507,52 @@ func TestPollerRecordsPullRequests(t *testing.T) {
 	}
 }
 
-// A Task of a Project the reader's agent is not a Member of: another agent of the Runner writes
-// it. A refusal the record will repeat (conflict, invalid, not_found) is not tried again; another
-// failure is, next Poll.
-func TestPollerWritesAsAnotherAgentAndDropsRefusals(t *testing.T) {
+// The poller writes a Task's pull request as the Runner's agent that held the Task last, else as
+// one of its agents in the Task's Project, else as the reader; when that is refused forbidden it
+// says no agent may, and does not try every token. A refusal the record will repeat is not tried
+// again; another failure is, next Poll.
+func TestPollerWritesAsTheTasksAgent(t *testing.T) {
 	rec := mergeFixture()
-	rec.refuse = map[string]client.ErrorCode{"DARK-3": client.ErrorCodeForbidden, "DARK-5": client.ErrorCodeConflict}
-	other := &taskRecord{name: "tester", tasks: rec.tasks, wss: rec.wss}
+	builder := &taskRecord{name: "builder", tasks: rec.tasks, wss: rec.wss}
+	tester := &taskRecord{name: "tester", tasks: rec.tasks, wss: rec.wss, projects: []client.Project{{ID: "p-dark"}}}
+	at := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	rec.tasks[0].Claims = []client.Claim{{HolderID: "m-tester", StartedAt: at}, {HolderID: "m-builder", StartedAt: at.Add(time.Hour)},
+		{HolderID: "m-ada", StartedAt: at.Add(2 * time.Hour)}}
+	other := &client.TaskDetail{Task: client.Task{ID: "t-7", Key: "OPS-7", Title: "Deploy", State: client.TaskStateOpen, ProjectID: "p-ops"}}
+	rec.tasks = append(rec.tasks, other)
+	builder.tasks, tester.tasks = rec.tasks, rec.tasks
+	rec.wss["t-7"] = rec.wss["t-3"]
 	gh := &recordingGitHub{}
-	gh.open(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", URL: "https://github.com/acme/web/pull/7"})
-	gh.merge(PullRequest{Number: 8, HeadRefName: "dark-5-totals", URL: "https://github.com/acme/web/pull/8"})
-	r := pollRunner(t, rec, gh, other)
+	url := func(n int64) string { return fmt.Sprintf("https://github.com/acme/web/pull/%d", n) }
+	gh.open(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: url(7)})
+	gh.open(PullRequest{Number: 8, HeadRefName: "dark-5-totals", BaseRefName: "dark-4", URL: url(8)})
+	gh.open(PullRequest{Number: 9, HeadRefName: "ops-7-deploy", BaseRefName: "main", URL: url(9)})
+	rec.refuse = map[string]client.ErrorCode{"OPS-7": client.ErrorCodeForbidden}
+	r := pollRunner(t, rec, gh, builder, tester)
 	seen := map[string]bool{}
 	r.pollOnce(t.Context(), seen)
-	if got := other.written(); !slices.Equal(got, []string{"tester DARK-3 #7 open"}) {
-		t.Fatalf("the other agent wrote %v", got)
+	if got := builder.written(); !slices.Equal(got, []string{"builder DARK-3 #7 open"}) {
+		t.Fatalf("the agent that held DARK-3 last wrote %v", got)
 	}
-	if !seen["/src/web#8:merged"] || !seen["/src/web#7:open"] {
-		t.Fatalf("seen: %v", seen)
+	if got := tester.written(); !slices.Equal(got, []string{"tester DARK-5 #8 open"}) {
+		t.Fatalf("the agent in DARK-5's Project wrote %v", got)
+	}
+	if got := rec.written(); len(got) != 0 || !seen["/src/web#9:open"] {
+		t.Fatalf("the reader wrote %v; seen %v", got, seen)
 	}
 
-	rec.refuse = map[string]client.ErrorCode{"DARK-3": client.ErrorCodeInternal}
-	gh.merge(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", URL: "https://github.com/acme/web/pull/7"})
+	builder.refuse = map[string]client.ErrorCode{"DARK-3": client.ErrorCodeConflict}
+	tester.refuse = map[string]client.ErrorCode{"DARK-5": client.ErrorCodeInternal}
+	gh.merge(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: url(7)})
+	gh.merge(PullRequest{Number: 8, HeadRefName: "dark-5-totals", BaseRefName: "dark-4", URL: url(8)})
 	r.pollOnce(t.Context(), seen)
-	if seen["/src/web#7:merged"] {
-		t.Fatal("a failed write was marked seen")
+	if !seen["/src/web#7:merged"] || seen["/src/web#8:merged"] {
+		t.Fatalf("a conflict is not tried again and a failure is: %v", seen)
 	}
-	rec.refuse = nil
+	tester.refuse = nil
 	r.pollOnce(t.Context(), seen)
-	if !seen["/src/web#7:merged"] || !slices.Contains(rec.written(), "reader DARK-3 #7 merged") {
-		t.Fatalf("the write was not tried again: %v", rec.written())
+	if !seen["/src/web#8:merged"] || !slices.Contains(tester.written(), "tester DARK-5 #8 merged") {
+		t.Fatalf("the write was not tried again: %v", tester.written())
 	}
 }
 
@@ -523,7 +565,7 @@ func TestPollerWriteCallsBackIntoTheRunner(t *testing.T) {
 	r := pollRunner(t, rec, gh)
 	var checked []string
 	rec.setHook = func(task string, pr client.PullRequest) error {
-		got, err := r.PullRequest(task, pr.Number)
+		got, err := r.PullRequest(context.Background(), task, pr.Number)
 		if err != nil {
 			return err
 		}
@@ -546,29 +588,51 @@ func TestPollerWriteCallsBackIntoTheRunner(t *testing.T) {
 }
 
 // At a Shift's end the Runner reads the pull requests of the Task's branch in each Workspace in
-// pull_request mode and writes the newest on the Task, as the Shift; a closed one is not the
-// Task's, and a plain Workspace is not looked at.
+// pull_request mode and writes the newest that is its landing on the Task, as the Shift; a closed
+// one, one into another base and one from a fork are not, and a plain Workspace is not looked at.
 func TestShiftEndReadsTheTasksPullRequest(t *testing.T) {
 	rec := mergeFixture()
 	rec.name = "builder"
 	web := rec.wss["t-3"][0]
 	plain := Workspace{ID: "w-docs", Name: "docs", Path: "/src/docs", Mode: ModePlain}
 	gh := byRepo{"/src/web": {}, "/src/docs": {}}
-	gh["/src/web"].set(PullRequest{Number: 5, HeadRefName: "dark-3-fix-the-cart", State: PRClosed, URL: "https://github.com/acme/web/pull/5"})
-	gh["/src/web"].open(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", URL: "https://github.com/acme/web/pull/7"})
-	gh["/src/web"].open(PullRequest{Number: 8, HeadRefName: "dark-3-other", URL: "https://github.com/acme/web/pull/8"})
-	gh["/src/docs"].open(PullRequest{Number: 2, HeadRefName: "dark-3-fix-the-cart", URL: "https://github.com/acme/docs/pull/2"})
+	gh["/src/web"].set(PullRequest{Number: 5, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PRClosed, URL: "https://github.com/acme/web/pull/5"})
+	gh["/src/web"].open(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: "https://github.com/acme/web/pull/7"})
+	gh["/src/web"].open(PullRequest{Number: 8, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "develop", URL: "https://github.com/acme/web/pull/8"})
+	gh["/src/web"].open(PullRequest{Number: 9, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: "https://github.com/acme/web/pull/9",
+		IsCrossRepository: true})
+	gh["/src/docs"].open(PullRequest{Number: 2, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: "https://github.com/acme/docs/pull/2"})
 	r := pollRunner(t, rec, gh)
-	s := &session{r: r, rec: rec, key: "DARK-3", taskID: "t-3", log: r.log,
+	s := &session{r: r, rec: rec, d: rec.tasks[0], key: "DARK-3", taskID: "t-3", log: r.log,
 		checkouts: []Checkout{{Workspace: plain, Branch: "dark-3-fix-the-cart"}, {Workspace: web, Branch: "dark-3-fix-the-cart"}}}
 	s.readPullRequests(t.Context())
 	if got := rec.written(); !slices.Equal(got, []string{"builder DARK-3 #7 open"}) {
 		t.Fatalf("at the Shift's end: %v", got)
 	}
 
-	gh["/src/web"].prs = []PullRequest{{Number: 5, HeadRefName: "dark-3-fix-the-cart", State: PRClosed}}
+	gh["/src/web"].prs = []PullRequest{{Number: 5, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PRClosed}}
 	s.readPullRequests(t.Context())
 	if got := rec.written(); len(got) != 1 {
 		t.Fatalf("a closed pull request was written: %v", got)
+	}
+}
+
+// A pull request whose branch names a Task not filed yet is written once the Task is.
+func TestPollerWaitsForTheTask(t *testing.T) {
+	rec := mergeFixture()
+	later := rec.tasks[0]
+	rec.tasks = rec.tasks[1:]
+	gh := &recordingGitHub{}
+	gh.open(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: "https://github.com/acme/web/pull/7"})
+	rec.wss["t-5"] = rec.wss["t-3"]
+	r := pollRunner(t, rec, gh)
+	seen := map[string]bool{}
+	r.pollOnce(t.Context(), seen)
+	rec.mu.Lock()
+	rec.tasks = append(rec.tasks, later)
+	rec.mu.Unlock()
+	r.pollOnce(t.Context(), seen)
+	if got := rec.written(); !slices.Equal(got, []string{"reader DARK-3 #7 open"}) {
+		t.Fatalf("written %v", got)
 	}
 }

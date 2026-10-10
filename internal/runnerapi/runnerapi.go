@@ -90,12 +90,12 @@ type Runner interface {
 	// It merges on GitHub only: the server records the merge on the Task, as the Member who
 	// asked. It returns ErrNoPullRequest when GitHub has no such pull request open; any other
 	// error is a refusal, a mismatch or GitHub's own, its message as the Runner read it, which the
-	// server shows as it is.
-	Merge(taskID string, number int64) error
+	// server shows as it is. ctx bounds the act; the Runner's gh runs under it.
+	Merge(ctx context.Context, taskID string, number int64) error
 	// PullRequest reads the Task's pull request number on GitHub, in the Task's Workspaces in
 	// pull_request mode, as the Runner's gh sees it. It returns ErrNoPullRequest when none of them
-	// has it.
-	PullRequest(taskID string, number int64) (PullRequest, error)
+	// has it. ctx bounds the act; the Runner's gh runs under it.
+	PullRequest(ctx context.Context, taskID string, number int64) (PullRequest, error)
 	// Attach bridges conn to the Task's terminal until either side ends or ctx is done, and
 	// closes conn. Binary messages carry the terminal's bytes both ways; a text message
 	// {"cols": n, "rows": n} resizes the view. With readonly, what the client sends is ignored.
