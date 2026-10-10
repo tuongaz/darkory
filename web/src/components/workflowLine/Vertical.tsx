@@ -116,7 +116,7 @@ function HintPool({ ids }: { ids: ReadonlyMap<string, string> }) {
   );
 }
 
-/** How a Connector reads: on a traced Task's way, one of its next moves, carrying a token now, changed by an edit, or as it is. */
+/** How a Connector reads: on a traced Task's way, one of its next moves, carrying a token now, changed by an edit (the editor's rails alone, in the waiting blue), or as it is. */
 export type Tone = "trace" | "next" | "lit" | "changed" | "plain";
 
 
@@ -150,7 +150,6 @@ export function VerticalLine({
   ringed,
   way,
   onOpenTask,
-  highlight,
   noBranch,
   footer,
   stepHref,
@@ -171,7 +170,6 @@ export function VerticalLine({
   ringed?: ReadonlySet<string>;
   way?: Way;
   onOpenTask?: (key: string) => void;
-  highlight?: ReadonlySet<string>;
   noBranch?: boolean;
   footer?: ReactNode;
   stepHref?: (stepId: string) => string;
@@ -253,7 +251,7 @@ export function VerticalLine({
   const name = (id: string | null) => (id === null || id === DONE_STATION ? "Done" : (steps.get(id)?.name ?? t.others.get(id) ?? "a Step"));
   const fullName = (id: string | null) => (id !== null && t.others.has(id) ? t.others.get(id)! : name(id));
   const tone = (ids: readonly string[]): Tone =>
-    ids.some((id) => traversed.has(id)) ? "trace" : ids.some((id) => next.has(id)) ? "next" : ids.some((id) => flow.lit.has(id)) ? "lit" : ids.some((id) => highlight?.has(id)) ? "changed" : "plain";
+    ids.some((id) => traversed.has(id)) ? "trace" : ids.some((id) => next.has(id)) ? "next" : ids.some((id) => flow.lit.has(id)) ? "lit" : "plain";
   const stays = new Map((trace?.stays ?? []).filter((s) => s.until !== undefined).map((s) => [s.stepId, s]));
   const start = t.start !== undefined ? name(t.start) : undefined;
 
@@ -311,7 +309,6 @@ export function VerticalLine({
       className={cn(
         "inline-flex max-w-full items-center gap-1 rounded-[5px] px-[7px] py-0.5 text-xs leading-[1.4]",
         kind === "done" ? "bg-state-done-bg" : kind === "hand" ? "border border-dashed border-muted-foreground px-1.5 py-px text-muted-foreground" : "bg-muted",
-        !!extra["data-connector"] && highlight?.has(extra["data-connector"] as string) && "ring-1 ring-state-waiting",
       )}
     >
       <span aria-hidden className={cn("font-semibold", kind === "done" ? "text-state-done" : "text-muted-foreground")}>
@@ -628,7 +625,7 @@ export function VerticalLine({
               data-connector={c.id}
               data-lit={lit === "lit" || lit === "trace" ? "true" : undefined}
               {...hover(outcomeHint(c, fullName))}
-              className={cn("px-0.5 py-1 text-xs whitespace-nowrap", (lit === "trace" || lit === "lit") && "font-semibold text-state-claimed", lit === "changed" && "font-medium text-state-waiting")}
+              className={cn("px-0.5 py-1 text-xs whitespace-nowrap", (lit === "trace" || lit === "lit") && "font-semibold text-state-claimed")}
             >
               <span aria-hidden className="mr-[3px] font-semibold text-muted-foreground">
                 {back ? "↩" : "↪"}

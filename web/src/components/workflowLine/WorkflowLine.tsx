@@ -23,8 +23,6 @@ export type WorkflowLineProps = {
   branchLabel?: string;
   /** Tasks that reached Done today: "1 today" beside Done. */
   doneToday?: number;
-  /** Connectors drawn in the changed colour: what an edit changed. */
-  highlight?: ReadonlySet<string>;
   /** One Task's path: traced on the line, its next outcomes dashed. */
   trace?: Trace;
   /** What plays on the line as it happens (useLiveFlow). */
@@ -184,7 +182,6 @@ export function WorkflowLine(props: WorkflowLineProps) {
         ringed={ringed}
         way={way}
         onOpenTask={props.onOpenTask}
-        highlight={props.highlight}
         noBranch={props.noBranch}
         footer={props.footer}
         stepHref={props.stepHref}

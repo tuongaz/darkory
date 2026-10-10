@@ -86,6 +86,8 @@
 
 **Steps:** list the behaviours the old rendering carried (grep each `edit/*.tsx` for what it asks the draft: rename, move, delete with "where do its Tasks go", Skill change with the Taken-by reach confirm, outcome add/retarget/remove, the clash refusal, the start-moved note) and write a failing test per behaviour against `OnLine`; implement; the changed colour is `--ring`.
 
+**Superseded (2026-10-11):** the changed colour is vf-9's waiting blue, not `--ring` (decisions.md, "The Workflow page, vertical").
+
 **Verification:** `npx vitest run src/screens/workflow`; Playwright `e2e/workflow.spec.ts` "editing: nothing is sent until Save; then the new Skill, then one PUT" green; a lab screenshot beside vf-9.
 
 ## Task 6 — Retire the horizontal line
