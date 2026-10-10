@@ -6,6 +6,7 @@
     "done"
   ],
   "start": "build",
+  "afterOnly": false,
   "before": "plan",
   "holds": [
     "backlog"

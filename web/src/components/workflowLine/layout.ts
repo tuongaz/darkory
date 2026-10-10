@@ -1,4 +1,4 @@
-import { DONE_STATION, sideSteps, type LineConnector, type LineStep, type LineWorkflow } from "./model";
+import { branchSkills, DONE_STATION, sideSteps, type LineConnector, type LineStep, type LineWorkflow } from "./model";
 import { estimate, twoLines, type Measure } from "./measure";
 import { along, Board, cuts, runsOf, type Box, type Placed as TextBox, type Pt } from "./place";
 import { AFTER_BRANCH, BREAKDOWN_BRANCH, breakdownOutcomeHint, ENTRY_LABEL, entryHint, FILES_LABEL, filesHint, gapHint, HAND_LABEL, handHint, holdHint, HOLD_NOTE, outcomeHint, outcomesHint } from "./words";
@@ -115,6 +115,11 @@ export type LineTopology = {
   main: string[];
   /** Where new Tasks start (on the main line), when the Workflow has a Step. */
   start?: string;
+  /**
+   * Every Step drawn carries a branch Skill (a Workflow of a Parent's own Subtasks, the
+   * Retrospective): they are the main line, which a Parent's end starts, and there is no quiet row.
+   */
+  afterOnly: boolean;
   /** The breakdown Step on the branch "Break down", off the line before the start Step. */
   before?: string;
   /** The holds no Connector joins, parked off the line by the entry, in Workflow order. */
@@ -271,7 +276,8 @@ export function lineTopology(workflow: LineWorkflow): LineTopology {
   const ordered = (workflow.drawn === undefined ? [...workflow.steps] : workflow.steps.filter((s) => s.workflow_id === workflow.drawn)).sort(inOrder);
   const steps = new Map(ordered.map((s) => [s.id, s]));
   const sides = sideSteps(workflow);
-  const sideIds = new Set([...sides.after].filter((id) => steps.has(id)));
+  const afterOnly = ordered.length > 0 && ordered.every((s) => !!s.skill && branchSkills.includes(s.skill.name));
+  const sideIds = new Set(afterOnly ? [] : [...sides.after].filter((id) => steps.has(id)));
   const before = [...sides.before].find((id) => steps.has(id));
   const start = sides.start !== undefined && steps.has(sides.start) ? sides.start : undefined;
   const holds = ordered.filter((s) => sides.holds.has(s.id)).map((s) => s.id);
@@ -384,7 +390,7 @@ export function lineTopology(workflow: LineWorkflow): LineTopology {
     ...backs.map((c) => ({ connector: c, from: name(c.from), to: name(c.to) })),
     ...rows.flatMap((r) => r.loops.map((l) => ({ connector: l.connector, from: name(l.connector.from), to: name(l.connector.to) }))),
   ];
-  return { main, start, before, holds, connectors: new Map(connectors.map((c) => [c.id, c])), steps, segments, under, over, rows, chips, exits, entries, others, loops, maxUnder, maxOver };
+  return { main, start, afterOnly, before, holds, connectors: new Map(connectors.map((c) => [c.id, c])), steps, segments, under, over, rows, chips, exits, entries, others, loops, maxUnder, maxOver };
 }
 
 function nestPlaced(list: (Arc | Track)[], placedOf: (e: Arc | Track) => Placed): number {

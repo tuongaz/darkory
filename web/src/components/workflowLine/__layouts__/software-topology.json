@@ -12,6 +12,7 @@
     "done"
   ],
   "start": "triage",
+  "afterOnly": false,
   "before": "plan",
   "holds": [
     "backlog"

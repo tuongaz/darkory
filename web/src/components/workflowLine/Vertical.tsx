@@ -599,12 +599,15 @@ export function VerticalLine({
   });
   const carried = new Set([...mainSegs.flatMap((s) => (s?.connector ? [s.connector.id] : [])), ...mainTracks.flatMap((k) => k.connectors.map((c) => c.id))]);
   const first = rail[0];
-  const startHint = first === DONE_STATION ? undefined : t.start === first ? entryHint(name(first)) : arriveHint(name(first));
+  // A Workflow of only branch Steps starts where a Parent's end files its own Subtasks: headed so, its sentence behind the ⓘ.
+  const heading = branchLabel === AFTER_BRANCH ? AFTER_LABEL : branchLabel;
+  const startHint = first === DONE_STATION || t.afterOnly ? undefined : t.start === first ? entryHint(name(first)) : arriveHint(name(first));
   const startRow = first !== DONE_STATION && (
     <div data-start-row className="flex min-h-6 flex-wrap items-center gap-x-2.5 gap-y-1 pb-0.5">
       <span data-start-label data-dim={way && (way.entered || way.from !== first) ? "" : undefined} {...hover(startHint)} className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
         <span aria-hidden>↓</span>
-        {START_LABEL}
+        {t.afterOnly ? heading : START_LABEL}
+        {t.afterOnly && <InfoTip label={heading}>{AFTER_HINT}</InfoTip>}
       </span>
       {entryChips(first)}
     </div>
@@ -709,7 +712,6 @@ export function VerticalLine({
       ),
     };
   };
-  const heading = branchLabel === AFTER_BRANCH ? AFTER_LABEL : branchLabel;
   const branch = !noBranch && t.rows.length > 0 && (
     <section aria-label={heading} data-dim={onWay(quietStations) ? undefined : ""} className="mt-3 border-t pt-2">
       <div className="mb-1 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">

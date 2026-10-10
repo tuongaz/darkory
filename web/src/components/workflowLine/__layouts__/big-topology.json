@@ -15,6 +15,7 @@
     "done"
   ],
   "start": "triage",
+  "afterOnly": false,
   "holds": [],
   "connectors": [
     [

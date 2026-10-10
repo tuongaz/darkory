@@ -175,6 +175,30 @@ describe("When a Parent ends", () => {
     // No Connector of the branch is drawn on the main rail.
     for (const id of ["retro:done", "retro:propose", "skillreview:publish", "skillreview:needs changes", "acceptance:pass"]) expect(mainRail.querySelector(`[data-connector="${id}"]`), id).toBeNull();
   });
+
+  it("draws a Workflow of only branch Steps as its own main line, headed When a Parent ends, its first station filled, with no quiet row (vf-8)", () => {
+    render(<WorkflowLine workflow={DARK("retros")} tasks={[]} now={0} label="retros" />);
+    const main = screen.getByRole("region", { name: "retros" });
+    const rail = within(main).getByRole("list", { name: "Steps on the line" });
+    expect(stations(rail).map((li) => li.getAttribute("data-head"))).toEqual(["Retro", "Skill review", "Done"]);
+    expect(stations(rail)[0]).toHaveAttribute("data-start");
+    const head = main.querySelector("[data-start-label]")!;
+    expect(head).toHaveTextContent("When a Parent ends");
+    expect(head).not.toHaveTextContent("Start");
+    expect(within(main).getByRole("button", { name: "About When a Parent ends" })).toBeInTheDocument();
+    // Its outcomes run on the rail and its return is a track, as on any line.
+    expect(rail.querySelector('[data-segment="retro"]')).toHaveTextContent("propose");
+    expect(rail.querySelector('[data-segment="skillreview"]')).toHaveTextContent("publish");
+    expect(rail.querySelector('[data-connector="retro:done"]')).toHaveTextContent("● done → Done");
+    expect(within(main).queryByRole("region", { name: "When a Parent ends" })).toBeNull();
+  });
+
+  it("keeps the quiet row for a Workflow that mixes worked and branch Steps", () => {
+    render(<WorkflowLine workflow={MAIN} tasks={[]} now={0} label="main" />);
+    const main = screen.getByRole("region", { name: "main" });
+    expect(main.querySelector("[data-start-label]")).toHaveTextContent("Start");
+    expect(within(main).getByRole("region", { name: "When a Parent ends" })).toBeInTheDocument();
+  });
 });
 
 describe("the Retrospective at Done", () => {

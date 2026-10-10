@@ -145,15 +145,17 @@ describe("a crossing between two branches (Work's Acceptance says accepted into 
     expect(overlaps(h.boxes)).toEqual([]);
   });
 
-  it("is an entry chip on Wrap's branch row, beside Retro, its route arriving at Retro", () => {
+  it("is an entry chip beside Retro, the first Step of Wrap's own line (only branch Steps: they are its main line), its route arriving at Retro", () => {
     const t = lineTopology(WRAP("wrap"));
-    expect(t.main).toEqual(["done"]);
-    expect(t.rows.map((r) => r.stations)).toEqual([["retro", "skillreview"]]);
+    expect(t.main).toEqual(["retro", "skillreview", "done"]);
+    expect(t.afterOnly).toBe(true);
+    expect(t.rows).toEqual([]);
     expect(t.entries.map((e) => [e.stepId, e.text])).toEqual([["retro", "from Work · accepted"]]);
-    const h = horizontal(t, { width: 1000, column: 66 });
-    expect(h.chips.find((c) => c.connectorId === "acceptance:accepted")).toMatchObject({ kind: "entry", stepId: "retro", text: "from Work · accepted", hint: "Work › Acceptance → Retro: when the holder says accepted" });
-    const at = h.at.get("retro")!;
-    expect(h.routes.get("acceptance:accepted")).toMatch(new RegExp(`H${at.x} V${at.y}$`));
+    // On the line, the crossing in is a chip beside its head, as beside Start.
+    render(<WorkflowLine workflow={WRAP("wrap")} tasks={[]} now={0} />);
+    const chip = document.querySelector('[data-start-row] [data-chip="entry"]');
+    expect(chip).toHaveAttribute("data-connector", "acceptance:accepted");
+    expect(chip).toHaveTextContent("Work · accepted");
   });
 });
 
