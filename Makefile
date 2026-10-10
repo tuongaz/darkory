@@ -6,7 +6,7 @@ TEST_POSTGRES_URL ?= postgres://dk@localhost:54329/postgres?sslmode=disable
 # How long the Go tests may run: under -race on a loaded machine the core package takes more than
 # go test's default 10 minutes on both engines.
 TEST_TIMEOUT ?= 30m
-GENERATED := client/client.gen.go internal/server/gen/server.gen.go
+GENERATED := client/client.gen.go internal/server/gen/server.gen.go web/src/api/schema.gen.ts
 
 # Local settings for dev and serve, such as PUBLIC_URL; local.mk is not committed.
 -include local.mk
@@ -19,9 +19,11 @@ PUBLIC_URL ?= http://127.0.0.1:7357
 
 .PHONY: gen gen-check build vet test test-pg check e2e e2e-pg web web-gen web-check dev dev-api dev-web dev-init serve
 
-## gen: regenerate the Go client and the server interface from api/openapi.yaml
+## gen: regenerate the Go client, the server interface and the web app's TypeScript client from
+## api/openapi.yaml (needs node for the web's)
 gen:
 	$(GO) generate ./client ./internal/server/gen
+	cd web && npm run gen
 
 ## web: build the web app into web/dist/app, which the next build embeds (needs node)
 web:
