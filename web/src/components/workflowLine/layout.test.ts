@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { wfId, wfStep } from "@/test/fixtures";
 import { BIG, DEFAULT, FIVE, MAIN, SACCA, SOFTWARE } from "./fixtures";
-import { crossings, densityFor, horizontal, lineTopology, railOf, topologyCrossings, trackCrossings, tracks, type Arc, type Track } from "./layout";
-import { DONE_STATION, type LineWorkflow } from "./model";
+import { crossings, densityFor, horizontal, laneTracks, lineTopology, railOf, topologyCrossings, trackCrossings, tracks, type Arc, type Track } from "./layout";
+import { DONE_STATION, type LineConnector, type LineWorkflow } from "./model";
 import { overlaps } from "./place";
 
 const arcNamed = (list: (Arc | Track)[], name: string) => list.find((e): e is Arc => e.kind === "arc" && e.connector.name === name);
@@ -366,4 +366,28 @@ describe("the line down the page: returns as tracks in lanes beside the rail", (
       }
     }
   });
+});
+
+describe("laying many tracks stays quick", () => {
+  /** A rail of `n` Steps where each Step from the fourth on returns three back, and every other one to the first too: tracks that cannot all stand clear. */
+  const dense = (n: number) => {
+    const stations = [...Array.from({ length: n }, (_, i) => `s${i}`), DONE_STATION];
+    const connectors: LineConnector[] = [];
+    for (let i = 3; i < n; i++) {
+      connectors.push({ id: `s${i}:back`, from: `s${i}`, to: `s${i - 3}`, name: "back", position: 1 });
+      if (i % 2) connectors.push({ id: `s${i}:restart`, from: `s${i}`, to: "s0", name: "restart", position: 2 });
+    }
+    return { stations, connectors };
+  };
+
+  for (const n of [9, 10, 14]) {
+    it(`lays ${n - 3} tracks on ${n} Steps in under 50 ms`, () => {
+      const { stations, connectors } = dense(n);
+      laneTracks(stations, connectors, new Set());
+      const t0 = performance.now();
+      const list = laneTracks(stations, connectors, new Set());
+      expect(performance.now() - t0).toBeLessThan(50);
+      expect(new Set(list.map((k) => k.lane)).size).toBe(list.length);
+    });
+  }
 });

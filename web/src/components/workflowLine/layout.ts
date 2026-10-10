@@ -1560,30 +1560,64 @@ export function laneTracks(stations: readonly string[], connectors: readonly Lin
   let best: { cost: number; pref: number; lanes: number[]; dys: StubHeight[] } | undefined;
   const tryLanes = (lanes: number[]) => {
     list.forEach((k, i) => (k.lane = lanes[i]));
-    const dys = pickHeights(list, free);
+    const dys = pickHeights(list, free, best?.cost);
     const cost = trackCrossings(list);
     const pref = preference(lanes);
     if (!best || cost < best.cost || (cost === best.cost && pref < best.pref)) best = { cost, pref, lanes, dys };
   };
-  if (list.length <= 6) for (const p of permutations(list.length)) tryLanes(p);
-  else tryLanes(list.map((_, i) => i).sort((a, b) => list[a].hi - list[a].lo - (list[b].hi - list[b].lo)).reduce<number[]>((lanes, i, rank) => ((lanes[i] = rank), lanes), []));
+  if (list.length <= EVERY_ORDER) {
+    for (const p of permutations(list.length)) tryLanes(p);
+  } else {
+    // Many tracks: nested ones inside, then swap two lanes at a time while that helps, the
+    // stubs' heights held; then the heights picked again for the lanes kept.
+    const order = list.map((_, i) => i).sort((a, b) => list[a].hi - list[a].lo - (list[b].hi - list[b].lo));
+    tryLanes(order.reduce<number[]>((lanes, i, rank) => ((lanes[i] = rank), lanes), []));
+    const score = (lanes: number[]) => {
+      list.forEach((k, i) => (k.lane = lanes[i]));
+      return { cost: trackCrossings(list, best!.cost + 1), pref: preference(lanes) };
+    };
+    free.forEach((e, i) => (e.dy = best!.dys[i]));
+    let lanes = best!.lanes;
+    let now = score(lanes);
+    for (let better = true; better; ) {
+      better = false;
+      for (let a = 0; a < list.length; a++) {
+        for (let b = a + 1; b < list.length; b++) {
+          const next = [...lanes];
+          [next[a], next[b]] = [next[b], next[a]];
+          const s = score(next);
+          if (s.cost < now.cost || (s.cost === now.cost && s.pref < now.pref)) [lanes, now, better] = [next, s, true];
+        }
+      }
+    }
+    if (lanes !== best!.lanes) tryLanes(lanes);
+  }
   list.forEach((k, i) => (k.lane = best!.lanes[i]));
   free.forEach((e, i) => (e.dy = best!.dys[i]));
   return list;
 }
 
-/** The heights of the ends that could meet another track's, tried every way (or improved one at a time when many), the fewest crossings kept. */
-function pickHeights(list: LaneTrack[], free: TrackEnd[]): StubHeight[] {
+/** Up to this many tracks every order of lanes is tried; past it, the nested order improved by swaps. */
+const EVERY_ORDER = 4;
+/** Up to this many ends that could meet another track's every set of heights is tried; past it, one end at a time. */
+const EVERY_HEIGHT = 7;
+
+/**
+ * The heights of the ends that could meet another track's, tried every way (or improved one at a
+ * time when many), the fewest crossings kept. A set of heights no better than `bound` (the best
+ * lanes so far) is given up as soon as it is counted that high.
+ */
+function pickHeights(list: LaneTrack[], free: TrackEnd[], bound = Infinity): StubHeight[] {
   const heights: StubHeight[] = [-1, 0, 1];
   const set = (dys: StubHeight[]) => free.forEach((e, i) => (e.dy = dys[i]));
   let best = free.map((e): StubHeight => (e.connectors.length === 0 ? -1 : 1));
   set(best);
   let cost = trackCrossings(list);
-  if (free.length <= 7) {
+  if (free.length <= EVERY_HEIGHT) {
     for (let code = 0; code < 3 ** free.length && cost > 0; code++) {
       const dys = free.map((_, i) => heights[Math.floor(code / 3 ** i) % 3]);
       set(dys);
-      const c = trackCrossings(list);
+      const c = trackCrossings(list, Math.min(cost, bound + 1));
       if (c < cost) [best, cost] = [dys, c];
     }
   } else {
@@ -1593,7 +1627,7 @@ function pickHeights(list: LaneTrack[], free: TrackEnd[]): StubHeight[] {
         for (const h of heights) {
           const dys = best.map((d, j) => (j === i ? h : d));
           set(dys);
-          const c = trackCrossings(list);
+          const c = trackCrossings(list, cost);
           if (c < cost) [best, cost, changed] = [dys, c, true];
         }
       }
@@ -1611,18 +1645,21 @@ function permutations(n: number): number[][] {
 /**
  * Where tracks cross: a stub running out past a track in a lane nearer the rail, at a height
  * inside that track's run; or two stubs of different tracks at one station and one height.
+ * Counting stops at `limit`: a search only needs to know a choice is no better.
  */
-export function trackCrossings(list: readonly LaneTrack[]): number {
+export function trackCrossings(list: readonly LaneTrack[], limit = Infinity): number {
   const key = (e: TrackEnd) => e.at * 3 + e.dy + 1;
   let n = 0;
   for (const a of list) {
     for (const b of list) {
       if (a === b) continue;
-      const span = b.ends.map(key);
-      const [top, bot] = [Math.min(...span), Math.max(...span)];
+      let [top, bot] = [Infinity, -Infinity];
+      for (const f of b.ends) [top, bot] = [Math.min(top, key(f)), Math.max(bot, key(f))];
       for (const e of a.ends) {
-        if (b.lane < a.lane && top <= key(e) && key(e) <= bot) n++;
-        if (a.lane < b.lane && b.ends.some((f) => key(f) === key(e))) n++;
+        const k = key(e);
+        if (b.lane < a.lane && top <= k && k <= bot) n++;
+        if (a.lane < b.lane && b.ends.some((f) => key(f) === k)) n++;
+        if (n >= limit) return n;
       }
     }
   }
