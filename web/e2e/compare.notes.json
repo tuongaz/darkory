@@ -22,13 +22,11 @@
   "vf-5": [
     "Seed: ACME's Tasks carry made-up titles (the fixture names none); Plan's and Acceptance's are plain Tasks filed at those Steps.",
     "Decided (plan, Tasks at a Step: one rule on every line): a held Task is a chip (holder · key · age); vf-5 draws 'TR 1 working' because the fixture names no ACME Task. Build's two chips and its count wrap in the 300px column.",
-    "Seed: the 403 is /v1/projects/ACME/seen: the seeding admin is not a Member of ACME.",
     "Shipped: a Project of one Workflow names it in the crumb as text (Platform), with no picker chip; Delete is off with 'The last Workflow stays'."
   ],
   "vf-6": [
     "Seed: What's happening lists NEWS-1 … NEWS-36 dropped under the fixture's six: the seed files and drops them so NEWS-37 … NEWS-42 take the fixture's keys (likewise DARK-1 … 11, 23 to 25).",
-    "Seed: Legal shows a median (1s) because the seed moved Tasks through it; the fixture's Legal has none.",
-    "Seed: the 403 is /v1/projects/NEWS/seen: the seeding admin is not a Member of NEWS."
+    "Seed: Legal shows a median (1s) because the seed moved Tasks through it; the fixture's Legal has none."
   ],
   "vf-7": [
     "Fixed 4e74ad1: the station the selected Task is at is ringed (vf-7's Build).",
@@ -38,8 +36,8 @@
   "vf-8": [
     "Seed: Implementation's Build reads 13 waiting where vf-8 has 1 (see vf-1), so its head reads 19 Tasks.",
     "Decided (Task 4, log rows 1 and 4): Edit and ⋯ in each head; no scope chip or Filter on row 2.",
-    "Left for the lead: in a column (and on a phone, vf-10) the frame stacks a Step as name + its return '↩ needs changes', then Skill · median · takers, then chips, and puts 'N today' under Done; the build keeps the wide row's order (name · facts, chips, then marks with '↩ needs changes → Build' on their own line, Task 1 log row 4 for the target).",
-    "Shipped: Retrospective's Done reads '0 today'; vf-8 draws a bare Done."
+    "Shipped: Retrospective's Done reads '0 today'; vf-8 draws a bare Done.",
+    "Shipped: Backlog's '⇢ Build' wraps under its row in the 300px column (the pills read a little wider than the frame's); nothing is cut."
   ],
   "vf-9": [
     "Fixed b86cb58 and 8e95b12: the Skill select carries the tag glyph (⌖ qa ⌄) and a name field is as wide as its name.",
@@ -49,9 +47,7 @@
   ],
   "vf-10": [
     "Seed: Build reads 13 waiting where vf-10 has 1 (see vf-1).",
-    "Fixed 16d396f: the scope chip reads 'All' on a phone where it read 'All …'; vf-10 draws no scope chip, and row 2 keeps it.",
-    "Left for the lead: Needs you sits above the line on a phone (Live.tsx: 'A phone reads it top to bottom: Needs you, the line, What's happening'); vf-10 draws both panels under the line, and the plan says 'the panels under the line as today'.",
-    "Left for the lead: the narrow Step composition (see vf-8)."
+    "Fixed 16d396f: the scope chip reads 'All' on a phone where it read 'All …'; vf-10 draws no scope chip, and row 2 keeps it."
   ],
   "own-page": [
     "The owner's MAIN shape (OWN, seeded): Build's, QA's and Review's tracks nest without a crossing; Acceptance stands in When a Parent ends as its own station, pass → Done and fail → Build as marks (Task 1, log row 3); no console error.",
@@ -61,7 +57,7 @@
     "One column, as wide as the page; its line is the page's own. Nothing overlaps or is cut."
   ],
   "own-page-phone": [
-    "Every Step's facts fit beside its name at 390; '⇢ Build' wraps under Backlog; the three tracks stay beside the rail. Nothing is cut."
+    "Narrow: each Step's facts on their own row under its name; Review's two labels keep their targets ('↩ needs changes → Build', '↩ needs QA → QA') so they read apart, Build's lone '↪ no UI change' leaves it to its track (7997f9b); '⇢ Build' wraps under Backlog; the three tracks stay beside the rail. Nothing is cut."
   ],
   "own-list-phone": [
     "The head reads grip · Implementation · 8 Tasks · Edit · ⋯ on one line; '+ Workflow' is its icon on row 2. Nothing is cut."
