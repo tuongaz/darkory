@@ -317,8 +317,8 @@ func TestCommandsFormTheirRequests(t *testing.T) {
 	}
 }
 
-// The work commands end to end against a real server on both engines, on Implementation, one of
-// the default Workflows: Break down, Subtasks, Notes, Observations, Evidence, a question that
+// The work commands end to end against a real server on both engines, on the default Workflows
+// (Implementation, its Retrospective at Retrospective › Retro): Break down, Subtasks, Notes, Observations, Evidence, a question that
 // blocks, advance along the outcomes (and the refusals naming them), take-back, Rank and
 // ownership, the Owner completing the Parent, and its Retrospective proposing a Skill version
 // that skill-review publishes.

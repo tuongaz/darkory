@@ -64,8 +64,8 @@ func TestProjectsThroughTheClient(t *testing.T) {
 		if copied.Project.Key != "API" {
 			t.Fatalf("API %+v", copied)
 		}
-		const two = "Backlog Plan Build Review Retro Skill review Triage Fix Code review Verify"
-		for key, want := range map[string]string{"WEB": two, "TAX": "Backlog", "API": two} {
+		const three = "Backlog Plan Build Review Triage Fix Code review Verify Retro Skill review"
+		for key, want := range map[string]string{"WEB": three, "TAX": "Backlog", "API": three} {
 			if names := stepNames(got(ada.GetWorkflowWithResponse(ctx, key)).want(t, http.StatusOK).JSON200); names != want {
 				t.Errorf("%s's Workflow: %s", key, names)
 			}
@@ -140,15 +140,16 @@ func TestWorkflowAndTasksThroughTheClient(t *testing.T) {
 		got(builder.ClaimTaskWithResponse(ctx, now.Key, &client.ClaimTaskParams{}, client.ClaimTaskBody{})).want(t, http.StatusOK)
 
 		wf := got(peer.GetWorkflowWithResponse(ctx, "WEB")).want(t, http.StatusOK).JSON200
-		if len(wf.Workflows) != 2 || wf.Workflows[0].Name != "Implementation" || wf.Workflows[0].Position != 1 || wf.Workflows[0].ID == "" ||
-			wf.Workflows[1].Name != "Bug triage" || wf.Workflows[1].Position != 2 {
+		if len(wf.Workflows) != 3 || wf.Workflows[0].Name != "Implementation" || wf.Workflows[0].Position != 1 || wf.Workflows[0].ID == "" ||
+			wf.Workflows[1].Name != "Bug triage" || wf.Workflows[1].Position != 2 || wf.Workflows[2].Name != "Retrospective" ||
+			wf.Workflows[2].Position != 3 {
 			t.Fatalf("WEB's Workflows: %+v", wf.Workflows)
 		}
 		work := wf.Workflows[0].ID
 		facts := map[string]client.WorkflowStep{}
 		for i, s := range wf.Steps {
 			facts[s.Name] = s
-			if in := wf.Workflows[min(i/6, 1)].ID; s.WorkflowID != in {
+			if in := wf.Workflows[min(i/4, 2)].ID; s.WorkflowID != in {
 				t.Fatalf("%s is in Workflow %q, want %s", s.Name, s.WorkflowID, in)
 			}
 		}
@@ -200,7 +201,8 @@ func TestWorkflowAndTasksThroughTheClient(t *testing.T) {
 		}
 
 		// Replaced whole: the Steps by position, not by the list's order; a Step with open Tasks
-		// needs moves. Implementation becomes Work, and Bug triage, left out, is deleted.
+		// needs moves. Implementation becomes Work, and Bug triage and Retrospective, left out, are
+		// deleted.
 		reviewID, buildID, backlogID := facts["Review"].ID, facts["Build"].ID, facts["Backlog"].ID
 		in := client.SetWorkflowBody{
 			Workflows: []client.WorkflowInput{{ID: &work, Name: "Work", Position: ptr64(1)}},

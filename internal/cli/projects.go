@@ -32,7 +32,7 @@ var projectCommands = []command{
 }
 
 func cmdProjectCreate(c *call) error {
-	workflow := c.fs.String("workflow", "", "the Workflows: default (Implementation and Bug triage), empty (Backlog into Done), or copy (with --copy-from)")
+	workflow := c.fs.String("workflow", "", "the Workflows: default (Implementation, Bug triage and Retrospective), empty (Backlog into Done), or copy (with --copy-from)")
 	copyFrom := c.fs.String("copy-from", "", "the Project whose Workflows are copied")
 	var members strs
 	c.fs.Var(&members, "member", "a Member put in the Project; give it once per Member (you are not added unless named)")
