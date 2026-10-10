@@ -281,10 +281,18 @@ func TestAgentMergedWriteIsCheckedOnGitHub(t *testing.T) {
 		// Merged on the Task's branch, but the Workspaces' #7 is another repository's.
 		github.Head, github.URL = "web-2-checkout", "https://github.com/acme/api/pull/7"
 		res = write(bob, task, client.PullRequestMerged)
-		if res.StatusCode() != http.StatusBadRequest || !strings.Contains(res.JSONDefault.Message, "the address written is not pull request #7's on GitHub") {
+		if res.StatusCode() != http.StatusBadRequest ||
+			!strings.Contains(res.JSONDefault.Message, "pull request #7 on GitHub is https://github.com/acme/api/pull/7, not https://github.com/acme/web/pull/7") {
 			t.Fatalf("another repository's #7: %s", res.Body)
 		}
-		github.URL = "https://github.com/acme/web/pull/7"
+		// GitHub answers with another number than the one asked.
+		github.Number, github.URL = 8, "https://github.com/acme/web/pull/8"
+		res = write(bob, task, client.PullRequestMerged)
+		if res.StatusCode() != http.StatusBadRequest ||
+			!strings.Contains(res.JSONDefault.Message, "pull request #7 on GitHub is https://github.com/acme/web/pull/8, not https://github.com/acme/web/pull/7") {
+			t.Fatalf("another number: %s", res.Body)
+		}
+		github.Number, github.URL = 7, "https://github.com/acme/web/pull/7"
 		// GitHub has no #7 in the Task's Workspaces.
 		ghErr = runnerapi.ErrNoPullRequest
 		res = write(bob, task, client.PullRequestMerged)
@@ -298,10 +306,27 @@ func TestAgentMergedWriteIsCheckedOnGitHub(t *testing.T) {
 			t.Fatalf("GitHub not reached: %s", res.Body)
 		}
 		ghErr = nil
-		// Merged, on the Task's branch: a renamed Task's branch still starts with its key.
-		github.Head = "web-2-old-title"
+		// Merged, on the Task's branch: a renamed Task's branch still starts with its key; GitHub's
+		// host is compared without regard to case.
+		github.Head, github.URL = "web-2-old-title", "https://GitHub.com/acme/web/pull/7"
 		if res := write(bob, task, client.PullRequestMerged); res.StatusCode() != http.StatusOK || res.JSON200.PullRequest.State != client.PullRequestMerged {
 			t.Fatalf("merged on the Task's branch: %s", res.Body)
+		}
+		// From here GitHub is not asked: a write the record already carries, and a bad address.
+		h.srv.AttachRunner(&fakeRunner{pullRequest: func(task string, number int64) (runnerapi.PullRequest, error) {
+			t.Errorf("the Runner was asked for %s #%d", task, number)
+			return runnerapi.PullRequest{}, errors.New("not asked")
+		}})
+		if res := write(bob, task, client.PullRequestMerged); res.StatusCode() != http.StatusOK {
+			t.Fatalf("the same merged write again: %s", res.Body)
+		}
+		bad, err := bob.SetTaskPullRequestWithResponse(ctx, file("Bad address").Key, &client.SetTaskPullRequestParams{},
+			client.SetTaskPullRequestBody{Number: 7, URL: "https://github.com/../web/pull/7", State: client.PullRequestMerged})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bad.StatusCode() != http.StatusBadRequest {
+			t.Fatalf("a bad address written as merged: %s", bad.Body)
 		}
 		// A human's write is not checked.
 		asked = nil

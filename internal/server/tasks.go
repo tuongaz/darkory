@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -240,15 +241,21 @@ func (s *Server) SetTaskPullRequest(w http.ResponseWriter, r *http.Request, task
 }
 
 // mergedOnGitHub checks an agent's write of merged on GitHub, through the Runner beside this
-// server when one is attached: the pull request must be merged there, and its head branch must
-// start with the Task's branch prefix, as the Runner names a Task's branches, and the address
-// written must be the one GitHub gives, since another repository may have a #7 of its own. An
+// server when one is attached: the pull request must be merged there, its head branch must start
+// with the Task's branch prefix, as the Runner names a Task's branches, and GitHub must give it
+// the number and the address written, since another repository may have a #7 of its own. An
 // agent writes as the Runner's discovery does, so its word that a merge happened is not taken
-// alone. A human's write, a write of open, and a write with no Runner attached are not checked.
+// alone. A human's write, a write of open, and a write with no Runner attached are not checked;
+// nor is a write of what the Task already carries, and a bad address is refused before GitHub is
+// asked.
 func (s *Server) mergedOnGitHub(ctx context.Context, c *auth.Caller, ref string, body gen.SetTaskPullRequestBody) error {
 	run := s.theRunner()
 	if body.State != gen.PullRequestMerged || run == nil {
 		return nil
+	}
+	written := core.PullRequest{Number: body.Number, URL: body.URL, State: string(body.State)}
+	if err := written.Validate(); err != nil {
+		return err
 	}
 	m, err := s.core.GetMember(ctx, c, c.MemberID)
 	if err != nil {
@@ -261,6 +268,9 @@ func (s *Server) mergedOnGitHub(ctx context.Context, c *auth.Caller, ref string,
 	if err != nil {
 		return err
 	}
+	if d.Task.PullRequest != nil && *d.Task.PullRequest == written {
+		return nil
+	}
 	key := d.Task.Key
 	pr, err := run.PullRequest(shortid.Of(d.Task.ID).String(), body.Number) // the Runner has ids as the API writes them
 	switch {
@@ -272,10 +282,23 @@ func (s *Server) mergedOnGitHub(ctx context.Context, c *auth.Caller, ref string,
 		return &core.Error{Code: core.CodeConflict, Message: fmt.Sprintf("GitHub has #%d %s, not merged", body.Number, pr.State)}
 	case !strings.HasPrefix(pr.Head, branch.Prefix(key)):
 		return &core.Error{Code: core.CodeInvalid, Message: fmt.Sprintf("pull request #%d's branch %s is not %s's", body.Number, pr.Head, key)}
-	case pr.URL != body.URL:
-		return &core.Error{Code: core.CodeInvalid, Message: fmt.Sprintf("the address written is not pull request #%d's on GitHub", body.Number)}
+	case pr.Number != body.Number || !sameAddress(pr.URL, body.URL):
+		return &core.Error{Code: core.CodeInvalid, Message: fmt.Sprintf("pull request #%d on GitHub is %s, not %s", body.Number, pr.URL, body.URL)}
 	}
 	return nil
+}
+
+// sameAddress reports whether two https addresses name the same page: the host compared without
+// regard to case, as hosts are, and everything else exactly.
+func sameAddress(a, b string) bool {
+	ua, errA := url.Parse(a)
+	ub, errB := url.Parse(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return ua.Scheme == ub.Scheme && ua.User == nil && ub.User == nil && strings.EqualFold(ua.Host, ub.Host) &&
+		ua.EscapedPath() == ub.EscapedPath() && ua.RawQuery == ub.RawQuery && ua.ForceQuery == ub.ForceQuery &&
+		ua.Fragment == ub.Fragment
 }
 
 // MergeTaskPullRequest asks the Runner beside this server to merge the Task's open pull request:
