@@ -32,7 +32,7 @@ export function Token({
   dim?: boolean;
   pulse?: Tone;
   arrived?: boolean;
-  /** A note hung off the token's right side: "now · builder picked up · waited 43m". */
+  /** A note beside the token, to its right: "now · builder picked up · waited 43m". */
   tag?: ReactNode;
   /** A past stay on a single Task's path: dashed, the time it was worked there. */
   past?: { text: string };
@@ -46,12 +46,7 @@ export function Token({
   const time = past ? past.text : picked ? "now" : since !== undefined ? tokenTime(now - since) : undefined;
   const by = blockedWords(task);
   return (
-    <span data-dim={dim ? "" : undefined} className="relative inline-flex">
-      {tag && (
-        <span data-tag className="pointer-events-none absolute top-1/2 left-full z-10 ml-1 flex -translate-y-1/2 flex-row-reverse items-center gap-1.5 text-xs font-medium whitespace-nowrap">
-          {tag}
-        </span>
-      )}
+    <span data-dim={dim ? "" : undefined} className="relative inline-flex items-center">
       <button
         type="button"
         data-task={task.key}
@@ -80,6 +75,12 @@ export function Token({
         )}
         {by && <span className="text-[11px] font-medium text-state-blocked">{by}</span>}
       </button>
+      {/* In the row's flow, so it pushes what follows on (a count, a mark) rather than lying over it. */}
+      {tag && (
+        <span data-tag className="pointer-events-none ml-1 flex flex-row-reverse items-center gap-1.5 text-xs font-medium whitespace-nowrap">
+          {tag}
+        </span>
+      )}
     </span>
   );
 }

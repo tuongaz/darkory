@@ -285,6 +285,10 @@ describe("the line as it happens", () => {
     expect(tokenOf("WEB-2")).toHaveTextContent("now");
     expect(tokenOf("WEB-2")).toHaveAttribute("data-pulse", "agent");
     expect(tokenOf("WEB-2")!.parentElement!.querySelector("[data-tag]")).toHaveTextContent("nowbuilder picked up· waited 43m");
+    // In the row's flow after its token, never laid over the count or a mark beside it.
+    const tag = tokenOf("WEB-2")!.parentElement!.querySelector("[data-tag]")!;
+    expect(tag).not.toHaveClass("absolute");
+    expect(tokenOf("WEB-2")!.nextElementSibling).toBe(tag);
   });
 
   it("an advance carries a token along its Connector, its outcome lit, and the Task lands at its next Step", async () => {
