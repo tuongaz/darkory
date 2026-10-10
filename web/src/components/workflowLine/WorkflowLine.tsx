@@ -151,7 +151,7 @@ export function WorkflowLine(props: WorkflowLineProps) {
   }, [selKey, selected]);
 
   return (
-    <div ref={box} tabIndex={-1} role="region" aria-label={props.label ?? "Workflow line"} data-orientation="vertical" className={cn("w-full min-w-0 outline-none", props.className)}>
+    <div ref={box} tabIndex={-1} role="region" aria-label={props.label ?? "Workflow line"} className={cn("w-full min-w-0 outline-none", props.className)}>
       {chain && (
         <WayStrip
           ref={strip}

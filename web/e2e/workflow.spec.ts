@@ -411,7 +411,7 @@ test("the software Workflow down a phone and a 1024 window: every return's track
   for (const size of [{ width: 390, height: 844 }, { width: 1024, height: 900 }]) {
     const { page, errors, ctx } = await open(browser, await workflowPage("SWL"), size);
     const line = page.getByRole("region", { name: "Workflow" });
-    await expect(line).toHaveAttribute("data-orientation", "vertical");
+    await expect(line).toBeVisible();
     const tracks = line.locator("g[data-track] path");
     await expect(tracks.first()).toBeAttached();
     // Each track's left edge, from the line's own left edge, in the page as drawn.

@@ -375,7 +375,7 @@ test("live moments, phone: the line fits 390 and a pickup reads now", async ({ b
   const errors = watchErrors(page);
   const { tasks } = await mockV1(page);
   await page.goto("/projects/WEB/workflows/wf-work");
-  await expect(page.getByRole("region", { name: "Workflow", exact: true })).toHaveAttribute("data-orientation", "vertical");
+  await expect(page.getByRole("region", { name: "Workflow", exact: true })).toBeVisible();
   tasks.find((t) => t.id === "k-7")!.claim = claimOf(7, "m-builder-1");
   await emit(page, entryAt(60, "task.claimed", "k-7", "m-builder-1", { step_id: "st-build" }));
   await expect(token(page, "WEB-7")).toContainText("now");
