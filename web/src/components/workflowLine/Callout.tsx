@@ -184,13 +184,13 @@ export function WayStrip({
   const name = `${t.key}'s way`;
   const asker = (m: LineMember) => (m.id === me ? "you" : m.name);
   return (
-    <section ref={ref} role="region" aria-label={name} data-way={t.id} className="@container mb-3">
+    <section ref={ref} tabIndex={-1} role="region" aria-label={name} data-way={t.id} className="@container mb-3 outline-none">
       <div className="relative flex flex-col items-start gap-1.5 rounded-lg border border-foreground bg-background py-1 pr-9 pl-1.5 text-xs @xl:flex-row @xl:flex-wrap @xl:items-center @xl:gap-x-3">
         <span className="rounded-full bg-foreground px-2 py-px text-[11px] leading-[18px] font-medium whitespace-nowrap text-background">{name}</span>
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {t.holder ? <MemberAvatar member={t.holder} working={t.holder.working} /> : <Glyph state={blocked ? "blocked" : "waiting"} />}
           {onOpen ? (
-            <button type="button" aria-label={`Open ${t.key}`} onClick={() => onOpen(t.key)} className="rounded font-mono text-[11.5px] hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+            <button type="button" data-way-key aria-label={`Open ${t.key}`} onClick={() => onOpen(t.key)} className="rounded font-mono text-[11.5px] hover:underline focus-visible:outline-2 focus-visible:outline-ring">
               {t.key}
             </button>
           ) : (

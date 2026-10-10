@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils";
 import { WayStrip } from "./Callout";
 import { chainOf, type Chain, type Ghost, type Trace } from "./data";
 import { lineTopology } from "./layout";
-import type { LineFacts, LineTask } from "./model";
+import { isHoldStep, type LineFacts, type LineTask } from "./model";
 import { VerticalLine, type Way } from "./Vertical";
-import { AFTER_BRANCH } from "./words";
+import { AFTER_BRANCH, HAND_LABEL } from "./words";
 
 export type WorkflowLineProps = {
   /** The Workflow with its Steps' takers and medians. */
@@ -83,19 +83,27 @@ export function WorkflowLine(props: WorkflowLineProps) {
 
   const task = chain?.task;
   const nameOf = (id: string | null) => (id === null ? "Done" : (topology.others.get(id) ?? props.workflow.steps.find((s) => s.id === id)?.name ?? "a Step"));
-  const next = task?.stepId
-    ? props.workflow.connectors
-        .filter((c) => c.from === task.stepId)
-        .sort((a, b) => a.position - b.position)
-        .map((c) => ({ outcome: c.name, to: nameOf(c.to) }))
-    : [];
+  const next = (() => {
+    const at = task?.stepId;
+    if (!at) return [];
+    const step = props.workflow.steps.find((s) => s.id === at);
+    const hold = !!step && isHoldStep(step);
+    // A hold's Connector names where a move by hand lands; a hold with none moves on by hand along
+    // the rail, or, parked, into the start.
+    const out = props.workflow.connectors
+      .filter((c) => c.from === at)
+      .sort((a, b) => a.position - b.position)
+      .map((c) => ({ outcome: hold ? HAND_LABEL : c.name, to: nameOf(c.to) }));
+    if (out.length > 0 || !hold) return out;
+    const along = topology.segments.find((x) => x.from === at && x.hand)?.to ?? (topology.holds.includes(at) ? topology.start : undefined);
+    return along ? [{ outcome: HAND_LABEL, to: nameOf(along) }] : [];
+  })();
   // Its way in: its trace says it when the line traces it (its scope), else its Step is.
   const trace = props.trace;
   const traced = !!task && trace?.taskId === task.id;
   const way: Way | undefined =
     task && inChain
       ? {
-          id: task.id,
           stepId: task.stepId,
           chain: inChain,
           entered: traced ? [...trace.traversed].reverse().find((id) => topology.entries.some((e) => e.connector.id === id)) : undefined,
@@ -128,7 +136,8 @@ export function WorkflowLine(props: WorkflowLineProps) {
     const byViewer = picked.current;
     picked.current = false;
     if (selKey) {
-      if (byViewer) strip.current?.querySelector<HTMLElement>("button, a[href]")?.focus();
+      // The key when it opens the Task, else the strip itself: never its action, which a key held down would press.
+      if (byViewer) (strip.current?.querySelector<HTMLElement>("[data-way-key]") ?? strip.current)?.focus();
       return;
     }
     const was = back.current;
@@ -137,12 +146,14 @@ export function WorkflowLine(props: WorkflowLineProps) {
     if (!was || !root) return;
     const active = document.activeElement;
     if (active && active !== document.body && !root.contains(active)) return;
-    const to = root.querySelector<HTMLElement>(`[data-box="token"][data-task="${was.key}"]`) ?? (was.stepId ? root.querySelector<HTMLElement>(`button[data-count="${was.stepId}"]`) : null);
-    to?.focus();
-  }, [selKey]);
+    // Cleared: the Task's chip, or the count it folded into. Still selected but gone (Done, another
+    // Workflow): the line.
+    const to = selected ? null : (root.querySelector<HTMLElement>(`[data-box="token"][data-task="${was.key}"]`) ?? (was.stepId ? root.querySelector<HTMLElement>(`button[data-count="${was.stepId}"]`) : null));
+    (to ?? root).focus();
+  }, [selKey, selected]);
 
   return (
-    <div ref={box} role="region" aria-label={props.label ?? "Workflow line"} data-orientation="vertical" className={cn("w-full min-w-0", props.className)}>
+    <div ref={box} tabIndex={-1} role="region" aria-label={props.label ?? "Workflow line"} data-orientation="vertical" className={cn("w-full min-w-0 outline-none", props.className)}>
       {chain && (
         <WayStrip
           ref={strip}

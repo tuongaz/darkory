@@ -238,12 +238,15 @@ describe("the selected Task's strip (vf-7)", () => {
     takeable = [],
     workflow = DARK("impl"),
     trace,
+    open = true,
   }: {
     tasks: readonly LineTask[];
     initial?: string | null;
     takeable?: string[];
     workflow?: LineWorkflow;
     trace?: Trace;
+    /** Whether the line can open a Task's peek (the strip's key a button). */
+    open?: boolean;
   }) {
     const [selected, setSelected] = useState<string | null>(initial);
     return (
@@ -259,7 +262,7 @@ describe("the selected Task's strip (vf-7)", () => {
           onSelect={setSelected}
           me={{ id: "m-me", takeable: new Set(takeable) }}
           actionFor={claim}
-          onOpenTask={() => {}}
+          onOpenTask={open ? () => {} : undefined}
           stepHref={(id) => `/tasks?step=${id}`}
         />
       </MemoryRouter>
@@ -350,6 +353,49 @@ describe("the selected Task's strip (vf-7)", () => {
     const blocked = [held(21, "build", "builder", 18, { blockers: [{ id: "k-30", key: "DARK-30", title: "Task 30" }] }), waiting(30, "acceptance", 4)];
     render(<Selecting tasks={blocked} workflow={MAIN} initial="k-21" />);
     expect(dimmed(screen.getByRole("region", { name: "When a Parent ends" }))).toBe(false);
+  });
+
+  it("says a Task at a hold moves on by hand: Legal on the line to Publish, a parked Backlog to Build", async () => {
+    const { unmount } = render(<Selecting tasks={[waiting(5, "legal", 3)]} workflow={NEWS} initial="k-5" />);
+    expect(strip("DARK-5")).toHaveTextContent("next: by hand → Publish");
+    unmount();
+    render(<Selecting tasks={[waiting(6, "backlog", 3)]} initial="k-6" />);
+    expect(strip("DARK-6")).toHaveTextContent("next: by hand → Build");
+  });
+
+  it("selecting a second chip while one is selected moves the focus into the new strip", async () => {
+    render(<Selecting tasks={VF7} />);
+    await userEvent.click(chip("DARK-21"));
+    await userEvent.click(chip("DARK-19"));
+    expect(strip("DARK-21")).toBeNull();
+    expect(strip("DARK-19")).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  it("keeps the focus where the viewer put it when the Task they picked moves on in a live update", async () => {
+    const { rerender } = render(<Selecting tasks={VF7} />);
+    await userEvent.click(chip("DARK-21"));
+    const elsewhere = screen.getByRole("textbox", { name: "Elsewhere" });
+    elsewhere.focus();
+    rerender(<Selecting tasks={[held(21, "review", "builder", 1), waiting(28, "build", 2), held(19, "review", "reviewer", 6)]} />);
+    expect(strip("DARK-21")).toHaveTextContent("next: pass → Done");
+    expect(elsewhere).toHaveFocus();
+  });
+
+  it("focuses the strip itself, never its action, when the line opens no peek", async () => {
+    const tasks = [waiting(27, "build", 30), waiting(22, "build", 3, { blockers: [{ id: "k-27", key: "DARK-27", title: "Task 27" }] })];
+    render(<Selecting tasks={tasks} takeable={["k-27"]} open={false} />);
+    await userEvent.click(line().querySelector<HTMLElement>('button[data-count="build"]')!);
+    await userEvent.click(within(screen.getByRole("group", { name: /^Build · / })).getByRole("button", { name: /^DARK-22 / }));
+    expect(within(strip("DARK-22")!).getByRole("button", { name: "Claim DARK-27" })).not.toHaveFocus();
+    expect(strip("DARK-22")).toHaveFocus();
+  });
+
+  it("gives the focus to the line when the selected Task leaves it", async () => {
+    const { rerender } = render(<Selecting tasks={VF7} />);
+    await userEvent.click(chip("DARK-21"));
+    rerender(<Selecting tasks={VF7.filter((x) => x.id !== "k-21")} />);
+    expect(strip("DARK-21")).toBeNull();
+    expect(line()).toHaveFocus();
   });
 
   it("× clears the selection and returns the focus to the chip", async () => {

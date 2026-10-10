@@ -160,7 +160,7 @@ describe("the Workflow page", () => {
     await waitFor(() => expect(tokenOf("WEB-4")).toHaveAttribute("data-selected"));
     const strip = within(line()).getByRole("region", { name: "WEB-4's way" });
     expect(strip).toHaveTextContent(/^WEB-4's way/);
-    expect(strip).toHaveTextContent("next: ");
+    expect(strip).toHaveTextContent("next: pass → Review");
     expect(strip).toHaveTextContent("Unblocks when WEB-2, then WEB-3 end");
     expect(strip).toHaveTextContent("First: answer WEB-2");
     expect(within(strip).getByRole("button", { name: "Answer WEB-2" })).toBeInTheDocument();

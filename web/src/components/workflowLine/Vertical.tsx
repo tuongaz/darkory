@@ -132,7 +132,7 @@ const glyphs: Record<MarkKind, string> = { done: "●", exit: "↗", hand: "⇢"
  * line, its Steps and outcomes stay; the other Tasks, the counts, the entries it did not come by
  * and "Also starts here" (unless its way runs there) fade.
  */
-export type Way = { id: string; stepId?: string; chain: ReadonlySet<string>; entered?: string; from?: string };
+export type Way = { stepId?: string; chain: ReadonlySet<string>; entered?: string; from?: string };
 
 export function VerticalLine({
   topology: t,
