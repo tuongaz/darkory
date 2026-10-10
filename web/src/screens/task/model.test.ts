@@ -89,6 +89,23 @@ describe("the actions by role", () => {
     expect(a.dimmed.drop).toBe("Owner only");
   });
 
+  it("gives the Owner Merge while the pull request is open and a Runner is attached; holding the Task, Merge waits in the menu", () => {
+    const pr = { number: 7, url: "https://github.com/o/r/pull/7", state: "open" as const };
+    const done = task(1, { state: "done", step_id: undefined, pull_request: pr });
+    expect(taskActions({ ...ctx, me: ada.id, runner: true, detail: out(done) }).primary).toEqual({ kind: "merge" });
+    expect(taskActions({ ...ctx, me: ada.id, runner: false, detail: out(done) }).primary).toBeUndefined();
+    expect(taskActions({ ...ctx, me: bob.id, runner: true, detail: out(done) }).primary).toBeUndefined();
+    expect(taskActions({ ...ctx, me: ada.id, runner: true, detail: out({ ...done, pull_request: { ...pr, state: "merged" } }) }).primary).toBeUndefined();
+
+    const takeable = taskActions({ ...ctx, me: ada.id, runner: true, takeable: new Set(["k-1"]), detail: out(task(1, { pull_request: pr })) });
+    expect(takeable.primary).toEqual({ kind: "merge" });
+    expect(takeable.menu[0]).toBe("claim");
+
+    const holding = taskActions({ ...ctx, me: ada.id, runner: true, detail: out(task(1, { step_id: step.review, pull_request: pr, claim: liveClaimOf(ada, "k-1") })) });
+    expect(holding.primary).toMatchObject({ kind: "advance" });
+    expect(holding.menu[0]).toBe("merge");
+  });
+
   it("completes a Task aimed at its holder, which has no outcomes", () => {
     const aimed = task(1, { step_id: undefined, aimed_at_id: bob.id, claim: liveClaimOf(bob, "k-1") });
     expect(taskActions({ ...ctx, me: bob.id, projects: new Set(), detail: out(aimed) }).primary).toEqual({ kind: "complete" });

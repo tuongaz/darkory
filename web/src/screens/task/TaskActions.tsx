@@ -1,9 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
-import { ArrowRightIcon, CheckIcon, ChevronDownIcon, RotateCcwIcon } from "lucide-react";
+import { ArrowRightIcon, CheckIcon, ChevronDownIcon, GitMergeIcon, RotateCcwIcon } from "lucide-react";
 import { Fragment, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { api, call, fileBody, type Connector, type TaskDetail } from "@/api/client";
-import { useDirectory } from "@/api/queries";
+import { useDirectory, useRunnerSessions } from "@/api/queries";
 import { useNow } from "@/clock";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -16,6 +16,7 @@ import {
   BlockerDialog,
   CompleteDialog,
   DropTaskDialog,
+  MergeDialog,
   MoveDialog,
   ObserveDialog,
   PassOwnershipDialog,
@@ -60,6 +61,7 @@ export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "s
   const me = useCurrentMe();
   const { members } = useDirectory();
   const takeable = useTakeableIds().data;
+  const runner = useRunnerSessions().data?.runner;
   const now = useNow();
   const { project, workflows, steps } = useTaskWorkflow(detail?.task.project_id);
   // A Connector into another Workflow's Step says where it leads.
@@ -69,7 +71,7 @@ export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "s
     return connectorLabel(c, from && to && to.workflow_id !== from.workflow_id ? advanceTarget(c, { workflows, steps, from: from.id }) : undefined);
   };
   const actions = detail
-    ? taskActions({ me: me.member.id, detail, members, takeable: takeable ?? new Set(), projects: new Set(me.projects.map((p) => p.id)), now })
+    ? taskActions({ me: me.member.id, detail, members, takeable: takeable ?? new Set(), projects: new Set(me.projects.map((p) => p.id)), now, runner })
     : none;
   const taskId = detail?.task.id ?? "";
   const taskKey = detail?.task.key ?? "";
@@ -94,6 +96,7 @@ export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "s
   const addSubtask = detail && actions.menu.includes("file-subtask") ? () => openFileTask({ project: project?.key, parent: taskKey }) : undefined;
   const choose = (a: TaskAction) => {
     if (a === "attach-evidence") return file.current?.click();
+    if (a === "claim") return claim.mutate();
     if (a === "file-subtask") return addSubtask?.();
     if (a === "ask-question" && detail) {
       // A question goes to the Owner, or for the Owner to the Member above them.
@@ -113,6 +116,13 @@ export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "s
     primary = (
       <Button size={size} className={text} onClick={() => claim.mutate()} disabled={claim.isPending}>
         Claim
+      </Button>
+    );
+  } else if (p?.kind === "merge") {
+    primary = (
+      <Button size={size} className={text} onClick={() => setOpen({ kind: "merge" })}>
+        <GitMergeIcon />
+        Merge
       </Button>
     );
   } else if (p?.kind === "complete") {
@@ -189,6 +199,7 @@ export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "s
       {open?.kind === "move" && <MoveDialog {...props("move")} />}
       {open?.kind === "take-back" && <TakeBackDialog {...props("take-back")} />}
       {open?.kind === "drop" && <DropTaskDialog {...props("drop")} />}
+      {open?.kind === "merge" && <MergeDialog {...props("merge")} />}
       {open?.kind === "pass-ownership" && <PassOwnershipDialog {...props("pass-ownership")} />}
       {open?.kind === "rank" && <RankDialog {...props("rank")} />}
       {open?.kind === "observe" && <ObserveDialog {...props("observe")} />}

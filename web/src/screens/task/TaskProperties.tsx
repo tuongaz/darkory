@@ -5,6 +5,7 @@ import { useNow } from "@/clock";
 import { CopyValue, SessionId } from "@/components/CopyValue";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
+import { PullRequestChip } from "@/components/PullRequestChip";
 import { Pill } from "@/components/Pill";
 import { Property, PropertiesRail } from "@/components/PropertiesRail";
 import { ClockTime } from "@/components/Time";
@@ -136,6 +137,7 @@ export function TaskProperties({ detail, steps, grouped }: { detail: TaskDetail;
     work.push({ label: "Branch", value: <Branch name={taskBranch(task.key, task.title)} /> });
     if (detail.parent) work.push({ label: "Merges into", value: <Branch name={taskBranch(detail.parent.key, detail.parent.title)} /> });
   }
+  if (task.pull_request) work.push({ label: "Pull request", value: <PullRequestChip pr={task.pull_request} /> });
 
   const openBlockers = detail.blockers.filter((b) => b.state === "open");
   const openBlocking = detail.blocking.filter((b) => b.state === "open");

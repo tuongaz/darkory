@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Activity, Member, Task, TaskDetail } from "@/api/client";
+import { mergeBase } from "./pullRequest";
 import { mockApi, refuse, type Call, type Handler } from "@/test/api";
 import { ada, bob, builder, bug, clientX, detail, step, wfId, wfStep, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
@@ -381,6 +382,72 @@ describe("a Parent's page", () => {
     const dialog = await screen.findByRole("dialog", { name: "File a Task" });
     await waitFor(() => expect(within(dialog).getByRole("combobox", { name: "Parent" })).toHaveTextContent("WEB-3"));
     expect(within(dialog).getByRole("combobox", { name: "Project" })).toHaveTextContent("Web");
+  });
+});
+
+describe("a Task's pull request", () => {
+  const url = "https://github.com/o/r/pull/7";
+  const repo = { id: "w-1", name: "darkory", kind: "git" as const, path: "/src/darkory", mode: "pull_request" as const, default_branch: "trunk", created_at: at(0) };
+  const landed = (state: "open" | "merged", extra: Partial<Task> = {}) => {
+    const t: Task = { ...copy, state: "done", ended_at: at(30), step_id: undefined, workspace_ids: [repo.id], pull_request: { number: 7, url, state }, ...extra };
+    return detail(t, { workspaces: [repo] });
+  };
+  const runner = (on: boolean) => ({ "GET /v1/runner/sessions": { items: [], runner: on } });
+
+  it("says it on the facts line after the branch and in the rail's Workspace group, a link to GitHub", async () => {
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": landed("open"), ...runner(false) }));
+    renderApp("/tasks/WEB-1");
+    const head = (await screen.findByRole("heading", { level: 1 })).closest("header")!;
+    const chip = within(head).getByRole("link", { name: "#7 open" });
+    expect(chip).toHaveAttribute("href", url);
+    expect(chip).toHaveAttribute("target", "_blank");
+    expect(chip).toHaveAttribute("rel", "noreferrer noopener");
+    const workspace = screen.getByRole("region", { name: "Workspace" });
+    expect(workspace).toHaveTextContent("Pull request");
+    expect(within(workspace).getByRole("link", { name: "#7 open" })).toHaveAttribute("href", url);
+    // No Runner beside the server: no Merge; the chip is the way to GitHub.
+    expect((await bar()).queryByRole("button", { name: "Merge" })).not.toBeInTheDocument();
+  });
+
+  it("gives its Owner Merge while it is open and a Runner is attached; the dialog names the branch it lands on", async () => {
+    const api = mockApi(
+      taskRoutes({
+        "GET /v1/tasks/:task": landed("open"),
+        ...runner(true),
+        "POST /v1/tasks/:task/pull-request/merge": refuse(409, "conflict", "Pull request #7 is not mergeable: checks failing"),
+      }),
+    );
+    renderApp("/tasks/WEB-1");
+    await userEvent.click(await (await bar()).findByRole("button", { name: "Merge" }));
+    const dialog = await screen.findByRole("dialog", { name: "Merge #7 into trunk" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Merge" }));
+    await waitFor(() => expect(posted(api, "/pull-request/merge")).toBeDefined());
+    expect(posted(api, "/pull-request/merge")?.path).toBe(`/v1/tasks/${copy.id}/pull-request/merge`);
+    // GitHub's refusal stays in the dialog, in its words.
+    expect(await within(dialog).findByText(/checks failing/)).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Merge #7 into trunk" })).toBeInTheDocument();
+  });
+
+  it("gives Merge to no one else, and none once merged", async () => {
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": landed("open"), ...runner(true) }, bob));
+    const page = renderApp("/tasks/WEB-1");
+    await screen.findByRole("heading", { level: 1 });
+    expect((await bar()).queryByRole("button", { name: "Merge" })).not.toBeInTheDocument();
+    page.unmount();
+
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": landed("merged"), ...runner(true) }));
+    renderApp("/tasks/WEB-1");
+    const head = (await screen.findByRole("heading", { level: 1 })).closest("header")!;
+    expect(within(head).getByRole("link", { name: "#7 merged" })).toHaveAttribute("href", url);
+    expect((await bar()).queryByRole("button", { name: "Merge" })).not.toBeInTheDocument();
+  });
+
+  it("names the Workspace's default branch, main when the Task names none, or its Parent's branch for a Subtask", () => {
+    expect(mergeBase(landed("open"), [])).toBe("trunk");
+    const plain = { ...landed("open"), workspaces: [] };
+    expect(mergeBase(plain, [])).toBe("main");
+    expect(mergeBase(plain, [repo], repo.id)).toBe("trunk");
+    expect(mergeBase({ ...landed("open"), parent: { id: "k-9", key: "WEB-9", title: "Checkout" } }, [])).toBe("web-9-checkout");
   });
 });
 

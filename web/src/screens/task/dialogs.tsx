@@ -1,9 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
-import { ArrowRightIcon, FileTextIcon, HeartPulseIcon, LinkIcon, MessageSquareIcon, UsersIcon } from "lucide-react";
+import { ArrowRightIcon, FileTextIcon, GitMergeIcon, HeartPulseIcon, LinkIcon, MessageSquareIcon, UserRoundIcon, UsersIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { api, ApiError, call, type Connector, type RunnerSession, type TaskDetail } from "@/api/client";
-import { useDirectory, useOpenTasks, useTasks } from "@/api/queries";
+import { useDirectory, useOpenTasks, useTasks, useWorkspaces } from "@/api/queries";
 import { useNow } from "@/clock";
 import { FormDialog } from "@/components/FormDialog";
 import { InfoTip } from "@/components/InfoTip";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { taskBranch } from "@/lib/branch";
 import { cn } from "@/lib/utils";
 import { liveClaim } from "@/work";
 import { Combobox } from "../board/Combobox";
@@ -24,6 +25,7 @@ import { StepOptions } from "../workflow/edit/StepOptions";
 import { stepTitle } from "@/components/workflowLine/model";
 import { advanceTarget, useMemberName, useSkillName } from "./format";
 import { Avatar } from "./parts";
+import { mergeBase } from "./pullRequest";
 import { useSkillDetail, useTaskWorkflow } from "./queries";
 
 type DialogProps = { detail: TaskDetail; open: boolean; onOpenChange: (open: boolean) => void };
@@ -302,6 +304,43 @@ export function StopSessionDialog({ detail, session, open, onOpenChange }: Dialo
         <Consequence mark={<MessageSquareIcon />}>Its Claim is released, with a Note saying so</Consequence>
         <Consequence mark={<ArrowRightIcon />}>{step ? `It stays at ${step.name}` : "It stays where it is"}</Consequence>
         <Consequence mark={<FileTextIcon />}>The Shift&apos;s log is kept with its Claim</Consequence>
+      </Consequences>
+    </FormDialog>
+  );
+}
+
+/**
+ * The Owner merges the Task's open pull request on GitHub through the Runner, as the account the
+ * Runner signs in with. A refusal (checks failing, a conflict, a head or base that is not the
+ * Task's) stays here in GitHub's words.
+ */
+export function MergeDialog({ detail, open, onOpenChange }: DialogProps) {
+  const { task } = detail;
+  const pr = task.pull_request;
+  const { project } = useTaskWorkflow(task.project_id);
+  const workspaces = useWorkspaces().data ?? [];
+  const base = mergeBase(detail, workspaces, project?.default_workspace_id);
+  const merge = useMutation({
+    mutationFn: () => call(api.POST("/v1/tasks/{task}/pull-request/merge", { params: { path: { task: task.id } } })),
+    onSuccess: done(`#${pr?.number} merged`, onOpenChange),
+  });
+  if (!pr) return null;
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Merge #${pr.number} into ${base}`}
+      description={`${task.key} ${task.title}`}
+      submitLabel="Merge"
+      onSubmit={() => merge.mutate()}
+      pending={merge.isPending}
+      error={merge.error}
+    >
+      <Consequences>
+        <Consequence mark={<GitMergeIcon />}>
+          {taskBranch(task.key, task.title)} lands on {base}
+        </Consequence>
+        <Consequence mark={<UserRoundIcon />}>On GitHub, as the account the Runner signs in with</Consequence>
       </Consequences>
     </FormDialog>
   );

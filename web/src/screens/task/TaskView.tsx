@@ -32,6 +32,7 @@ import { Subtasks } from "./Subtasks";
 import { TaskLine } from "./TaskLine";
 import { useTaskActionsUI, type TaskActionsUI } from "./TaskActions";
 import { Branch, ParentLink, Standing, TaskProperties } from "./TaskProperties";
+import { PullRequestChip } from "@/components/PullRequestChip";
 import { TaskRecord } from "./TaskRecord";
 import { Markdown } from "@/components/Markdown";
 
@@ -225,6 +226,12 @@ function TaskHeader({ detail, ui, heading, steps, path }: { detail: TaskDetail; 
             <span className="inline-flex min-w-0 items-center text-foreground">
               <Branch name={taskBranch(task.key, task.title)} />
             </span>
+          </>
+        )}
+        {task.pull_request && (
+          <>
+            <Sep />
+            <PullRequestChip pr={task.pull_request} />
           </>
         )}
       </div>
