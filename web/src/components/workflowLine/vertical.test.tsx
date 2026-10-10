@@ -524,3 +524,10 @@ describe("a narrow line (a list column, a phone: under 768px)", () => {
     expect(kinds(nameRow("done"))).toEqual(["Done", "today"]);
   });
 });
+
+describe("what a Step holds that is not a Task yet", () => {
+  it("says a ghost Subtask as one image, in its words", () => {
+    render(<WorkflowLine workflow={DARK("impl")} tasks={[]} now={0} ghosts={[{ stepId: "review", text: "after Build", label: "Review Subtask, filed" }]} />);
+    expect(screen.getByRole("img", { name: "Review Subtask, filed after Build" })).toHaveTextContent("after Build");
+  });
+});

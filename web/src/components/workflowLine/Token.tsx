@@ -88,7 +88,7 @@ export function Token({
 /** A Subtask still to come on a Parent's line: a dashed ghost saying when it will be filed. */
 export function GhostToken({ text, label, dim }: { text: string; label: string; dim?: boolean }) {
   return (
-    <span data-ghost data-dim={dim ? "" : undefined} aria-label={`${label} ${text}`} className="wl-token inline-flex h-6 items-center rounded-[6px] border border-dashed px-2 text-xs whitespace-nowrap">
+    <span data-ghost data-dim={dim ? "" : undefined} role="img" aria-label={`${label} ${text}`} className="wl-token inline-flex h-6 items-center rounded-[6px] border border-dashed px-2 text-xs whitespace-nowrap">
       {text}
     </span>
   );
@@ -97,7 +97,7 @@ export function GhostToken({ text, label, dim }: { text: string; label: string; 
 /** The faint count a narrowed line leaves on a Step: "+1". */
 export function HiddenCount({ n, dim }: { n: number; dim?: boolean }) {
   return (
-    <span data-dim={dim ? "" : undefined} aria-label={`${n} more ${n === 1 ? "Task" : "Tasks"} outside this scope`} className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
+    <span data-dim={dim ? "" : undefined} role="img" aria-label={`${n} more ${n === 1 ? "Task" : "Tasks"} outside this scope`} className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
       +{n}
     </span>
   );

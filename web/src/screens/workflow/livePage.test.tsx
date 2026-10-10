@@ -223,7 +223,7 @@ describe("the Workflow page", () => {
     ]);
     renderApp("/projects/WEB/workflows/wf-work?scope=k-7");
     expect(keys(await listAt("Build"))).toEqual(["WEB-8"]);
-    expect(within(line()).getByLabelText("2 more Tasks outside this scope")).toBeInTheDocument();
+    expect(within(line()).getByRole("img", { name: "2 more Tasks outside this scope" })).toBeInTheDocument();
     // The list's link would carry the scope; WEB-8 is the only one, so there is none.
     expect(screen.getByText("2 hidden")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open WEB-7" })).toHaveAttribute("href", "/tasks/WEB-7");
@@ -239,7 +239,7 @@ describe("the Workflow page", () => {
     renderApp(`/projects/WEB/workflows/wf-work?filter.tasks=${encodeURIComponent("blocked:is:true")}`);
     expect(keys(await listAt("Build"))).toEqual(["WEB-3"]);
     expect(within(line()).queryByRole("button", { name: /^Review: / })).toBeNull();
-    expect(within(line()).getAllByLabelText("1 more Task outside this scope")).toHaveLength(2);
+    expect(within(line()).getAllByRole("img", { name: "1 more Task outside this scope" })).toHaveLength(2);
     expect(screen.getByText("2 hidden")).toBeInTheDocument();
     expect(screen.getByRole("toolbar", { name: /Filter/ })).toBeInTheDocument();
   });
