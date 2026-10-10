@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BIG, MAIN } from "./fixtures";
-import { crossings, handRoute, horizontal, lineTopology } from "./layout";
+import { lineTopology } from "./layout";
 import { DONE_STATION, sideSteps, startStep, type LineWorkflow } from "./model";
-import { ENTRY_LABEL, FILES_LABEL, filesHint, HAND_LABEL, handHint, holdHint } from "./words";
 
 /** The one Workflow of the Steps written here. */
 const work = { id: "work", name: "Work", position: 1 };
@@ -14,74 +13,18 @@ const work = { id: "work", name: "Work", position: 1 };
 
 describe("where Tasks enter the line (MAIN)", () => {
   const t = lineTopology(MAIN);
-  const h = horizontal(t, { width: 1198, column: 102, holdColumn: () => 72 });
-  const build = h.at.get("build")!;
 
-  it("draws the entry arrow from the left into the start Step, with its words", () => {
-    const arrow = h.entry?.arrow;
-    expect(arrow?.label.text).toBe(ENTRY_LABEL);
-    expect(arrow?.label.hint).toBe("New Tasks start at Build, unless the filer names another Step");
-    const [a, b] = arrow!.line;
-    expect([a[1], b[1]]).toEqual([h.lineY, h.lineY]);
-    expect(b[0]).toBeLessThan(build.x);
-    expect(b[0]).toBeGreaterThan(build.x - 20);
-    expect(h.entry?.mark).toBeUndefined();
+  it("starts the rail at Build; Plan stands before it, Backlog parked beside it", () => {
+    expect(t.start).toBe("build");
+    expect(t.main[0]).toBe("build");
+    expect(t.before).toBe("plan");
+    expect(t.holds).toEqual(["backlog"]);
   });
 
-  it("puts Plan on the branch Break down above the entry, its arrow files Subtasks dropping into it", () => {
-    const before = h.entry!.before!;
-    expect(before.id).toBe("plan");
-    expect(before.station.y).toBeLessThan(h.lineY);
-    expect(before.station.x).toBeLessThan(build.x - 80);
-    const files = before.files!;
-    expect(files.label.text).toBe(FILES_LABEL);
-    const end = files.line.at(-1)!;
-    const [from, to] = [h.entry!.arrow!.line[0][0], h.entry!.arrow!.line[1][0]];
-    expect(end[0]).toBeGreaterThan(from);
-    expect(end[0]).toBeLessThan(to);
-    expect(files.head.dir).toBe("down");
-    expect(h.hints.get("files")).toBe(filesHint("Plan", "Build"));
-  });
-
-  it("names Plan's outcome into Done in words beside it, saying where its Subtasks start", () => {
-    const chip = h.chips.find((c) => c.stepId === "plan")!;
+  it("names Plan's outcome into Done in words beside it, with its sentence", () => {
+    const chip = t.chips.find((c) => c.stepId === "plan")!;
     expect(chip.text).toBe("done → Done");
-    expect(chip.x).toBeLessThan(h.entry!.before!.station.x);
-    expect(chip.hint).toBe("Plan's Breakdown Subtask ends Done when its holder says done; the Subtasks it filed start each at the Step its filer names, Build when they name none");
-  });
-
-  it("parks Backlog below the entry, its spine rising into it by hand", () => {
-    const [hold] = h.entry!.holds;
-    expect(hold.id).toBe("backlog");
-    expect(hold.y).toBeGreaterThan(h.lineY);
-    expect(h.entry!.spine!.label.text).toBe(HAND_LABEL);
-    expect(h.entry!.spine!.head).toMatchObject({ dir: "up" });
-    expect(h.hints.get("holds")).toBe(holdHint("Backlog"));
-    // Its tokens' column is room the drawing keeps.
-    expect(h.height).toBeGreaterThan(hold.y + 72);
-  });
-
-  it("keeps Backlog and Plan where a move by hand or a chip's route can find them", () => {
-    expect(handRoute(h, "backlog", "qa")).toMatch(/^M/);
-    expect(h.routes.get("plan:done")).toMatch(/^M/);
-  });
-
-  it("gives every drawn line words, and every segment a label", () => {
-    for (const p of h.polylines) if (p.id !== "main") expect(h.hints.get(p.id), p.id).toBeTruthy();
-    for (const s of t.segments) expect(h.hints.get(`seg:${s.from}`)).toBeTruthy();
-    expect(h.segmentLabels.map((l) => l.text)).toEqual(["pass", "pass", "pass"]);
-    for (const c of h.chips) expect(c.hint, c.text).toBeTruthy();
-    for (const a of [...h.arcs, ...(h.branch?.loops ?? [])]) for (const l of a.labels) expect(l.hint, l.text).toBeTruthy();
-    expect(h.hints.get("seg:build")).toBe("Build → QA: when the holder says pass");
-    expect(h.hints.get("seg:review")).toBe("Review → Done: when the holder says pass, and the Task is complete");
-  });
-
-  it("crosses nothing with the entry drawn, at every width", () => {
-    for (const width of [640, 800, 1000, 1198, 1600]) {
-      const at = horizontal(t, { width, column: 30, holdColumn: () => 36 });
-      expect(crossings(at.polylines), String(width)).toEqual([]);
-      expect(at.at.get("build")!.x).toBeGreaterThan(at.entry!.before!.station.x);
-    }
+    expect(chip.hint).toBe("Plan → Done: when the holder says done, and the Task is complete");
   });
 });
 
@@ -145,11 +88,7 @@ describe("which Steps leave the main line", () => {
     const t = lineTopology(wf);
     expect(t.holds).toEqual(["parked"]);
     expect(t.main).toEqual(["build", "wait", "ship", DONE_STATION]);
-    const h = horizontal(t, { width: 1000, column: 30 });
-    expect(h.main.find((m) => m.from === "wait")?.dotted).toBe(true);
-    expect(h.segmentLabels.map((l) => l.text)).toEqual(["pass", HAND_LABEL, "pass"]);
-    expect(h.hints.get("seg:wait")).toBe(handHint("wait", "ship"));
-    expect(crossings(h.polylines)).toEqual([]);
+    expect(t.segments.map((x) => (x.connector ? x.connector.name : x.hand ? "by hand" : "gap"))).toEqual(["pass", "by hand", "pass"]);
   });
 
   it("keeps Acceptance off the line when only the breakdown Step leads into it", () => {
@@ -161,19 +100,13 @@ describe("which Steps leave the main line", () => {
 });
 
 describe("a start Step that is not the line's first", () => {
-  it("is marked over its head where no arrow can reach it; a Backlog joined by a Connector stays on the line (BIG)", () => {
+  it("starts the rail there; a Backlog joined by a Connector stays on the line before it (BIG)", () => {
     const t = lineTopology(BIG);
     expect(t.main[0]).toBe("backlog");
-    const h = horizontal(t, { width: 1198, column: 36 });
-    expect(h.entry?.arrow).toBeUndefined();
-    expect(h.entry?.mark).toMatchObject({ x: h.at.get("triage")!.x, hint: "New Tasks start at Triage, unless the filer names another Step" });
-    // Over the name (a bead head sets its name at the foot of 30px), under every arc over the line.
-    expect(h.entry!.mark!.y).toBeLessThanOrEqual(h.headY);
-    for (const a of h.arcs.filter((x) => x.side === "over")) expect(Math.min(...a.line.map((p) => p[1]))).toBeLessThan(h.entry!.mark!.y - 12);
-    expect(crossings(h.polylines)).toEqual([]);
+    expect(t.start).toBe("triage");
   });
 
-  it("says where the breakdown Step's Subtasks start in words, and sends parked holds into the line's first Step by hand", () => {
+  it("parks the holds no Connector joins and takes the breakdown Step off, the rail starting at the start Step", () => {
     const s = (id: string, position: number, skill?: string) => ({ id, workflow_id: work.id, name: id, position, ...(skill ? { skill: { name: skill } } : {}) });
     const t = lineTopology({
       workflows: [work],
@@ -181,12 +114,8 @@ describe("a start Step that is not the line's first", () => {
       connectors: [{ id: "k", from: "intake", to: "build", name: "ready", position: 1 }],
     });
     expect(t.main).toEqual(["intake", "build", DONE_STATION]);
-    const h = horizontal(t, { width: 1000, column: 30 });
-    expect(h.entry?.mark?.x).toBe(h.at.get("build")!.x);
-    expect(h.entry?.before?.files).toBeUndefined();
-    expect(h.chips.filter((c) => c.stepId === "plan").map((c) => c.text)).toEqual(["files Subtasks"]);
-    expect(h.entry?.spine?.head.dir).toBe("right");
-    expect(h.entry?.spine?.label.text).toBe(HAND_LABEL);
-    expect(crossings(h.polylines)).toEqual([]);
+    expect(t.start).toBe("build");
+    expect(t.before).toBe("plan");
+    expect(t.holds).toEqual(["parked"]);
   });
 });

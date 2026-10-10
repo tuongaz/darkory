@@ -294,7 +294,6 @@ export function VerticalLine({
         pulse={flow.pulses.get(task.id)}
         arrived={flow.arrived.has(task.id)}
         tag={trace ? undefined : tagFor(task)}
-        tagSide="right"
         onClick={onSelect ? () => onSelect(selected === task.id ? null : task.id) : onOpenTask && (() => onOpenTask(task.key))}
         noKey={!!trace}
       />

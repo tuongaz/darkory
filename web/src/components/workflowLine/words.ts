@@ -2,11 +2,11 @@ import type { LineConnector } from "./model";
 
 /*
  * What every line on the Workflow line says, in words: the labels drawn on it and the sentence its
- * hover shows. The horizontal line, the phone and the Text view all read them from here, so they
- * never say different things.
+ * hover shows. The line, its editor and the Text view all read them from here, so they never say
+ * different things.
  */
 
-/** The label on the entry arrow, and the mark on a start Step the arrow cannot reach. */
+/** What the Text view says by the Step New Tasks start at. */
 export const ENTRY_LABEL = "New Tasks start here";
 /** The word over the line's first station, where Tasks come onto it. */
 export const START_LABEL = "Start";
@@ -26,10 +26,6 @@ export const MEDIAN_HINT = "median time a Task spends here";
 export const FILES_LABEL = "files Subtasks";
 /** The label on every line along which a human, not a Connector, moves a Task. */
 export const HAND_LABEL = "by hand";
-/** The branch the breakdown Step sits on. */
-export const BREAKDOWN_BRANCH = "Break down";
-/** What a hold says under its name. */
-export const HOLD_NOTE = "hold · moved on by hand";
 
 type Name = (id: string | null) => string;
 
@@ -54,7 +50,7 @@ export function gapHint(from: string, to: string): string {
   return `${from} → ${to}: no outcome of ${from} leads to ${to}, so nothing moves along here; a Task reaches ${to} when it is filed there, or moved there by hand`;
 }
 
-/** The entry arrow, or the mark on the start Step. */
+/** Start's hover: where New Tasks start. */
 export function entryHint(start: string): string {
   return `New Tasks start at ${start}, unless the filer names another Step`;
 }

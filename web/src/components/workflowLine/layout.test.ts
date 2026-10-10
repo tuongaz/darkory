@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { wfId, wfStep } from "@/test/fixtures";
 import { BIG, DARK, DEFAULT, FIVE, MAIN, SACCA, SOFTWARE } from "./fixtures";
-import { crossings, densityFor, horizontal, laneTracks, lineTopology, railOf, topologyCrossings, trackCrossings, tracks, type Arc, type Track } from "./layout";
+import { laneTracks, lineTopology, railOf, trackCrossings, tracks, type LineTopology } from "./layout";
 import { DONE_STATION, type LineConnector, type LineWorkflow } from "./model";
-import { overlaps } from "./place";
 
-const arcNamed = (list: (Arc | Track)[], name: string) => list.find((e): e is Arc => e.kind === "arc" && e.connector.name === name);
+/** A line's tracks as [the Step returned to, its Connectors as "From:outcome", sorted]. */
+const returns = (t: LineTopology) => tracks(t).map((k) => [t.steps.get(k.target)?.name, k.connectors.map((c) => `${t.steps.get(c.from)?.name}:${c.name}`).sort()]);
 
 describe("the line on MAIN, the default Workflow", () => {
   const t = lineTopology(MAIN);
@@ -22,22 +22,7 @@ describe("the line on MAIN, the default Workflow", () => {
     expect(t.segments.map((s) => s.connector?.name ?? "dotted")).toEqual(["pass", "pass", "pass"]);
   });
 
-  it("sends the forward skip over: no UI change; Plan's done is words beside Plan, not an arc", () => {
-    expect(t.over.map((a) => [a.connector.name, a.back, a.depth])).toEqual([["no UI change", false, 1]]);
-  });
-
-  it("nests the three loops under the line: fail and needs QA inside needs changes", () => {
-    expect(t.under.map((e) => [(e as Arc).connector.name, e.depth])).toEqual([
-      ["fail", 1],
-      ["needs QA", 1],
-      ["needs changes", 2],
-    ]);
-    // At Build both fail and needs changes land: the outer one's leg stands nearest the station.
-    expect(arcNamed(t.under, "needs changes")!.legLo).toBe(0);
-    expect(arcNamed(t.under, "fail")!.legLo).toBe(1);
-  });
-
-  it("keeps the branch's own routes: propose and publish along the row, needs changes under it, the rest as chips", () => {
+  it("keeps the branch's own routes: propose and publish along the row, needs changes a loop in it, the rest as chips", () => {
     const [acc, retro] = t.rows;
     expect(acc.exit?.name).toBe("pass");
     expect(retro.segments.map((s) => s.connector.name)).toEqual(["propose"]);
@@ -46,23 +31,8 @@ describe("the line on MAIN, the default Workflow", () => {
     expect(t.chips.map((c) => `${c.stepId}: ${c.text}`)).toEqual(["plan: done → Done", "acceptance: fail → Build", "retro: done → Done"]);
   });
 
-  it("crosses nothing, in station order and in pixels", () => {
-    expect(topologyCrossings(t)).toBe(0);
-    const h = horizontal(t, { width: 1198, column: 102 });
-    expect(h.density).toBe("tokens");
-    expect(crossings(h.polylines)).toEqual([]);
-  });
-
-  it("gives every Connector a route a token can travel", () => {
-    const h = horizontal(t, { width: 1198, column: 102 });
-    for (const c of MAIN.connectors) expect(h.routes.get(c.id), c.id).toMatch(/^M/);
-  });
-
-  it("stays uncrossed at a narrow width too", () => {
-    for (const width of [640, 800, 1000, 1600]) {
-      const h = horizontal(t, { width, column: 30 });
-      expect(crossings(h.polylines), String(width)).toEqual([]);
-    }
+  it("lays its returns uncrossed", () => {
+    expect(trackCrossings(tracks(t))).toBe(0);
   });
 });
 
@@ -74,50 +44,12 @@ describe("the line on BIG, 12 Steps and 7 loops", () => {
     expect(t.rows).toEqual([]);
   });
 
-  it("merges the five loops into Build on one return track", () => {
-    const tracks = t.under.filter((e): e is Track => e.kind === "track");
-    expect(tracks).toHaveLength(1);
-    expect(tracks[0].target).toBe("build");
-    expect(tracks[0].drops.map((d) => `${d.connector.from} ${d.connector.name}`)).toEqual([
-      "creview needs changes",
-      "qa fail",
-      "sec fail",
-      "docs needs changes",
-      "acc fail",
+  it("merges the five returns into Build and the skip past Design on one track; rework into Plan and rollback into QA are tracks of their own", () => {
+    expect(returns(t)).toEqual([
+      ["Plan", ["Design:rework"]],
+      ["Build", ["Acceptance:fail", "Code review:needs changes", "Docs:needs changes", "Plan:no design needed", "QA:fail", "Security review:fail"]],
+      ["QA", ["Release:rollback"]],
     ]);
-  });
-
-  it("draws rework under, and sends rollback over the line because under it would cross the track", () => {
-    expect(arcNamed(t.under, "rework")).toMatchObject({ side: "under", back: true });
-    const rollback = t.over.find((a) => a.connector.name === "rollback");
-    expect(rollback).toMatchObject({ side: "over", back: true });
-    expect(t.over.find((a) => a.connector.name === "no design needed")).toMatchObject({ back: false });
-  });
-
-  it("lists all 7 loops", () => {
-    expect(t.loops.map((l) => `${l.from} ↩ ${l.to} ${l.connector.name}`)).toEqual([
-      "Design ↩ Plan rework",
-      "Code review ↩ Build needs changes",
-      "QA ↩ Build fail",
-      "Security review ↩ Build fail",
-      "Docs ↩ Build needs changes",
-      "Acceptance ↩ Build fail",
-      "Release ↩ QA rollback",
-    ]);
-  });
-
-  it("turns tokens to beads: more than 9 Steps", () => {
-    expect(densityFor(t, 1198)).toBe("beads");
-    expect(densityFor(lineTopology(MAIN), 1198)).toBe("tokens");
-    expect(densityFor(lineTopology(MAIN), 560)).toBe("beads");
-  });
-
-  it("crosses nothing, in station order and in pixels", () => {
-    expect(topologyCrossings(t)).toBe(0);
-    for (const width of [1198, 900, 1600]) {
-      const h = horizontal(t, { width, column: 36 });
-      expect(crossings(h.polylines), String(width)).toEqual([]);
-    }
   });
 });
 
@@ -131,8 +63,7 @@ describe("the rules on Workflows of other shapes", () => {
   it("a Workflow with no Steps is just Done", () => {
     const t = lineTopology({ workflows: [], steps: [], connectors: [] });
     expect(t.main).toEqual([DONE_STATION]);
-    const h = horizontal(t, { width: 600, column: 0 });
-    expect(h.at.get(DONE_STATION)?.x).toBe(300);
+    expect(tracks(t)).toEqual([]);
   });
 
   it("a new hold an editor placed stays where it was put though nothing joins it: on the rail, or among the Steps a Parent's end files into", () => {
@@ -148,28 +79,30 @@ describe("the rules on Workflows of other shapes", () => {
     expect(after.rows.flatMap((r) => r.stations)).toEqual(["n"]);
   });
 
-  it("two loops that would interleave under the line: one goes over", () => {
+  it("two returns that interleave: a track each, crossing once, the least they can", () => {
     const t = lineTopology(wf(["a", "b", "c", "d"], [["a", "p", "b"], ["b", "p", "c"], ["c", "p", "d"], ["c", "x", "a"], ["d", "y", "b"]]));
-    expect(t.under).toHaveLength(1);
-    expect(t.over).toHaveLength(1);
-    expect(topologyCrossings(t)).toBe(0);
-    expect(crossings(horizontal(t, { width: 900, column: 30 }).polylines)).toEqual([]);
+    expect(returns(t)).toEqual([
+      ["a", ["c:x"]],
+      ["b", ["d:y"]],
+    ]);
+    expect(trackCrossings(tracks(t))).toBe(1);
   });
 
-  it("a loop that straddles a drop of a track is not drawn under it", () => {
+  it("a return that straddles where another track's return leaves: a track each, crossing once", () => {
     const t = lineTopology(
       wf(["a", "b", "c", "d", "e", "f"], [["a", "p", "b"], ["b", "p", "c"], ["c", "p", "d"], ["d", "p", "e"], ["e", "p", "f"], ["c", "x1", "a"], ["d", "x2", "a"], ["f", "x3", "a"], ["e", "y", "c"]]),
     );
-    expect(t.under.filter((e) => e.kind === "track")).toHaveLength(1);
-    // e → c spans the drop at d: over the line.
-    expect(t.over.map((a) => a.connector.name)).toEqual(["y"]);
-    expect(crossings(horizontal(t, { width: 1000, column: 30 }).polylines)).toEqual([]);
+    expect(returns(t)).toEqual([
+      ["a", ["c:x1", "d:x2", "f:x3"]],
+      ["c", ["e:y"]],
+    ]);
+    expect(trackCrossings(tracks(t))).toBe(1);
   });
 
-  it("two Connectors between the same neighbours: the second arcs over", () => {
+  it("two Connectors between the same neighbours: the first is the rail, the second a track", () => {
     const t = lineTopology(wf(["a", "b"], [["a", "p", "b"], ["a", "q", "b"], ["b", "p", null]]));
     expect(t.segments[0].connector?.name).toBe("p");
-    expect(t.over.map((a) => a.connector.name)).toEqual(["q"]);
+    expect(returns(t)).toEqual([["b", ["a:q"]]]);
   });
 
   it("a main Step leading into a branch Step keeps that Step on the main line", () => {
@@ -223,25 +156,6 @@ describe("one Workflow of several drawn alone (ADR 0019): a Connector into anoth
     expect(counted(t)).toBe(touching(wf, wfId.triage));
   });
 
-  it("Triage in pixels: each exit a chip at the end of a leg leaving Triage, clear of every word and line", () => {
-    const t = lineTopology(FIVE(wfId.triage));
-    for (const width of [744, 1000, 1160, 1640]) {
-      const h = horizontal(t, { width, column: 66 });
-      const chips = h.chips.filter((c) => c.stepId === wfStep.triage).map((c) => c.text);
-      expect(chips, String(width)).toEqual(t.exits.map((e) => e.text));
-      for (const e of t.exits) {
-        const leg = h.polylines.find((p) => p.id === `exit:${e.connector.id}`);
-        expect(leg, `${e.text} at ${width}`).toBeDefined();
-        expect(leg!.points[0][0]).toBe(h.at.get(wfStep.triage)!.x);
-        expect(h.routes.get(e.connector.id), e.text).toMatch(/^M/);
-        expect(h.boxes.filter((b) => b.kind === "chip" && b.text === e.text)).toHaveLength(1);
-      }
-      expect(overlaps(h.boxes), String(width)).toEqual([]);
-      expect(h.clashes, String(width)).toEqual([]);
-      expect(crossings(h.polylines), String(width)).toEqual([]);
-    }
-  });
-
   it("Bugs: Investigate carries one entry from Triage; Bugs' own Connectors are drawn as they would be alone", () => {
     const wf = FIVE(wfId.bugs);
     const t = lineTopology(wf);
@@ -251,36 +165,26 @@ describe("one Workflow of several drawn alone (ADR 0019): a Connector into anoth
     expect(t.entries.map((e) => [e.stepId, e.text])).toEqual([[wfStep.investigate, "from Triage · bug"]]);
     expect(t.exits).toEqual([]);
     expect(t.segments.map((s) => s.connector?.name ?? "dotted")).toEqual(["fix", "ready", "pass", "pass"]);
-    expect(t.loops.map((l) => `${l.from} ↩ ${l.to} ${l.connector.name}`)).toEqual(["Review ↩ Fix needs changes", "Verify ↩ Fix fail"]);
+    expect(returns(t)).toEqual([["Fix", ["Review:needs changes", "Verify:fail"]]]);
+    expect(t.entries[0].hint).toBe("Triage › Triage → Investigate: when the holder says bug");
     expect(counted(t)).toBe(touching(wf, wfId.bugs));
   });
 
-  it("Bugs in pixels: the entry is an arrow into Investigate from the left, its words where New Tasks' would be", () => {
-    const t = lineTopology(FIVE(wfId.bugs));
-    const h = horizontal(t, { width: 1160, column: 66 });
-    const arrow = h.entry?.arrow;
-    expect(arrow?.label.text).toBe("from Triage · bug");
-    expect(arrow?.label.hint).toBe("Triage › Triage → Investigate: when the holder says bug");
-    expect(arrow!.line.at(-1)![0]).toBeLessThan(h.at.get(wfStep.investigate)!.x);
-    expect(h.entry?.mark).toBeUndefined();
-    expect(h.entry?.before).toBeUndefined();
-    expect(h.boxes.filter((b) => b.kind === "entry").map((b) => b.text)).toEqual(["from Triage · bug"]);
-    expect(h.routes.get(t.entries[0].connector.id)).toMatch(/^M/);
-    expect(overlaps(h.boxes)).toEqual([]);
-    expect(crossings(h.polylines)).toEqual([]);
-  });
-
-  it("Support: an entry from Triage on Support, and its loops back (Ops' done into Support among them) drawn as they would be alone", () => {
+  it("Support: an entry from Triage on Support, and its returns (Ops' done into Support among them) drawn as they would be alone", () => {
     const wf = FIVE(wfId.support);
     const t = lineTopology(wf);
     expect(t.main).toEqual([wfStep.support, wfStep.awaitingCustomer, wfStep.ops, wfStep.approve, DONE_STATION]);
     expect(t.entries.map((e) => [e.stepId, e.text])).toEqual([[wfStep.support, "from Triage · question"]]);
     expect(t.exits).toEqual([]);
-    expect(t.loops.map((l) => `${l.from} ↩ ${l.to} ${l.connector.name}`)).toEqual(["Ops ↩ Support done", "Approve ↩ Ops approved", "Approve ↩ Support declined"]);
+    expect(returns(t)).toEqual([
+      ["Support", ["Approve:declined", "Ops:done"]],
+      ["Ops", ["Approve:approved", "Support:account change"]],
+      ["Approve", ["Support:exception"]],
+    ]);
     expect(counted(t)).toBe(touching(wf, wfId.support));
   });
 
-  it("an entry into a Step after the line's first is a mark over its head, as New Tasks' is", () => {
+  it("an entry into a Step after the line's first is that Step's entry, as an exit out of it is its exit", () => {
     const wf: LineWorkflow = {
       workflows: [
         { id: "a", name: "Intake", position: 1 },
@@ -302,15 +206,6 @@ describe("one Workflow of several drawn alone (ADR 0019): a Connector into anoth
     const t = lineTopology(wf);
     expect(t.entries.map((e) => [e.stepId, e.text])).toEqual([["qa", "from Intake · test only"]]);
     expect(t.exits.map((e) => [e.stepId, e.text])).toEqual([["qa", "misrouted → Intake › Intake"]]);
-    const h = horizontal(t, { width: 1000, column: 30 });
-    expect(h.entry?.arrow).toBeUndefined();
-    const marks = h.entry?.arrivals ?? [];
-    expect(marks.map((m) => [m.stepId, m.lines])).toEqual([["qa", ["from Intake · test only"]]]);
-    expect(marks[0].x).toBe(h.at.get("qa")!.x);
-    expect(h.boxes.filter((b) => b.kind === "mark").map((b) => b.text)).toEqual(["from Intake · test only"]);
-    expect(overlaps(h.boxes)).toEqual([]);
-    expect(h.clashes).toEqual([]);
-    expect(crossings(h.polylines)).toEqual([]);
   });
 
   it("a Workflow with no crossing has no exits or entries, and draws as it did before a Project had several", () => {
@@ -318,7 +213,6 @@ describe("one Workflow of several drawn alone (ADR 0019): a Connector into anoth
     expect(alone.exits).toEqual([]);
     expect(alone.entries).toEqual([]);
     expect(alone).toEqual(lineTopology(MAIN));
-    expect(horizontal(alone, { width: 1198, column: 102 })).toEqual(horizontal(lineTopology(MAIN), { width: 1198, column: 102 }));
   });
 
   it("ignores a Connector that touches no drawn Step: it belongs to another drawing", () => {

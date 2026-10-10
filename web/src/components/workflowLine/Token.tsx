@@ -22,10 +22,7 @@ export function Token({
   tag,
   past,
   onClick,
-  onHover,
-  compact,
   noKey,
-  tagSide = "left",
 }: {
   task: LineTask;
   hold: boolean;
@@ -35,17 +32,13 @@ export function Token({
   dim?: boolean;
   pulse?: Tone;
   arrived?: boolean;
-  /** A note hung off the token's left side: "now · builder picked up · waited 43m". */
+  /** A note hung off the token's right side: "now · builder picked up · waited 43m". */
   tag?: ReactNode;
   /** A past stay on a single Task's path: dashed, the time it was worked there. */
   past?: { text: string };
   onClick?: () => void;
-  onHover?: (on: boolean) => void;
-  /** Key and mark only: the line is too narrow for times. */
-  compact?: boolean;
   /** Mark and time only: the page around it is already about this Task. */
   noKey?: boolean;
-  tagSide?: "left" | "right";
 }) {
   const state = tokenState(task, hold);
   const picked = task.heldSince !== undefined && now - task.heldSince < PICKUP_MS;
@@ -55,14 +48,7 @@ export function Token({
   return (
     <span data-dim={dim ? "" : undefined} className="relative inline-flex">
       {tag && (
-        <span
-          data-tag
-          data-box="tag"
-          className={cn(
-            "pointer-events-none absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-1.5 text-xs font-medium whitespace-nowrap",
-            tagSide === "left" ? "right-full mr-1" : "left-full ml-1 flex-row-reverse",
-          )}
-        >
+        <span data-tag className="pointer-events-none absolute top-1/2 left-full z-10 ml-1 flex -translate-y-1/2 flex-row-reverse items-center gap-1.5 text-xs font-medium whitespace-nowrap">
           {tag}
         </span>
       )}
@@ -81,8 +67,6 @@ export function Token({
         aria-label={tokenLabel(task, state)}
         aria-pressed={onClick ? !!selected : undefined}
         onClick={onClick}
-        onMouseEnter={onHover && (() => onHover(true))}
-        onMouseLeave={onHover && (() => onHover(false))}
         className={cn(
           "wl-token inline-flex min-h-7 items-center gap-1.5 rounded-[6px] border bg-background pr-2 pl-1 text-xs whitespace-nowrap data-[past]:border-dashed data-[state=hold]:border-dashed data-[state=idle]:border-dashed",
           "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
@@ -91,7 +75,7 @@ export function Token({
       >
         {task.holder ? <MemberAvatar member={task.holder} working={task.holder.working} /> : <span aria-hidden className="wl-ring mx-0.5 size-3.5 flex-none rounded-full" />}
         {!noKey && <span className="font-mono text-[11.5px] text-foreground">{task.key}</span>}
-        {!compact && time && (
+        {time && (
           <span className={cn("tabular-nums", picked && !past ? "font-medium text-state-claimed" : "text-muted-foreground")}>{time}</span>
         )}
         {by && <span className="text-[11px] font-medium text-state-blocked">{by}</span>}
@@ -107,12 +91,6 @@ export function GhostToken({ text, label, dim }: { text: string; label: string; 
       {text}
     </span>
   );
-}
-
-/** A Task as a bead on a crowded line: filled amber held, hollow blue waiting, red blocked, dashed in the hold. */
-export function Bead({ task, hold, dim }: { task: LineTask; hold: boolean; dim?: boolean }) {
-  const state = tokenState(task, hold);
-  return <span data-task={task.key} data-state={state} aria-label={tokenLabel(task, state)} role="img" className={cn("wl-bead size-3 rounded-full", dim && "wl-dim")} />;
 }
 
 /** The faint count a narrowed line leaves on a Step: "+1". */

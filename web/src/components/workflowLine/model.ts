@@ -81,7 +81,7 @@ export function stepsOf<S extends LineStep>(workflow: { workflows: readonly Line
 /**
  * The Workflow a line of the Project draws: of a Project of several, the one picked, else the
  * first by position; of a Project of one, none, picked or not, so it draws every Step as it always
- * has (the path the pinned layouts hold).
+ * has.
  */
 export function drawnWorkflow(workflow: { workflows: readonly LineWorkflowName[] }, picked?: string): string | undefined {
   if (workflow.workflows.length < 2) return undefined;
