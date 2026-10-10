@@ -227,9 +227,10 @@ func TestRunnerStopsEveryShiftOfARevokedToken(t *testing.T) {
 }
 
 // A count lowered while a loop waits in next: the Task that loop then takes, above the count, is
-// released unworked with a Note saying why, and the loop ends.
+// released unworked with a Note saying why, and the loop ends; one Shift runs.
 func TestRunnerReleasesATaskTakenAboveALoweredCount(t *testing.T) {
-	f := newFixture(t, storetest.Open(t, store.SQLite))
+	st := storetest.Open(t, store.SQLite)
+	f := newFixture(t, st)
 	f.timings.Wait = 30 * time.Second // both loops wait in next while the count is lowered
 	f.workflow(buildOnly)
 	f.agent("builder", "busy", "engineer")
@@ -244,20 +245,18 @@ func TestRunnerReleasesATaskTakenAboveALoweredCount(t *testing.T) {
 		defer a.mu.Unlock()
 		return len(a.loops) == 2
 	})
-	time.Sleep(10 * f.timings.Tick) // both reach next
+	// Both loops wait in next: each has dialled its pull Session, which then opens on the Install.
+	eventually(t, 10*time.Second, "both loops waiting in next", func() bool {
+		return f.openSessions(st, "builder") == 3 // its own, and each loop's pull Session
+	})
 	f.ok("ada", "agent", "set", "builder", "--shifts", "1")
 	f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
 	f.ok("ada", "file", "--project", "WEB", "--title", "Totals")
-	eventually(t, 20*time.Second, "one Shift and one Task released with the Note", func() bool {
-		if len(r.Running()) != 1 {
-			return false
-		}
-		for _, k := range []string{"WEB-1", "WEB-2"} {
-			if d := f.task(k); d.Task.Claim == nil && strings.Contains(notesOf(d), shiftsLoweredNote) {
-				return true
-			}
-		}
-		return false
+	// The loop below the count may take the released Task straight back: the Note says it was
+	// released, whoever holds it now.
+	eventually(t, 20*time.Second, "one Shift, and a Task released with the Note", func() bool {
+		return len(r.Running()) == 1 &&
+			(strings.Contains(notesOf(f.task("WEB-1")), shiftsLoweredNote) || strings.Contains(notesOf(f.task("WEB-2")), shiftsLoweredNote))
 	})
 	holds(t, r, 1, f.holdsFor())
 }
