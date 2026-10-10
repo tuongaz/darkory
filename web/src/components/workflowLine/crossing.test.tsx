@@ -1,5 +1,5 @@
 import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { wfId, wfStep } from "@/test/fixtures";
 import { ESCALATE, FIVE, FIXTURES, HOTFIX, MARKS, PAGE, PARENT, WRAP } from "./fixtures";
 import { crossings, horizontal, lineTopology, type Horizontal, type HorizontalOptions, type LineTopology } from "./layout";
@@ -14,20 +14,6 @@ import { ENTRY_LABEL } from "./words";
  * wide, every Connector touching a drawn Step is in the drawing, on a line or in words, and has a
  * way for a token to travel.
  */
-
-/** Each drawing the renderer laid out (its own call, the one that knows its name lines), the latest last. */
-const laid = vi.hoisted(() => [] as unknown[]);
-vi.mock("./layout", async (actual) => {
-  const m = await actual<typeof import("./layout")>();
-  return {
-    ...m,
-    horizontal: (t: LineTopology, opts: HorizontalOptions) => {
-      const h = m.horizontal(t, opts);
-      if (opts.labelWidth) laid.push(h);
-      return h;
-    },
-  };
-});
 
 /** The Steps a drawing draws: every one of the topology's, or with `noBranch` (a Task's line off the branch) those off the branch rows. */
 const drawnOf = (t: LineTopology, noBranch = false): ReadonlySet<string> => {
@@ -103,70 +89,44 @@ describe("every Connector touching a drawn Step is drawn, at every width", () =>
   it("and down a phone, each exit and entry as a chip naming its Connector", () => {
     for (const [name, wf] of drawings) {
       const t = lineTopology(wf);
-      const { container } = render(<WorkflowLine workflow={wf} tasks={[]} now={0} orientation="vertical" />);
+      const { container } = render(<WorkflowLine workflow={wf} tasks={[]} now={0} />);
       for (const c of [...t.exits, ...t.entries]) {
         const tag = container.querySelector(`[data-chip="${c.kind}"][data-connector="${c.connector.id}"]`);
         expect(tag, `${name}: ${c.text}`).not.toBeNull();
         expect(tag!.hasAttribute(c.kind === "exit" ? "data-exit" : "data-arrival"), `${name}: ${c.text}`).toBe(true);
-        expect(tag).toHaveTextContent(c.text);
-        expect(tag).toHaveAttribute("title", c.hint);
+        expect(tag).toHaveTextContent(c.kind === "entry" ? c.text.replace(/^from /, "") : c.text);
+        expect(tag).toHaveAttribute("data-hint", c.hint);
       }
       cleanup();
     }
   });
 });
 
-describe("and across, as the renderer draws it", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    cleanup();
-  });
+describe("and down the page, as the renderer draws it", () => {
+  afterEach(cleanup);
 
-  /**
-   * The line as the page draws it, and as TaskLine draws a single Task's: on the branch, off it
-   * (`noBranch`, its Task at a main Step) and with its path traced.
-   */
-  const taskLine = { compactHeads: true, density: "tokens", noLoops: true } as const;
+  /** The line as the page draws it, and as TaskLine draws a single Task's: off the branch (`noBranch`), and with its path traced. */
   const rendered: Record<string, (wf: LineWorkflow, t: LineTopology) => Partial<Parameters<typeof WorkflowLine>[0]>> = {
     page: () => ({}),
-    "a Task's line": () => taskLine,
-    "a Task's line off the branch": () => ({ ...taskLine, noBranch: true }),
-    "a Task's traced line": (wf, t) => ({ ...taskLine, noBranch: true, trace: traceAt(wf, t) }),
+    "a Task's line off the branch": () => ({ noBranch: true }),
+    "a Task's traced line": (wf, t) => ({ noBranch: true, trace: traceAt(wf, t) }),
   };
 
-  for (const [name, wf, from] of drawings) {
+  for (const [name, wf] of drawings) {
     for (const [shape, propsOf] of Object.entries(rendered)) {
       it(`${name}, ${shape}`, () => {
         const t = lineTopology(wf);
         const props = propsOf(wf, t);
         const drawn = drawnOf(t, props.noBranch);
-        for (const width of [...new Set([from, ...Object.values(PAGE), 1000, 1640])]) {
-          vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width, height: 600, x: 0, y: 0, top: 0, left: 0, right: width, bottom: 600, toJSON: () => ({}) } as DOMRect);
-          laid.length = 0;
-          const { container } = render(<WorkflowLine workflow={wf} tasks={[]} now={0} orientation="horizontal" {...props} />);
-          const h = laid.at(-1) as Horizontal;
-          expect(h.width, `${name} at ${width}`).toBe(width);
-          const at = `${name} at ${width}`;
-          const has = (selector: string) => container.querySelector(selector) !== null;
-          /** Whether an element `selector` names the Connector among its `data-connectors`. */
-          const names = (selector: string, id: string) =>
-            [...container.querySelectorAll(`${selector}[data-connectors]`)].some((el) => (JSON.parse(el.getAttribute("data-connectors")!) as string[]).includes(id));
-          const q = JSON.stringify;
-          // Every Connector touching a drawn Step is somewhere in the drawing, by its id.
-          for (const c of touching(wf, t, drawn)) expect(has(`[data-connector=${q(c.id)}], [data-route=${q(c.id)}]`) || names("", c.id), `${c.id}, ${at}`).toBe(true);
-          // Each exit and entry laid out as a chip is a chip of its kind; each exit's leg is drawn.
-          for (const c of h.chips.filter((x) => x.kind !== "chip")) expect(has(`[data-chip="${c.kind}"][data-connector=${q(c.connectorId)}]`), `${c.text}, ${at}`).toBe(true);
-          for (const e of t.exits.filter((x) => drawn.has(x.stepId))) expect(has(`[data-chip="exit"][data-connector=${q(e.connector.id)}]`), `${e.text}, ${at}`).toBe(true);
-          for (const x of h.exits) expect(has(`[data-exit=${q(x.connectorId)}]`), `${x.connectorId}'s leg, ${at}`).toBe(true);
-          // An entry not a chip is a mark over its Step's head, or the arrow into the line.
-          for (const m of h.entry?.arrivals ?? []) for (const id of m.connectorIds) expect(names("[data-arrival]", id), `${id}, ${at}`).toBe(true);
-          for (const id of h.entry?.arrow?.connectorIds ?? []) expect(names('[data-box="entry"]', id), `${id}, ${at}`).toBe(true);
-          for (const e of t.entries.filter((x) => drawn.has(x.stepId))) {
-            const id = e.connector.id;
-            expect(has(`[data-chip="entry"][data-connector=${q(id)}]`) || names("[data-arrival]", id) || names('[data-box="entry"]', id), `${e.text}, ${at}`).toBe(true);
-          }
-          cleanup();
-        }
+        const { container } = render(<WorkflowLine workflow={wf} tasks={[]} now={0} {...props} />);
+        const named = new Set([
+          ...[...container.querySelectorAll("[data-connector]")].map((el) => el.getAttribute("data-connector")),
+          ...[...container.querySelectorAll("[data-connectors]")].flatMap((el) => JSON.parse(el.getAttribute("data-connectors")!) as string[]),
+        ]);
+        // Every Connector touching a drawn Step is somewhere in the drawing, by its id.
+        for (const c of touching(wf, t, drawn)) expect(named.has(c.id), `${c.id}, ${name}`).toBe(true);
+        // Each exit and entry is a chip of its kind.
+        for (const c of [...t.exits, ...t.entries].filter((x) => drawn.has(x.stepId))) expect(container.querySelector(`[data-chip="${c.kind}"][data-connector=${JSON.stringify(c.connector.id)}]`), `${c.text}, ${name}`).not.toBeNull();
       });
     }
   }

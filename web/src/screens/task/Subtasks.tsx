@@ -184,8 +184,6 @@ function ParentLine({ detail, workflow }: { detail: TaskDetail; workflow: string
       done={s.done}
       ghosts={s.ghosts}
       branchLabel={s.branchLabel}
-      fold={s.fold}
-      noLoops
       now={now}
       selected={selected}
       onSelect={setSelected}

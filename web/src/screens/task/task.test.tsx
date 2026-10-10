@@ -239,7 +239,7 @@ describe("a Task in a Project of several Workflows (ADR 0019)", () => {
       expect(el).not.toBeNull();
       return el!;
     });
-    expect(came).toHaveTextContent("from Triage · bug");
+    expect(came).toHaveTextContent("Triage · bug");
   });
 });
 

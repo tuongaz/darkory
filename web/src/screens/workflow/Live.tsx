@@ -155,10 +155,8 @@ function LiveLine({
         done={s.done}
         ghosts={s.ghosts}
         branchLabel={s.branchLabel}
-        fold={s.fold}
         doneToday={data.doneToday}
         trace={data.trace}
-        compactHeads={!!data.trace}
         noBranch={!!data.trace && !data.trace.stays.some((st) => data.facts.steps.some((x) => x.id === st.stepId && branchSkills.includes(x.skill?.name ?? "")))}
         flow={flow}
         now={now}

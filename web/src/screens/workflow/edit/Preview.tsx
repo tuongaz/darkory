@@ -50,7 +50,7 @@ export function Preview({
       className={cn("flex min-w-0 flex-col", onStep && "[&_[data-step]]:cursor-pointer [&_[data-step]:hover]:underline", className)}
     >
       <span role="img" aria-label={describe(line)} className="sr-only" />
-      <WorkflowLine label="The line" workflow={line} tasks={[]} now={0} compactHeads noBranch noLoops density="tokens" highlight={changed} />
+      <WorkflowLine label="The line" workflow={line} tasks={[]} now={0} noBranch highlight={changed} />
       {after.length > 0 && (
         <figcaption className="px-5 pb-2.5 text-xs text-muted-foreground">
           After a Parent ·{" "}

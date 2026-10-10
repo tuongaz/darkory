@@ -61,22 +61,23 @@ describe("the Workflow page", () => {
     expect(tokenOf("WEB-2")).toHaveAccessibleName("WEB-2 Task 2, waiting");
     expect(tokenOf("WEB-5")).toBeInTheDocument();
     expect(tokenOf("WEB-6")).toBeNull();
-    // Retro and Skill review run on the branch after a Parent.
-    expect(within(line()).getByText("After a Parent")).toBeInTheDocument();
+    // Retro and Skill review run on the quiet line when a Parent ends.
+    expect(within(line()).getByRole("region", { name: "When a Parent ends" })).toBeInTheDocument();
   });
 
-  it("says where Tasks enter: the arrow into Build, Plan on Break down, Backlog parked with its Tasks", async () => {
+  it("says where Tasks enter: Start into Build, Plan and Backlog beside it with their Tasks", async () => {
     serve([task(2), task(3, { step_id: step.backlog, title: "Later" }), task(4, { step_id: step.plan, title: "Break down: Big thing", kind: "breakdown" })]);
     renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-3")).not.toBeNull());
-    expect(within(line()).getByText("New Tasks start here")).toBeInTheDocument();
-    expect(within(line()).getByText("Break down")).toBeInTheDocument();
-    expect(within(line()).getByText("files Subtasks")).toBeInTheDocument();
-    expect(within(line()).getByText("hold · moved on by hand")).toBeInTheDocument();
+    expect(line().querySelector("[data-start-label]")).toHaveTextContent("Start");
+    expect(line().querySelector("[data-start-label]")).toHaveAttribute("data-hint", "New Tasks start at Build, unless the filer names another Step");
+    const also = within(line()).getByRole("region", { name: "Also starts here" });
+    expect(also.querySelector(`[data-side="${step.plan}"] [data-mark="files"]`)).toHaveTextContent("↳ Build");
+    expect(also.querySelector(`[data-side="${step.backlog}"]`)).toHaveTextContent(/Backlog\s*hold/);
     expect(tokenOf("WEB-3")).toHaveAttribute("data-state", "hold");
     expect(tokenOf("WEB-4")).toBeInTheDocument();
-    // Plan's done is words beside it, not a dashed arc over the line.
-    expect(line().querySelector('[data-hint^="Plan\'s Breakdown Subtask ends Done"]')).toHaveTextContent("done → Done");
+    // Plan's done is a mark beside it, not a line.
+    expect(line().querySelector('[data-hint^="Plan\'s Breakdown Subtask ends Done"]')).toHaveTextContent("● Done");
   });
 
   it("explains every line on hover, in words", async () => {
@@ -90,7 +91,7 @@ describe("the Workflow page", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
     await userEvent.hover(within(line()).getByText("Backlog"));
     expect(screen.getByRole("tooltip")).toHaveTextContent("Backlog: a hold. No one is offered these; a human moves a Task on by hand, to any Step");
-    await userEvent.hover(within(line()).getByText("files Subtasks"));
+    await userEvent.hover(line().querySelector<HTMLElement>('[data-mark="files"]')!);
     expect(screen.getByRole("tooltip")).toHaveTextContent("Whoever takes it files the Parent's other Subtasks, each at the Step its filer names, Build when they name none");
     // No line goes without words.
     const lines = [...line().querySelectorAll("svg path[stroke='transparent']")];
@@ -307,14 +308,14 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
     await waitFor(() => expect(tokenOf("WEB-1")).not.toBeNull());
     expect(heads()).toEqual(["Triage", "Done"]);
     // Triage's four outcomes leave the line as exits; WEB-2, at Investigate, is on Bugs' line.
-    expect(within(line()).getByText("bug → Bugs › Investigate")).toHaveAttribute("data-chip", "exit");
+    expect(within(line()).getByText("bug → Bugs › Investigate").closest("[data-chip]")).toHaveAttribute("data-chip", "exit");
     expect(tokenOf("WEB-2")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Workflow: Triage" }));
     const options = await screen.findAllByRole("option");
     expect(options.map((o) => o.textContent)).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support"]);
     await userEvent.click(screen.getByRole("option", { name: "Bugs" }));
     await waitFor(() => expect(heads()).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]));
-    expect(within(line()).getByText("from Triage · bug")).toBeInTheDocument();
+    expect(line().querySelector('[data-start-row] [data-chip="entry"]')).toHaveTextContent("Triage · bug");
     expect(tokenOf("WEB-2")).not.toBeNull();
     expect(tokenOf("WEB-1")).toBeNull();
     expect(screen.getByRole("button", { name: "Workflow: Bugs" })).toBeInTheDocument();
@@ -517,8 +518,9 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
       expect(el).toHaveTextContent("WEB-2bug");
       return el!;
     });
-    const station = line().querySelector(`[data-station="${wfStep.triage}"]`)!;
-    expect(travel.style.offsetPath).toMatch(new RegExp(`^path\\("M${station.getAttribute("cx")} ${station.getAttribute("cy")} V[\\d.]+ H[\\d.]+"\\)$`));
+    const station = line().querySelector(`[data-dot="${wfStep.triage}"]`)!;
+    // Off the line to the right, from Triage's station.
+    expect(travel.style.offsetPath).toMatch(new RegExp(`^path\\("M${station.getAttribute("cx")} ${station.getAttribute("cy")} H[\\d.]+"\\)$`));
     expect(line().querySelector(`[data-exit="${bug.id}"]`)).not.toBeNull();
     await waitFor(() => expect(document.querySelector("[data-travel]")).toBeNull(), { timeout: 3000 });
     expect(tokenOf("WEB-2")).toBeNull();

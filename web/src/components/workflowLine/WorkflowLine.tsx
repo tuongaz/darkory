@@ -1,19 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { quiet, type FlowState } from "@/components/workflow/live";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { MemberAvatar } from "@/components/MemberAvatar";
 import { cn } from "@/lib/utils";
 import { ChainCallout } from "./Callout";
 import { chainOf, type Chain, type Ghost, type Trace } from "./data";
-import { HorizontalLine } from "./Horizontal";
-import { densityFor, horizontal, lineTopology, type Density, type Loop } from "./layout";
-import { pageMeasure } from "./measure";
+import { lineTopology, type Loop } from "./layout";
 import type { LineFacts, LineTask } from "./model";
 import { VerticalLine } from "./Vertical";
-
-/** Under this width the line runs down the page. */
-export const VERTICAL_BELOW = 640;
-/** Loops back from which the line lists them by name. */
-export const LOOPS_LISTED = 5;
+import { AFTER_BRANCH } from "./words";
 
 export type WorkflowLineProps = {
   /** The Workflow with its Steps' takers and medians. */
@@ -28,11 +22,9 @@ export type WorkflowLineProps = {
   done?: readonly { id: string; key: string; title: string }[];
   ghosts?: readonly Ghost[];
   branchLabel?: string;
-  /** A Parent with nothing on the main line: the main line folds to a strip of names. */
-  fold?: boolean;
-  /** Tasks that reached Done today: "1 today" under Done. */
+  /** Tasks that reached Done today: "1 today" beside Done. */
   doneToday?: number;
-  /** Connectors drawn amber and dashed, the rest as they are: what an edit changed. */
+  /** Connectors drawn in the changed colour: what an edit changed. */
   highlight?: ReadonlySet<string>;
   /** One Task's path: traced on the line, its next outcomes dashed. */
   trace?: Trace;
@@ -48,17 +40,10 @@ export type WorkflowLineProps = {
   me?: { id: string; takeable: ReadonlySet<string> };
   /** The button for a chain's first move: Answer, Claim. */
   actionFor?: (first: Chain["first"]) => ReactNode;
-  orientation?: "auto" | "horizontal" | "vertical";
-  /** Under this width (auto) the line runs down the page. */
-  verticalBelow?: number;
-  density?: "auto" | Density;
-  /** Station heads as names with "+N" only. */
-  compactHeads?: boolean;
+  /** Leave the quiet row "When a Parent ends" off (a Task's line off it). */
   noBranch?: boolean;
-  /** Under a vertical line: what follows it on a phone. */
+  /** Under the line: what follows it on a phone. */
   footer?: ReactNode;
-  /** Leave the Loops list off, whatever the Workflow. */
-  noLoops?: boolean;
   label?: string;
   className?: string;
 };
@@ -66,62 +51,17 @@ export type WorkflowLineProps = {
 const nobody = { id: "", takeable: new Set<string>() };
 
 /**
- * A Project's Workflow as one line (Direction D): the Steps left to right in Workflow order, loops
- * back arced under it, forward skips dashed over it, the Steps Darkory files a Parent's own
- * Subtasks at on a branch "After a Parent"; every Task a token at its Step (beads past ~9 Steps or
- * narrow), a pickup tagged "now", a move travelling its Connector. Selecting a token draws its
- * Blocking chain and says what must end first. Below 640 px, or wherever its heads
- * and words could not all stand clear across the width, the line runs down the page.
+ * A Project's Workflow as one line, top to bottom at every width (the final design, vf-1 … vf-6):
+ * Start first, each Step a row, the outcomes on the rail, returns as tracks beside it, "Also starts
+ * here" beside the start, the Steps where Darkory files a Parent's own Subtasks a quiet row "When a
+ * Parent ends"; every Task a token at its Step, a pickup tagged "now". Selecting a token says its
+ * Blocking chain and what must end first.
  */
 export function WorkflowLine(props: WorkflowLineProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => setWidth(Math.floor(el.getBoundingClientRect().width));
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  // Laid out before it is measured (and under a test's DOM) at the drawing's own width.
-  const w = width || 1198;
   const topology = useMemo(() => lineTopology(props.workflow), [props.workflow]);
-  // The words are measured in the page's fonts, again once they have loaded.
-  const [fonts, setFonts] = useState(0);
-  useEffect(() => {
-    let live = true;
-    document.fonts?.ready.then(() => live && setFonts((n) => n + 1));
-    return () => {
-      live = false;
-    };
-  }, []);
-  const measure = useMemo(() => pageMeasure(fonts > 0), [fonts]);
-  // Tokens where they fit, else beads; and where even beads' heads and words would meet, the line
-  // runs down the page rather than cramming them.
-  const compact = !!(props.compactHeads || props.fold);
-  const fixed = props.density && props.density !== "auto" ? props.density : undefined;
-  const { density, fits } = useMemo(() => {
-    const fitsAt = (d: Density) => horizontal(topology, { width: w, density: d, heads: compact ? "compact" : d, column: 0, noBranch: true, measure }).fits;
-    const d = fixed ?? densityFor(topology, w, measure);
-    if (fitsAt(d)) return { density: d, fits: true };
-    if (!fixed && d === "tokens" && fitsAt("beads")) return { density: "beads" as const, fits: true };
-    return { density: d, fits: false };
-  }, [topology, w, measure, fixed, compact]);
-  // The drawing itself may find its heads and words meet once its Tasks are in (a name line
-  // carrying tokens): then it too runs down the page, at that width and any narrower.
-  const [tight, setTight] = useState<{ width: number; topology: unknown } | null>(null);
-  const tooTight = !!tight && tight.topology === topology && w <= tight.width;
-  // Said once per width and drawing: unmeasured (a test's DOM) the line stays across, and a second
-  // word would only draw it again.
-  const onTight = useCallback(() => setTight((t) => (t && t.topology === topology && w <= t.width ? t : { width: w, topology })), [w, topology]);
-  const vertical = props.orientation === "vertical" || (props.orientation !== "horizontal" && width > 0 && (width < (props.verticalBelow ?? VERTICAL_BELOW) || !fits || tooTight));
   const flow = props.flow ?? quiet;
   const all = props.all ?? props.tasks;
   const me = props.me ?? nobody;
-  const [litLoop, setLitLoop] = useState<string | null>(null);
   const ring = props.ringed;
   const ringed = useMemo<ReadonlySet<string>>(() => new Set(typeof ring === "string" ? [ring] : (ring ?? [])), [ring]);
 
@@ -133,72 +73,47 @@ export function WorkflowLine(props: WorkflowLineProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [selected, onSelect]);
 
-  const heavy = !props.noLoops && !props.trace && (density === "beads" || topology.loops.length >= LOOPS_LISTED) && topology.loops.length > 0;
-  const chain = useMemo(() => (vertical && selected ? chainOf(selected, all, me) : undefined), [vertical, selected, all, me]);
+  const chain = useMemo(() => (selected ? chainOf(selected, all, me) : undefined), [selected, all, me]);
+  // A question the chain waits on, with a Member at no Step: it stands with the chain.
+  const aimed = chain?.upstream.flat().find((x) => x.aimedAt && !x.stepId);
 
   return (
-    <div ref={ref} role="region" aria-label={props.label ?? "Workflow line"} data-orientation={vertical ? "vertical" : "horizontal"} data-density={density} className={cn("w-full min-w-0", props.className)}>
-      {vertical ? (
-        <>
-          <VerticalLine
-            topology={topology}
-            facts={props.workflow}
-            tasks={props.tasks}
-            hidden={props.hidden}
-            done={props.done}
-            ghosts={props.ghosts}
-            branchLabel={props.branchLabel ?? "After a Parent"}
-            doneToday={props.doneToday}
-            trace={props.trace}
-            flow={flow}
-            now={props.now}
-            selected={selected}
-            onSelect={onSelect}
-            ringed={ringed}
-            onOpenTask={props.onOpenTask}
-            compactHeads={props.compactHeads}
-            noBranch={props.noBranch}
-            footer={props.footer}
-          />
-          <Sheet open={!!chain} onOpenChange={(o) => !o && onSelect?.(null)}>
-            <SheetContent side="bottom" className="p-4 pt-10">
-              <SheetTitle className="sr-only">{chain ? `${chain.task.key} Blocking` : "Blocking"}</SheetTitle>
-              {chain && <ChainCallout chain={chain} me={me.id} takeable={me.takeable} action={props.actionFor?.(chain.first)} onOpen={props.onOpenTask} now={props.now} />}
-            </SheetContent>
-          </Sheet>
-        </>
-      ) : (
-        <HorizontalLine
-          topology={topology}
-          facts={props.workflow}
-          width={w}
-          density={density}
-          tasks={props.tasks}
-          all={all}
-          hidden={props.hidden}
-          done={props.done}
-          ghosts={props.ghosts}
-          branchLabel={props.branchLabel ?? "After a Parent"}
-          fold={props.fold}
-          doneToday={props.doneToday}
-          trace={props.trace}
-          flow={flow}
-          now={props.now}
-          selected={selected}
-          onSelect={onSelect}
-          ringed={ringed}
-          onOpenTask={props.onOpenTask}
-          me={me}
-          actionFor={props.actionFor}
-          compactHeads={props.compactHeads}
-          litLoop={litLoop}
-          highlight={props.highlight}
-          noBranch={props.noBranch}
-          measure={measure}
-          onTight={onTight}
-        />
+    <div role="region" aria-label={props.label ?? "Workflow line"} data-orientation="vertical" className={cn("w-full min-w-0", props.className)}>
+      {chain && (
+        <div role="dialog" aria-label={`${chain.task.key} Blocking`} className="mb-3 flex flex-col gap-2 rounded-lg border bg-popover px-3 py-2.5 text-popover-foreground shadow-pop">
+          <ChainCallout chain={chain} me={me.id} takeable={me.takeable} action={props.actionFor?.(chain.first)} onOpen={props.onOpenTask} now={props.now} />
+          {aimed?.aimedAt && (
+            <span
+              className="inline-flex h-[26px] w-max items-center gap-1.5 rounded-full border-[1.5px] border-dashed border-state-waiting bg-background pr-2.5 pl-1.5 text-xs whitespace-nowrap"
+              aria-label={`${aimed.key} ${aimed.title}, with ${aimed.aimedAt.id === me.id ? "you" : aimed.aimedAt.name}`}
+            >
+              <MemberAvatar member={aimed.aimedAt} />
+              <span className="font-mono text-[11.5px]">{aimed.key}</span>
+              <span className="text-muted-foreground">with {aimed.aimedAt.id === me.id ? "you" : aimed.aimedAt.name}</span>
+            </span>
+          )}
+        </div>
       )}
-      {heavy && !vertical && <LoopsList loops={topology.loops} onHover={setLitLoop} />}
+      <VerticalLine
+        topology={topology}
+        facts={props.workflow}
+        tasks={props.tasks}
+        hidden={props.hidden}
+        done={props.done}
+        ghosts={props.ghosts}
+        branchLabel={props.branchLabel ?? AFTER_BRANCH}
+        doneToday={props.doneToday}
+        trace={props.trace}
+        flow={flow}
+        now={props.now}
+        selected={selected}
+        onSelect={onSelect}
+        ringed={ringed}
+        onOpenTask={props.onOpenTask}
+        highlight={props.highlight}
+        noBranch={props.noBranch}
+        footer={props.footer}
+      />
     </div>
   );
 }
