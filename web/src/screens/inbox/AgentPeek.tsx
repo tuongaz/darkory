@@ -30,7 +30,7 @@ import { Refusal } from "@/components/Refusal";
 import { SessionFacts } from "@/components/RunnerSessionBadge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { untilText } from "@/lib/time";
+import { ageText, untilText } from "@/lib/time";
 import { workingOf } from "@/lib/work";
 import { useCurrentMe } from "@/me";
 import { heldClaims } from "@/screens/settings/model";
@@ -38,7 +38,7 @@ import { SessionsTable } from "@/screens/settings/SessionsTable";
 import { liveClaim } from "@/work";
 import { agentActions, agentSettingsPath, sessionOverAgents, taskOverAgents, type AgentAction } from "./agentActions";
 import { useAgentActions } from "./useAgentActions";
-import { agentRows, claimHolder, claimsSince, count, startOfDay, takesOf, type ClaimRecord } from "./derive";
+import { agentRows, claimHolder, claimsSince, count, queueOf, startOfDay, takesOf, type ClaimRecord } from "./derive";
 import { activityLimit, useRecentActivity, useSessions, useStepNames, useTaskMap } from "./queries";
 
 const actionIcons: Record<string, ReactNode> = {
@@ -57,6 +57,40 @@ export function AgentMenuItems({ actions, run }: { actions: AgentAction[]; run: 
       {a.label}
     </DropdownMenuItem>
   ));
+}
+
+/**
+ * What waits for a busy agent, under what it holds: "↳ WEB-4 Cart · waits at Build · 1m", the age
+ * since the Task reached its Step.
+ */
+export function QueueLines({
+  agent,
+  queue,
+  project,
+  stepName,
+  now,
+}: {
+  agent: Member;
+  queue: Task[];
+  project: Project;
+  stepName: (id: string) => string | undefined;
+  now: number;
+}) {
+  if (queue.length === 0) return null;
+  return (
+    <ul aria-label={`Waiting for ${agent.name}`} className="flex min-w-0 flex-col gap-0.5">
+      {queue.map((t) => (
+        <li key={t.id} className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <span aria-hidden>↳</span>
+          <Key to={taskOverAgents(project, t.key)}>{t.key}</Key>
+          <span className="min-w-0 truncate">{t.title}</span>
+          <span className="whitespace-nowrap">
+            · waits at {t.step_id ? (stepName(t.step_id) ?? "a Step") : "a Step"} · {ageText(now - Date.parse(t.step_since ?? t.waiting_since))}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 const claimEndWords: Record<string, string> = {
@@ -135,7 +169,7 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
   const detail = useMember(agent ? id : undefined);
   const sessionsQ = useSessions(id, admin && !!agent);
   const history = useRecentActivity({ member: id }, (e) => e.actor_id === id || claimHolder(e) === id, !!agent);
-  const runnerSession = useRunnerSessions().data?.items.find((s) => s.member_id === id);
+  const runnerSessions = (useRunnerSessions().data?.items ?? []).filter((s) => s.member_id === id);
   const { run, dialog } = useAgentActions(agent);
 
   if (!agent) {
@@ -147,6 +181,9 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
   }
 
   const held = agentRows([agent], open.data ?? [], now)[0]?.held ?? [];
+  // The ⋯ menu's Nudge and Stop name one Shift: the one on the Task first held, else the first; each Shift's own section has its acts.
+  const runnerSession = runnerSessions.find((s) => s.task_id === held[0]?.id) ?? runnerSessions[0];
+  const queue = queueOf({ agent, held, open: open.data ?? [], workflow, projectId: project.id, now });
   const claims = withLive(claimsSince(history.entries, id, startOfDay(now)), held, now);
   const live = held[0] && liveClaim(held[0], now);
   const set = agent.agent?.model;
@@ -174,7 +211,7 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
       menu={actions.length > 0 ? <AgentMenuItems actions={actions} run={run} /> : undefined}
     >
       <PropertiesRail className="grid-cols-[120px_minmax(0,1fr)]">
-        <Property label="Holds" stack={held.length > 1}>
+        <Property label="Holds" stack={held.length > 1 || queue.length > 0}>
           {held.length === 0 ? (
             <span className="text-muted-foreground">Nothing</span>
           ) : (
@@ -190,6 +227,7 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
               );
             })
           )}
+          <QueueLines agent={agent} queue={queue} project={project} stepName={(sid) => steps.get(sid)?.name} now={now} />
         </Property>
         {!admin && (
           // Only an admin may list another Member's Sessions; anyone sees the one holding the Claim.
@@ -238,7 +276,18 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
         </Property>
       </PropertiesRail>
 
-      {runnerSession && <RunnerSessionSection agent={agent} session={runnerSession} task={sessionTask} admin={admin} project={project} run={run} />}
+      {runnerSessions.map((s) => (
+        <RunnerSessionSection
+          key={s.session_id}
+          agent={agent}
+          session={s}
+          task={tasks.get(s.task_id) ?? held.find((t) => t.id === s.task_id)}
+          admin={admin}
+          project={project}
+          run={run}
+          several={runnerSessions.length > 1}
+        />
+      ))}
 
       {admin && (
         <section aria-label="Sessions">
@@ -329,6 +378,7 @@ function RunnerSessionSection({
   admin,
   project,
   run,
+  several,
 }: {
   agent: Member;
   session: RunnerSession;
@@ -336,11 +386,14 @@ function RunnerSessionSection({
   admin: boolean;
   project: Project;
   run: (a: AgentAction) => void;
+  /** The agent runs more than one Shift: each names its Task. */
+  several?: boolean;
 }) {
   const navigate = useNavigate();
+  const title = several && task ? `Shift on ${task.key}` : "Shift";
   return (
-    <section aria-label="Shift">
-      <h3 className="pb-1.5 text-2xs font-medium tracking-[0.02em] text-muted-foreground">Shift</h3>
+    <section aria-label={title}>
+      <h3 className="pb-1.5 text-2xs font-medium tracking-[0.02em] text-muted-foreground">{title}</h3>
       <div className="flex flex-col rounded-md border">
         <SessionFacts session={session} agent={agent} className="min-h-9 border-b px-2.5 py-1.5" />
         {task && (

@@ -339,6 +339,45 @@ export function sizeText(bytes: number): string {
  * The Steps a Member takes in a Project, in its order, as the Agents page names them: `Bugs ›
  * Investigate` when the Project has two or more Workflows, else the Step's name.
  */
+/**
+ * What waits for a busy agent in a Project: while it holds as many Tasks as it has Shifts (its
+ * settings' `shifts`, 1 unless set), the open Tasks of the Project nobody holds and nothing blocks,
+ * at a Step whose takers include it (its Skill there), not aimed at someone else and not Parents.
+ * The longest waiting at its Step comes first.
+ */
+export function queueOf({
+  agent,
+  held,
+  open,
+  workflow,
+  projectId,
+  now,
+}: {
+  agent: Member;
+  held: readonly Task[];
+  open: readonly Task[];
+  workflow: Pick<Workflows, "steps"> | undefined;
+  projectId: string;
+  now: number;
+}): Task[] {
+  if (!workflow || held.length === 0 || held.length < (agent.agent?.shifts ?? 1)) return [];
+  const takes = new Set(workflow.steps.filter((s) => s.takers.some((t) => t.id === agent.id)).map((s) => s.id));
+  const since = (t: Task) => Date.parse(t.step_since ?? t.waiting_since);
+  return open
+    .filter(
+      (t) =>
+        t.project_id === projectId &&
+        t.state === "open" &&
+        !t.subtask_counts &&
+        !t.blocked &&
+        !liveClaim(t, now) &&
+        !!t.step_id &&
+        takes.has(t.step_id) &&
+        (!t.aimed_at_id || t.aimed_at_id === agent.id),
+    )
+    .sort((a, b) => since(a) - since(b));
+}
+
 export function takesOf(workflow: Pick<Workflows, "workflows" | "steps"> | undefined, memberId: string): string[] {
   if (!workflow) return [];
   return stepsInOrder(workflow)

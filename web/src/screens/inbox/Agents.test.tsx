@@ -4,9 +4,9 @@ import { act } from "react";
 import { describe, expect, it } from "vitest";
 import { FakeEventSource } from "@/test/eventSource";
 import type { Member, RunnerSession, Workflows } from "@/api/client";
-import { ada, bob, builder, engineer, ops, task, web, workflowsFixture } from "@/test/fixtures";
+import { ada, bob, builder, engineer, ops, step, task, web, workflow, workflowsFixture } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
-import { agentRows, claimHolder, claimsSince } from "./derive";
+import { agentRows, claimHolder, claimsSince, queueOf } from "./derive";
 import { claim, entry, memberDetail, minutes, recordApi } from "./testing";
 
 const planner: Member = { id: "m-planner", name: "planner", kind: "agent", admin: false, created_at: minutes(-1000) };
@@ -16,11 +16,17 @@ function session(state: RunnerSession["state"], extra: Partial<RunnerSession> = 
   return { task_id: "k-3", member_id: builder.id, session_id: "sess-1", host: "mac-mini", tmux: "dk-WEB-3", started_at: minutes(-20), state, state_since: minutes(-20), log_path: "/tmp/log", ...extra };
 }
 
-function agentsApi({ sessions = [], member = ada, paused = false, workflow }: { sessions?: RunnerSession[]; member?: Member; paused?: boolean; workflow?: Workflows } = {}) {
+function agentsApi({
+  sessions = [],
+  member = ada,
+  paused = false,
+  workflow,
+  tasks = [],
+}: { sessions?: RunnerSession[]; member?: Member; paused?: boolean; workflow?: Workflows; tasks?: ReturnType<typeof task>[] } = {}) {
   const shown = paused ? { ...agentBuilder, agent: { ...agentBuilder.agent!, paused: true } } : agentBuilder;
   const held = task(3, { title: "Payment form", claim: claim("k-3", builder.id, { expires_at: minutes(10), heartbeat_timeout_seconds: 600, skill_id: engineer.id }) });
   return recordApi({
-    tasks: [held, task(4, { title: "Cart" })],
+    tasks: [held, task(4, { title: "Cart", step_since: minutes(-1) }), ...tasks],
     activity: [
       entry(1, "task.claimed", "k-3", { actor_id: builder.id, payload: { claim_id: "c-k-3", skill_id: engineer.id } }),
       entry(2, "task.advanced", "k-4", { actor_id: builder.id, payload: { claim_id: "c-x", from: "st-build", to: "st-review", outcome: "pass" }, at: minutes(-1) }),
@@ -65,6 +71,35 @@ describe("the Agents' rules", () => {
   });
 });
 
+describe("the queue behind a busy agent", () => {
+  const wf = workflow();
+  const now = Date.now();
+  const holding = task(3, { claim: claim("k-3", builder.id, { expires_at: minutes(10) }) });
+  const waiting = (n: number, extra: Parameters<typeof task>[1] = {}) => task(n, { step_since: minutes(-n), ...extra });
+
+  it("lists the open, unheld, unblocked Tasks of this Project at a Step it takes, oldest at the Step first, while all its Shifts are busy", () => {
+    const open = [
+      holding,
+      waiting(4),
+      waiting(9),
+      waiting(5, { blocked: true }),
+      waiting(6, { claim: claim("k-6", bob.id, { expires_at: minutes(10) }) }),
+      waiting(7, { step_id: step.review }),
+      waiting(8, { project_id: ops.id }),
+      waiting(10, { aimed_at_id: bob.id }),
+    ];
+    const q = queueOf({ agent: agentBuilder, held: [holding], open, workflow: wf, projectId: web.id, now });
+    expect(q.map((t) => t.key)).toEqual(["WEB-9", "WEB-4"]);
+  });
+
+  it("is empty while the agent holds nothing, or has a Shift free", () => {
+    const open = [holding, waiting(4)];
+    expect(queueOf({ agent: agentBuilder, held: [], open, workflow: wf, projectId: web.id, now })).toEqual([]);
+    const two = { ...agentBuilder, agent: { ...agentBuilder.agent!, shifts: 2 } };
+    expect(queueOf({ agent: two, held: [holding], open, workflow: wf, projectId: web.id, now })).toEqual([]);
+  });
+});
+
 const tableRow = (name: string) => screen.getByRole("link", { name }).closest("tr")!;
 
 describe("a Project's Agents", () => {
@@ -88,6 +123,30 @@ describe("a Project's Agents", () => {
     await waitFor(() => expect(row).toHaveTextContent("1 lapse in 24h"));
     // ada is a human: not listed.
     expect(screen.queryByRole("link", { name: "ada" })).not.toBeInTheDocument();
+  });
+
+  it("lists every Shift the Runner runs for the agent, and under what it holds the Task waiting for it", async () => {
+    const second = task(5, { title: "Search", claim: claim("k-5", builder.id, { expires_at: minutes(12), heartbeat_timeout_seconds: 600 }) });
+    agentsApi({
+      sessions: [session("running"), session("waiting", { task_id: "k-5", session_id: "sess-2", tmux: "dk-WEB-5" })],
+      tasks: [second],
+    });
+    renderApp("/projects/WEB/agents?agent=builder");
+    const row = await waitFor(() => tableRow("builder"));
+    expect(row).toHaveTextContent("dk-WEB-3");
+    expect(row).toHaveTextContent("dk-WEB-5");
+    expect(within(row).getByText("Running")).toBeInTheDocument();
+    expect(within(row).getByText("Waiting")).toBeInTheDocument();
+    expect(row).toHaveTextContent("Payment form");
+    expect(row).toHaveTextContent("Search");
+    // Both Shifts are busy: WEB-4 waits at Build behind them.
+    const queue = within(row).getByRole("list", { name: "Waiting for builder" });
+    expect(queue).toHaveTextContent(/^↳\s*WEB-4\s*Cart\s*· waits at Build · 1m$/);
+    expect(within(queue).getByRole("link", { name: "WEB-4" })).toBeInTheDocument();
+
+    const peek = await screen.findByRole("dialog", { name: "Agent builder" });
+    expect(within(peek).getAllByRole("region", { name: /^Shift/ })).toHaveLength(2);
+    expect(within(peek).getByRole("list", { name: "Waiting for builder" })).toHaveTextContent("WEB-4");
   });
 
   it("of a Project with no agent, points an admin at the Project's Members", async () => {
