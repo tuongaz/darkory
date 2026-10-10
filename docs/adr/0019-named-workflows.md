@@ -22,3 +22,4 @@ Decided on 2026-10-09 with the owner, after separating two readings of "several 
 - An ended Task keeps the Step it ended at (`last_step_id`), so its card lands on the board of the Workflow it ended in; the Task is still at no Step.
 - A Connector into another Workflow's Step is drawn on both canvases: as an exit naming its target on the one it leaves, as an entry on the one it reaches.
 - Which Workflow a board opens on and how the switcher reads are decisions for the build, recorded in `docs/build/decisions.md`.
+- A new Project starts with three Workflows (2026-10-10, the owner's call pending): Implementation (Backlog · Plan · Build · Review), Bug triage, and Retrospective (Retro · Skill review), so the Steps a Parent's end files work at are their own Workflow and Implementation ends on its line; an existing Project keeps its Workflows.
