@@ -150,14 +150,14 @@ type fakeRunner struct {
 	nudged   []string
 	stopped  []string
 	// merge answers Merge, nil for ErrNoPullRequest.
-	merge func(task string, number int64, branch string) error
+	merge func(task string, number int64) error
 }
 
-func (f *fakeRunner) Merge(task string, number int64, branch string) error {
+func (f *fakeRunner) Merge(task string, number int64) error {
 	if f.merge == nil {
 		return runnerapi.ErrNoPullRequest
 	}
-	return f.merge(task, number, branch)
+	return f.merge(task, number)
 }
 
 func (f *fakeRunner) Sessions() []runnerapi.Session {

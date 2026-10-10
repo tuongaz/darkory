@@ -71,24 +71,24 @@ func TestPullRequestThroughTheClient(t *testing.T) {
 			t.Fatalf("no open pull request: %s", res.Body)
 		}
 		// The Runner refuses, in its words.
-		fake.merge = func(string, int64, string) error {
+		fake.merge = func(string, int64) error {
 			return errors.New("Pull request acme/web#7 is not mergeable: the base branch policy prohibits the merge")
 		}
 		res = got(ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusConflict)
 		if res.JSONDefault.Code != client.ErrorCodeConflict || !strings.Contains(res.JSONDefault.Message, "base branch policy prohibits") {
 			t.Fatalf("GitHub's refusal: %s", res.Body)
 		}
-		// The Runner merges, given the recorded number and the Task's branch; the server records
-		// the merge as the caller.
-		fake.merge = func(id string, number int64, branch string) error {
-			asked = append(asked, fmt.Sprintf("%s #%d %s", id, number, branch))
+		// The Runner merges, given the Task and the recorded number only; the server records the
+		// merge as the caller.
+		fake.merge = func(id string, number int64) error {
+			asked = append(asked, fmt.Sprintf("%s #%d", id, number))
 			return nil
 		}
 		done := got(ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusOK).JSON200
 		if done.PullRequest == nil || done.PullRequest.State != client.PullRequestMerged {
 			t.Fatalf("after the merge %+v", done.PullRequest)
 		}
-		if want := task.ID + " #7 " + strings.ToLower(task.Key) + "-checkout"; len(asked) != 1 || asked[0] != want {
+		if want := task.ID + " #7"; len(asked) != 1 || asked[0] != want {
 			t.Fatalf("the Runner was asked %v, want %s", asked, want)
 		}
 		kinds := []client.ActivityKind{client.ActivityKindTaskPullRequestMerged}

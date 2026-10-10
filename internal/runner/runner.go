@@ -466,7 +466,7 @@ func (r *Runner) Stop(task string) error {
 
 // Merge merges a Task's pull request on GitHub. Not yet: until the Runner reads pull requests it
 // finds none (docs/build/dogfood-followups-plan.md, Task 2).
-func (r *Runner) Merge(_ string, _ int64, _ string) error {
+func (r *Runner) Merge(_ string, _ int64) error {
 	return runnerapi.ErrNoPullRequest
 }
 

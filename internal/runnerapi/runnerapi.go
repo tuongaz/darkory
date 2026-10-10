@@ -72,13 +72,16 @@ type Runner interface {
 	Nudge(taskID string) error
 	// Stop ends the Task's session and releases its Claim with a Note.
 	Stop(taskID string) error
-	// Merge merges pull request number on GitHub, as the identity the Runner's gh signs in as,
-	// once it has checked there that its head is branch, the Task's, and its base the Workspace's
-	// default branch. It merges on GitHub only: the server records the merge on the Task, as the
-	// Member who asked. It returns ErrNoPullRequest when GitHub has no such pull request open; any
-	// other error is a refusal, a mismatch or GitHub's own, its message as the Runner read it,
-	// which the server shows as it is.
-	Merge(taskID string, number int64, branch string) error
+	// Merge merges the Task's pull request number on GitHub, as the identity the Runner's gh
+	// signs in as, once it has checked there that its head branch starts with the Task's branch
+	// prefix (branch.Prefix of its key: the Runner names a branch from the title when it makes
+	// it, and a renamed Task's branch still starts with its key) and that its base is that
+	// branch's own base: the Parent's branch for a Subtask, else the Workspace's default branch.
+	// It merges on GitHub only: the server records the merge on the Task, as the Member who
+	// asked. It returns ErrNoPullRequest when GitHub has no such pull request open; any other
+	// error is a refusal, a mismatch or GitHub's own, its message as the Runner read it, which the
+	// server shows as it is.
+	Merge(taskID string, number int64) error
 	// Attach bridges conn to the Task's terminal until either side ends or ctx is done, and
 	// closes conn. Binary messages carry the terminal's bytes both ways; a text message
 	// {"cols": n, "rows": n} resizes the view. With readonly, what the client sends is ignored.

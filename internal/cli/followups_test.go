@@ -46,8 +46,8 @@ func TestFollowupCommands(t *testing.T) {
 		var asked []string
 		fake := &oneSession{session: runnerapi.Session{TaskID: task.Task.ID, MemberID: task.Task.OwnerID, SessionID: "run-1", Host: "box",
 			StartedAt: time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC), State: runnerapi.StateRunning}}
-		fake.merge = func(_ string, number int64, branch string) error {
-			asked = append(asked, fmt.Sprintf("#%d %s", number, branch))
+		fake.merge = func(_ string, number int64) error {
+			asked = append(asked, fmt.Sprintf("#%d", number))
 			return nil
 		}
 		in.srv.AttachRunner(fake)
@@ -56,7 +56,7 @@ func TestFollowupCommands(t *testing.T) {
 			t.Fatalf("an agent merging: %s", res.stderr)
 		}
 		out = ada.ok("pr", "merge", "WEB-1")
-		if !strings.Contains(out, "\n  Pull request #7 merged https://github.com/acme/web/pull/7\n") || fmt.Sprint(asked) != "[#7 web-1-checkout]" {
+		if !strings.Contains(out, "\n  Pull request #7 merged https://github.com/acme/web/pull/7\n") || fmt.Sprint(asked) != "[#7]" {
 			t.Fatalf("pr merge, asked %v:\n%s", asked, out)
 		}
 		if out := bob.ok("show", "WEB-1"); !strings.Contains(out, "web: #7 merged") {

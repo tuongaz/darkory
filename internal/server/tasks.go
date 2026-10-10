@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
-	"github.com/tuongaz/darkory/internal/branch"
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/runnerapi"
 	"github.com/tuongaz/darkory/internal/server/gen"
@@ -236,8 +235,8 @@ func (s *Server) SetTaskPullRequest(w http.ResponseWriter, r *http.Request, task
 
 // MergeTaskPullRequest asks the Runner beside this server to merge the Task's open pull request:
 // by a human who is the Task's Owner or an admin, never an agent. The Runner is given the number
-// the record carries and the Task's branch, which it checks on GitHub before merging; it merges
-// only, and the server then records the merge as the caller, with a Note. Like Nudge and Stop it
+// the record carries and checks on GitHub that its head is the Task's branch before merging; it
+// merges only, and the server then records the merge of that number as the caller, with a Note. Like Nudge and Stop it
 // accepts an Idempotency-Key and keeps nothing under it: a repeat finds the pull request merged
 // and answers not_found.
 func (s *Server) MergeTaskPullRequest(w http.ResponseWriter, r *http.Request, task gen.TaskRef, _ gen.MergeTaskPullRequestParams) {
@@ -253,7 +252,7 @@ func (s *Server) MergeTaskPullRequest(w http.ResponseWriter, r *http.Request, ta
 		return
 	}
 	// The Runner has ids as the API writes them.
-	if err := run.Merge(shortid.Of(t.ID).String(), pr.Number, branch.Task(t.Key, t.Title)); err != nil {
+	if err := run.Merge(shortid.Of(t.ID).String(), pr.Number); err != nil {
 		if errors.Is(err, runnerapi.ErrNoPullRequest) {
 			writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, fmt.Sprintf("GitHub has no open pull request #%d for %s", pr.Number, t.Key))
 			return
