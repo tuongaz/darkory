@@ -335,3 +335,52 @@ func TestAgentMergedWriteIsCheckedOnGitHub(t *testing.T) {
 		}
 	})
 }
+
+// Evidence carries the Claim it belongs to through the API: the holder's own by default, the
+// Claim the Runner names for a Shift's log after the Shift ended, and none for a Member who does
+// not hold the Task; another Member's Claim named is refused forbidden.
+func TestEvidenceClaimThroughTheAPI(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		h := newHarness(t, st)
+		ctx := t.Context()
+		ada := h.admin
+		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(ada.AddProjectMemberWithResponse(ctx, "WEB", "ada", &client.AddProjectMemberParams{})).want(t, http.StatusNoContent)
+		bob, _ := h.member("bob", client.Agent, "WEB", "engineer")
+		task := h.file(bob, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Checkout"}).Task
+		attach := func(c *client.ClientWithResponses, claim *string, kind *client.EvidenceKind) *client.AttachTaskEvidenceResponse {
+			res, err := c.AttachTaskEvidenceWithBodyWithResponse(ctx, task.Key,
+				&client.AttachTaskEvidenceParams{Filename: "a.log", Kind: kind, Claim: (*client.EvidenceClaim)(claim)}, "text/plain", bytes.NewReader([]byte("ok")))
+			if err != nil {
+				t.Fatal(err)
+			}
+			return res
+		}
+		claimOf := func(res *client.AttachTaskEvidenceResponse) string {
+			if res.StatusCode() != http.StatusCreated {
+				t.Fatalf("attach: %d %s", res.StatusCode(), res.Body)
+			}
+			if res.JSON201.ClaimID == nil {
+				return "none"
+			}
+			return string(*res.JSON201.ClaimID)
+		}
+
+		claim := got(bob.ClaimTaskWithResponse(ctx, task.Key, &client.ClaimTaskParams{}, client.ClaimTaskBody{})).want(t, http.StatusOK).JSON200.Task.Claim
+		held := string(claim.ID)
+		if c := claimOf(attach(bob, nil, nil)); c != held {
+			t.Fatalf("the holder's attach belongs to %s, want %s", c, held)
+		}
+		got(bob.ReleaseTaskWithResponse(ctx, task.Key, &client.ReleaseTaskParams{}, client.ReleaseTaskBody{})).want(t, http.StatusOK)
+		log := client.EvidenceKindLog
+		if c := claimOf(attach(bob, &held, &log)); c != held {
+			t.Fatalf("the Shift's log belongs to %s, want %s", c, held)
+		}
+		if c := claimOf(attach(ada, nil, nil)); c != "none" {
+			t.Fatalf("a Member's attach belongs to %s", c)
+		}
+		if res := attach(ada, &held, &log); res.StatusCode() != http.StatusForbidden || !strings.Contains(res.JSONDefault.Message, "the Claim is not yours") {
+			t.Fatalf("another Member's Claim: %d %s", res.StatusCode(), res.Body)
+		}
+	})
+}

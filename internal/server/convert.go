@@ -198,7 +198,7 @@ func observationOut(o core.Observation) gen.Observation {
 }
 
 func evidenceOut(e core.Evidence) gen.Evidence {
-	return gen.Evidence{ID: shortid.Of(e.ID), TaskID: shortid.Of(e.TaskID), Kind: gen.EvidenceKind(e.Kind), Filename: e.Filename, ContentType: e.ContentType,
+	return gen.Evidence{ID: shortid.Of(e.ID), TaskID: shortid.Of(e.TaskID), Kind: gen.EvidenceKind(e.Kind), ClaimID: shortid.OfPtr(e.ClaimID), Filename: e.Filename, ContentType: e.ContentType,
 		Size: e.Size, Sha256: e.SHA256, AttachedBy: shortid.Of(e.AttachedBy), CreatedAt: e.CreatedAt}
 }
 
