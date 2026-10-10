@@ -2,11 +2,16 @@ package core
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/store"
 )
 
 func validTitle(title string) error {
@@ -745,12 +750,8 @@ func (s *Service) SetPullRequest(ctx context.Context, c *auth.Caller, ref string
 		if err := inProjectOrOwner(ctx, t, c, task, "record the pull request of"); err != nil {
 			return nil, err
 		}
-		landsByPR, err := landsByPullRequest(t, task)
-		if err != nil {
+		if _, err := pullRequestWorkspace(t, task); err != nil {
 			return nil, err
-		}
-		if !landsByPR {
-			return nil, refuse(CodeInvalid, "%s names no Workspace in pull_request mode, so no pull request lands it", task.Key)
 		}
 		was := task.PullRequest
 		if was != nil && *was == pr {
@@ -781,8 +782,18 @@ WHERE org_id = $4 AND id = $5`, pr.Number, pr.URL, pr.State, c.OrgID, task.ID); 
 	return res.(Task), nil
 }
 
+// GitHubHost is the host a pull request's address must be on: GH_HOST, gh's own variable for
+// GitHub Enterprise, when the server's environment sets it, else github.com.
+func GitHubHost() string {
+	if h := strings.TrimSpace(os.Getenv("GH_HOST")); h != "" {
+		return strings.ToLower(h)
+	}
+	return "github.com"
+}
+
 // validate refuses a pull request with no number, a state other than open or merged, or an
-// address that is not an http or https URL: the app links to it.
+// address that is not an https address on GitHub (GitHubHost): the app links to it, so nothing
+// else may be written there. A valid address is kept exactly as given.
 func (pr PullRequest) validate() error {
 	if pr.Number < 1 {
 		return refuse(CodeInvalid, "a pull request's number is 1 or more")
@@ -791,20 +802,94 @@ func (pr PullRequest) validate() error {
 		return refuse(CodeInvalid, "a pull request is open or merged, not %q", pr.State)
 	}
 	u, err := url.Parse(pr.URL)
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || len(pr.URL) > 2000 {
-		return refuse(CodeInvalid, "a pull request's url is its http or https address, at most 2000 characters")
+	if err != nil || u.Scheme != "https" || u.User != nil || !strings.EqualFold(u.Host, GitHubHost()) || len(pr.URL) > 2000 {
+		return refuse(CodeInvalid, "the pull request's address is not on GitHub: an https address on %s, at most 2000 characters", GitHubHost())
 	}
 	return nil
 }
 
-// landsByPullRequest says whether task names a Workspace in pull_request mode: one of its own,
-// or, when it names none, its Project's default.
-func landsByPullRequest(t *tx, task Task) (bool, error) {
-	var n int
-	err := t.QueryRow(t.ctx, `SELECT COUNT(*) FROM workspaces w WHERE w.org_id = $1 AND w.mode = 'pull_request' AND (
-	w.id IN (SELECT tw.workspace_id FROM task_workspaces tw WHERE tw.org_id = $1 AND tw.task_id = $2)
-	OR (NOT EXISTS (SELECT 1 FROM task_workspaces tw WHERE tw.org_id = $1 AND tw.task_id = $2)
-		AND w.id = (SELECT p.default_workspace_id FROM projects p WHERE p.org_id = $1 AND p.id = $3)))`,
-		t.caller.OrgID, task.ID, task.ProjectID).Scan(&n)
-	return n > 0, err
+// pullRequestWorkspace is the name of the Workspace in pull_request mode task lands through: the
+// first of its own in that mode or, when it names none, its Project's default when in that mode.
+// With none it refuses invalid.
+func pullRequestWorkspace(t *tx, task Task) (string, error) {
+	var name string
+	err := t.QueryRow(t.ctx, `SELECT w.name FROM workspaces w
+	LEFT JOIN task_workspaces tw ON tw.org_id = w.org_id AND tw.workspace_id = w.id AND tw.task_id = $2
+	WHERE w.org_id = $1 AND w.mode = 'pull_request' AND (tw.task_id IS NOT NULL
+		OR (NOT EXISTS (SELECT 1 FROM task_workspaces xw WHERE xw.org_id = $1 AND xw.task_id = $2)
+			AND w.id = (SELECT p.default_workspace_id FROM projects p WHERE p.org_id = $1 AND p.id = $3)))
+	ORDER BY tw.position LIMIT 1`, t.caller.OrgID, task.ID, task.ProjectID).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", refuse(CodeInvalid, "%s names no Workspace in pull_request mode, so no pull request lands it", task.Key)
+	}
+	return name, err
+}
+
+// MayMergePullRequest returns the Task ref names and its open pull request when the caller may
+// have it merged: a human, its Owner or an admin. Merging lands the work in the default branch as
+// the identity the Runner's gh signs in as, so it is a human's act; an agent, even the Owner, is
+// refused forbidden. A Task with no open pull request recorded is refused not_found.
+func (s *Service) MayMergePullRequest(ctx context.Context, c *auth.Caller, ref string) (Task, PullRequest, error) {
+	id, err := resolveTask(ctx, s.store, c.OrgID, ref)
+	if err != nil {
+		return Task{}, PullRequest{}, err
+	}
+	task, err := getTask(ctx, s.store, c.OrgID, id, s.clock.Now())
+	if err != nil {
+		return Task{}, PullRequest{}, err
+	}
+	pr, err := mayMerge(ctx, s.store, c, task)
+	return task, pr, err
+}
+
+func mayMerge(ctx context.Context, r store.Reader, c *auth.Caller, task Task) (PullRequest, error) {
+	m, err := getMember(ctx, r, c.OrgID, c.MemberID)
+	if err != nil {
+		return PullRequest{}, err
+	}
+	if m.Kind != "human" {
+		return PullRequest{}, refuse(CodeForbidden, "merging is a human's act; an agent may not merge the pull request of %s", task.Key)
+	}
+	if task.OwnerID != c.MemberID && !c.Admin {
+		return PullRequest{}, refuse(CodeForbidden, "only the Owner of %s or an admin may merge its pull request", task.Key)
+	}
+	if task.PullRequest == nil || task.PullRequest.State != PullRequestOpen {
+		return PullRequest{}, refuse(CodeNotFound, "%s carries no open pull request", task.Key)
+	}
+	return *task.PullRequest, nil
+}
+
+// RecordMerge records, as the caller who asked for it, that the Runner merged the Task's open
+// pull request on GitHub: in one write, its state merged, task.pull_request_merged with the
+// caller as actor, and the Note "<Workspace>: #<n> merged". The caller is held to
+// MayMergePullRequest's rules again under the counter.
+func (s *Service) RecordMerge(ctx context.Context, c *auth.Caller, ref string, idem Idem) (Task, error) {
+	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
+		task, err := taskOf(t, ref)
+		if err != nil {
+			return nil, err
+		}
+		pr, err := mayMerge(ctx, t, c, task)
+		if err != nil {
+			return nil, err
+		}
+		ws, err := pullRequestWorkspace(t, task)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := t.Exec(ctx, `UPDATE tasks SET pull_request_state = $1 WHERE org_id = $2 AND id = $3`, PullRequestMerged, c.OrgID, task.ID); err != nil {
+			return nil, err
+		}
+		if err := t.recordByCaller("task.pull_request_merged", task.ID, map[string]any{"number": pr.Number, "url": pr.URL}); err != nil {
+			return nil, err
+		}
+		if err := addNote(t, task.ID, nil, fmt.Sprintf("%s: #%d merged", ws, pr.Number)); err != nil {
+			return nil, err
+		}
+		return getTask(ctx, t, c.OrgID, task.ID, t.now)
+	})
+	if err != nil {
+		return Task{}, err
+	}
+	return res.(Task), nil
 }

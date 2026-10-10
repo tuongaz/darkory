@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -36,53 +38,69 @@ func TestPullRequestThroughTheClient(t *testing.T) {
 		if set.PullRequest == nil || set.PullRequest.Number != 7 || set.PullRequest.State != client.PullRequestOpen {
 			t.Fatalf("recorded %+v", set.PullRequest)
 		}
-		bad := pr
-		bad.URL = "javascript:alert(1)"
-		if res := got(cy.SetTaskPullRequestWithResponse(ctx, task.Key, &client.SetTaskPullRequestParams{}, bad)).want(t, http.StatusBadRequest); res.JSONDefault.Code != client.ErrorCodeInvalid {
-			t.Fatalf("a javascript: address: %s", res.Body)
+		for _, addr := range []string{"javascript:alert(1)", "http://github.com/acme/web/pull/7", "https://evil.example/acme/web/pull/7"} {
+			bad := pr
+			bad.URL = addr
+			if res := got(cy.SetTaskPullRequestWithResponse(ctx, task.Key, &client.SetTaskPullRequestParams{}, bad)).want(t, http.StatusBadRequest); res.JSONDefault.Code != client.ErrorCodeInvalid {
+				t.Fatalf("%s: %s", addr, res.Body)
+			}
 		}
+		zero := pr
+		zero.Number = 0
+		got(cy.SetTaskPullRequestWithResponse(ctx, task.Key, &client.SetTaskPullRequestParams{}, zero)).want(t, http.StatusBadRequest)
 		open := got(ada.ListTasksWithResponse(ctx, &client.ListTasksParams{Filter: &[]string{"pull_request:is:open"}})).want(t, http.StatusOK).JSON200
 		if len(open.Items) != 1 || open.Items[0].Key != task.Key {
 			t.Fatalf("pull_request:is:open listed %+v", open.Items)
 		}
 
 		// No Runner attached.
-		res := got(bob.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusConflict)
+		res := got(ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusConflict)
 		if res.JSONDefault.Code != client.ErrorCodeNoRunner {
 			t.Fatalf("without a Runner: %s", res.Body)
 		}
 		var asked []string
 		fake := &fakeRunner{}
 		h.srv.AttachRunner(fake)
-		// Neither the Owner nor an admin.
+		// An agent, though the Task's Owner, and a human neither its Owner nor an admin.
+		if res := got(bob.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusForbidden); !strings.Contains(res.JSONDefault.Message, "human's act") {
+			t.Fatalf("an agent merging: %s", res.Body)
+		}
 		got(cy.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusForbidden)
-		// The Runner finds none open.
-		if res := got(bob.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusNotFound); res.JSONDefault.Code != client.ErrorCodeNotFound {
+		// GitHub has no such pull request open.
+		if res := got(ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusNotFound); res.JSONDefault.Code != client.ErrorCodeNotFound {
 			t.Fatalf("no open pull request: %s", res.Body)
 		}
-		// GitHub refuses, in its words.
-		fake.merge = func(string, string) error {
+		// The Runner refuses, in its words.
+		fake.merge = func(string, int64, string) error {
 			return errors.New("Pull request acme/web#7 is not mergeable: the base branch policy prohibits the merge")
 		}
-		res = got(bob.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusConflict)
+		res = got(ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusConflict)
 		if res.JSONDefault.Code != client.ErrorCodeConflict || !strings.Contains(res.JSONDefault.Message, "base branch policy prohibits") {
 			t.Fatalf("GitHub's refusal: %s", res.Body)
 		}
-		// The Runner merges and records it; the answer is the Task as it reads after.
-		fake.merge = func(id, by string) error {
-			asked = append(asked, id+" "+by)
-			merged := pr
-			merged.State = client.PullRequestMerged
-			got(bob.SetTaskPullRequestWithResponse(ctx, id, &client.SetTaskPullRequestParams{}, merged)).want(t, http.StatusOK)
+		// The Runner merges, given the recorded number and the Task's branch; the server records
+		// the merge as the caller.
+		fake.merge = func(id string, number int64, branch string) error {
+			asked = append(asked, fmt.Sprintf("%s #%d %s", id, number, branch))
 			return nil
 		}
 		done := got(ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusOK).JSON200
 		if done.PullRequest == nil || done.PullRequest.State != client.PullRequestMerged {
 			t.Fatalf("after the merge %+v", done.PullRequest)
 		}
-		if len(asked) != 1 || asked[0] != task.ID+" ada" {
-			t.Fatalf("the Runner was asked %v", asked)
+		if want := task.ID + " #7 " + strings.ToLower(task.Key) + "-checkout"; len(asked) != 1 || asked[0] != want {
+			t.Fatalf("the Runner was asked %v, want %s", asked, want)
 		}
+		kinds := []client.ActivityKind{client.ActivityKindTaskPullRequestMerged}
+		merged := got(ada.ListActivityWithResponse(ctx, &client.ListActivityParams{Kind: &kinds})).want(t, http.StatusOK).JSON200.Items
+		if len(merged) != 1 || merged[0].ActorID == nil || shortid.Canonical(*merged[0].ActorID) != shortid.Canonical(h.adminID) {
+			t.Fatalf("task.pull_request_merged %+v", merged)
+		}
+		detail := got(ada.GetTaskWithResponse(ctx, task.Key)).want(t, http.StatusOK).JSON200
+		if n := detail.Notes; len(n) != 1 || n[0].Body != "web: #7 merged" {
+			t.Fatalf("Notes %+v", n)
+		}
+		got(ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})).want(t, http.StatusNotFound)
 		if res := got(cy.SetTaskPullRequestWithResponse(ctx, task.Key, &client.SetTaskPullRequestParams{}, pr)).want(t, http.StatusConflict); !strings.Contains(res.JSONDefault.Message, "#7 is already merged") {
 			t.Fatalf("open over merged: %s", res.Body)
 		}

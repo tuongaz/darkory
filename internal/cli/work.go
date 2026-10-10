@@ -36,7 +36,7 @@ var workCommands = []command{
 	{path: "observations", args: "<task> [--all]", short: "list the Observations on a Task and its Subtasks not yet reviewed", run: cmdObservations},
 	{path: "attach", args: "<task> <file> [--type mime] [--name filename] [--kind evidence|log]", short: "attach Evidence", run: cmdAttach},
 	{path: "pr set", args: "<task> --number n --link u --state open|merged", short: "record the pull request a Task's branch lands through", run: cmdPRSet},
-	{path: "pr merge", args: "<task>", short: "merge a Task's open pull request through the Runner beside the server (Owner or admin)", run: cmdPRMerge},
+	{path: "pr merge", args: "<task>", short: "merge a Task's open pull request through the Runner beside the server (a human: its Owner or an admin)", run: cmdPRMerge},
 	{path: "evidence get", args: "<id> [-o file|-]", short: "show an Evidence record, or download its file", run: cmdEvidenceGet},
 	{path: "file", args: "--title t (--project p | --parent task | --blocks task --aim member) [--step s] [--breakdown] [--blocked-by task,…] [--label l]… [--owner m] [--workspace ws]… [--body text|-]", short: "file a Task; with --parent, a Subtask; with --blocks, a question that blocks a Task", run: cmdFile},
 	{path: "block", args: "<task> --by <task>", short: "let a Task block another", run: cmdBlock},

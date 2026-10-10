@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,7 +38,7 @@ func TestFollowupCommands(t *testing.T) {
 		if out := bob.ok("tasks", "--filter", "pull_request:is:open"); !strings.Contains(out, "WEB-1") {
 			t.Fatalf("tasks with an open pull request:\n%s", out)
 		}
-		if res := bob.fails(ExitFailed, "pr", "merge", "WEB-1"); !strings.Contains(res.stderr, "no_runner") {
+		if res := ada.fails(ExitFailed, "pr", "merge", "WEB-1"); !strings.Contains(res.stderr, "no_runner") {
 			t.Fatalf("pr merge without a Runner: %s", res.stderr)
 		}
 		var task client.TaskDetail
@@ -45,15 +46,21 @@ func TestFollowupCommands(t *testing.T) {
 		var asked []string
 		fake := &oneSession{session: runnerapi.Session{TaskID: task.Task.ID, MemberID: task.Task.OwnerID, SessionID: "run-1", Host: "box",
 			StartedAt: time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC), State: runnerapi.StateRunning}}
-		fake.merge = func(id, by string) error {
-			asked = append(asked, by)
-			bob.ok("pr", "set", id, "--number", "7", "--link", "https://github.com/acme/web/pull/7", "--state", "merged")
+		fake.merge = func(_ string, number int64, branch string) error {
+			asked = append(asked, fmt.Sprintf("#%d %s", number, branch))
 			return nil
 		}
 		in.srv.AttachRunner(fake)
+		// Merging is a human's act: bob, an agent, owns WEB-1 and is refused.
+		if res := bob.fails(ExitRefused, "pr", "merge", "WEB-1"); !strings.Contains(res.stderr, "human's act") {
+			t.Fatalf("an agent merging: %s", res.stderr)
+		}
 		out = ada.ok("pr", "merge", "WEB-1")
-		if !strings.Contains(out, "\n  Pull request #7 merged https://github.com/acme/web/pull/7\n") || len(asked) != 1 || asked[0] != "ada" {
+		if !strings.Contains(out, "\n  Pull request #7 merged https://github.com/acme/web/pull/7\n") || fmt.Sprint(asked) != "[#7 web-1-checkout]" {
 			t.Fatalf("pr merge, asked %v:\n%s", asked, out)
+		}
+		if out := bob.ok("show", "WEB-1"); !strings.Contains(out, "web: #7 merged") {
+			t.Fatalf("show after the merge:\n%s", out)
 		}
 
 		// Evidence kind.

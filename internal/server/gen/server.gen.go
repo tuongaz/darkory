@@ -1688,7 +1688,9 @@ type SetTaskLabelsBody struct {
 type SetTaskPullRequestBody struct {
 	Number int64            `json:"number"`
 	State  PullRequestState `json:"state"`
-	URL    string           `json:"url"`
+
+	// URL The pull request's `https` address on `github.com`, or on the host `GH_HOST` names.
+	URL string `json:"url"`
 }
 
 // SetWorkflowBody defines model for SetWorkflowBody.

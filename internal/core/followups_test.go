@@ -45,6 +45,11 @@ func TestSetPullRequest(t *testing.T) {
 			{Number: 7, URL: open7.URL, State: "closed"},
 			{Number: 7, URL: "javascript:alert(1)", State: "open"},
 			{Number: 7, URL: "", State: "open"},
+			{Number: 7, URL: "http://github.com/acme/web/pull/7", State: "open"},
+			{Number: 7, URL: "https://gitlab.com/acme/web/pull/7", State: "open"},
+			{Number: 7, URL: "https://github.com.evil.example/acme/web/pull/7", State: "open"},
+			{Number: 7, URL: "https://user@github.com/acme/web/pull/7", State: "open"},
+			{Number: -1, URL: "https://github.com/acme/web/pull/7", State: "open"},
 		} {
 			if _, err := f.svc.SetPullRequest(ctx, lead, task.Key, bad, core.Idem{}); codeOf(err) != core.CodeInvalid {
 				t.Errorf("%+v: %v, want invalid", bad, err)
@@ -350,5 +355,104 @@ func TestAgentShifts(t *testing.T) {
 		if err != nil || got.Member.Agent.Shifts != 1 {
 			t.Fatalf("stored without shifts: %+v, %v", got.Member.Agent, err)
 		}
+	})
+}
+
+// A pull request's address is on github.com, or on the host GH_HOST names when the server's
+// environment sets it.
+func TestPullRequestOnGHHost(t *testing.T) {
+	t.Setenv("GH_HOST", "git.acme.example")
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.project("WEB")
+		if _, err := f.svc.CreateWorkspace(ctx, f.admin, core.NewWorkspace{Name: "web", Path: "/src/web", Mode: "pull_request"}, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		lead := f.member("lead", []string{"WEB"}, nil)
+		task := f.fileTask(lead, core.NewTask{Project: ptrStr("WEB"), Title: "x", Step: ptrStr("Build"), Workspaces: &[]string{"web"}}).Task
+		on := core.PullRequest{Number: 3, URL: "https://git.acme.example/acme/web/pull/3", State: core.PullRequestOpen}
+		got, err := f.svc.SetPullRequest(ctx, lead, task.Key, on, core.Idem{})
+		if err != nil || got.PullRequest.URL != on.URL {
+			t.Fatalf("on GH_HOST: %+v, %v", got.PullRequest, err)
+		}
+		off := on
+		off.URL = "https://github.com/acme/web/pull/3"
+		_, err = f.svc.SetPullRequest(ctx, lead, task.Key, off, core.Idem{})
+		wantCode(t, err, core.CodeInvalid)
+		if !strings.Contains(err.Error(), "not on GitHub") {
+			t.Errorf("refused with %q", err)
+		}
+	})
+}
+
+// Merging is a human's act: a human Owner or an admin may have the open pull request merged, an
+// agent never, its Owner included; the merge is recorded as the human who asked, with a Note.
+func TestMergePullRequest(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.project("WEB")
+		if _, err := f.svc.CreateWorkspace(ctx, f.admin, core.NewWorkspace{Name: "web", Path: "/src/web", Mode: "pull_request"}, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		agent := f.member("builder", []string{"WEB"}, nil)
+		hm, err := f.svc.CreateMember(ctx, f.admin, core.NewMember{Name: "cy", Kind: "human"}, core.Idem{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.svc.AddProjectMember(ctx, f.admin, "WEB", hm.ID, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		tok, err := f.svc.IssueToken(ctx, f.admin, hm.ID, "main", 0, core.Idem{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.secrets[hm.ID] = tok.Secret
+		cy := f.session(hm.ID, "cy-1")
+
+		byAgent := f.fileTask(agent, core.NewTask{Project: ptrStr("WEB"), Title: "agent's", Step: ptrStr("Build"), Workspaces: &[]string{"web"}}).Task
+		byHuman := f.fileTask(cy, core.NewTask{Project: ptrStr("WEB"), Title: "cy's", Step: ptrStr("Build"), Workspaces: &[]string{"web"}}).Task
+		pr := core.PullRequest{Number: 7, URL: "https://github.com/acme/web/pull/7", State: core.PullRequestOpen}
+
+		// No pull request yet.
+		_, _, err = f.svc.MayMergePullRequest(ctx, cy, byHuman.Key)
+		wantCode(t, err, core.CodeNotFound)
+		for _, k := range []string{byAgent.Key, byHuman.Key} {
+			if _, err := f.svc.SetPullRequest(ctx, agent, k, pr, core.Idem{}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// The agent is its Owner, and still refused.
+		_, _, err = f.svc.MayMergePullRequest(ctx, agent, byAgent.Key)
+		wantCode(t, err, core.CodeForbidden)
+		if !strings.Contains(err.Error(), "human's act") {
+			t.Errorf("refused with %q", err)
+		}
+		_, err = f.svc.RecordMerge(ctx, agent, byAgent.Key, core.Idem{})
+		wantCode(t, err, core.CodeForbidden)
+		// A human neither its Owner nor an admin.
+		_, _, err = f.svc.MayMergePullRequest(ctx, cy, byAgent.Key)
+		wantCode(t, err, core.CodeForbidden)
+		// The human Owner, and an admin.
+		if _, got, err := f.svc.MayMergePullRequest(ctx, cy, byHuman.Key); err != nil || got != pr {
+			t.Fatalf("the human Owner: %+v, %v", got, err)
+		}
+		merged, err := f.svc.RecordMerge(ctx, f.admin, byAgent.Key, core.Idem{})
+		if err != nil || merged.PullRequest.State != core.PullRequestMerged || merged.PullRequest.URL != pr.URL {
+			t.Fatalf("an admin's merge: %+v, %v", merged.PullRequest, err)
+		}
+		entries := f.activity("task.pull_request_merged")
+		if len(entries) != 1 || entries[0].ActorID == nil || *entries[0].ActorID != f.admin.MemberID || entries[0].SubjectID != byAgent.ID {
+			t.Fatalf("task.pull_request_merged %+v", entries)
+		}
+		notes := f.get(byAgent.Key).Notes
+		if len(notes) != 1 || notes[0].Body != "web: #7 merged" || notes[0].AuthorID != f.admin.MemberID {
+			t.Fatalf("Notes %+v", notes)
+		}
+		// Merged, there is nothing open to merge.
+		_, _, err = f.svc.MayMergePullRequest(ctx, f.admin, byAgent.Key)
+		wantCode(t, err, core.CodeNotFound)
+		f.checkActivity()
 	})
 }

@@ -1,11 +1,14 @@
 package server
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/branch"
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/runnerapi"
 	"github.com/tuongaz/darkory/internal/server/gen"
@@ -231,19 +234,17 @@ func (s *Server) SetTaskPullRequest(w http.ResponseWriter, r *http.Request, task
 	})
 }
 
-// MergeTaskPullRequest asks the Runner beside this server to merge the Task's open pull request,
-// by the Task's Owner or an admin; the Runner records the merge on the Task, which is answered as
-// it reads after. Like Nudge and Stop it accepts an Idempotency-Key and keeps nothing under it:
-// a repeat finds the pull request merged and answers not_found.
+// MergeTaskPullRequest asks the Runner beside this server to merge the Task's open pull request:
+// by a human who is the Task's Owner or an admin, never an agent. The Runner is given the number
+// the record carries and the Task's branch, which it checks on GitHub before merging; it merges
+// only, and the server then records the merge as the caller, with a Note. Like Nudge and Stop it
+// accepts an Idempotency-Key and keeps nothing under it: a repeat finds the pull request merged
+// and answers not_found.
 func (s *Server) MergeTaskPullRequest(w http.ResponseWriter, r *http.Request, task gen.TaskRef, _ gen.MergeTaskPullRequestParams) {
 	ctx, c := r.Context(), caller(r)
-	d, err := s.core.GetTask(ctx, c, task)
+	t, pr, err := s.core.MayMergePullRequest(ctx, c, task)
 	if err != nil {
 		s.fail(w, r, err)
-		return
-	}
-	if d.Task.OwnerID != c.MemberID && !c.Admin {
-		writeError(w, http.StatusForbidden, gen.ErrorCodeForbidden, "only the Owner of "+d.Task.Key+" or an admin may merge its pull request")
 		return
 	}
 	run := s.theRunner()
@@ -251,16 +252,17 @@ func (s *Server) MergeTaskPullRequest(w http.ResponseWriter, r *http.Request, ta
 		noRunner(w)
 		return
 	}
-	if err := run.Merge(ctx, shortid.Of(d.Task.ID).String(), c.Name); err != nil { // the Runner has ids as the API writes them
+	// The Runner has ids as the API writes them.
+	if err := run.Merge(shortid.Of(t.ID).String(), pr.Number, branch.Task(t.Key, t.Title)); err != nil {
 		if errors.Is(err, runnerapi.ErrNoPullRequest) {
-			writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, d.Task.Key+" carries no open pull request")
+			writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, fmt.Sprintf("GitHub has no open pull request #%d for %s", pr.Number, t.Key))
 			return
 		}
 		writeError(w, http.StatusConflict, gen.ErrorCodeConflict, err.Error())
 		return
 	}
-	t, err := s.core.GetTask(ctx, c, d.Task.ID)
-	s.respond(w, r, as(http.StatusOK, func(d core.TaskDetail) any { return taskOut(d.Task) }), t, err)
+	merged, err := s.core.RecordMerge(context.WithoutCancel(ctx), c, t.ID, core.Idem{})
+	s.respond(w, r, as(http.StatusOK, func(t core.Task) any { return taskOut(t) }), merged, err)
 }
 
 func (s *Server) SetTaskLabels(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.SetTaskLabelsParams) {

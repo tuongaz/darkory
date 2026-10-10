@@ -1267,14 +1267,17 @@ export interface paths {
         get?: never;
         /**
          * Record the pull request a Task's branch lands through
-         * @description Written by the Runner when it finds a pull request for the Task's branch on GitHub, and
-         *     again when it is merged. By the Task's Owner or a Member of its Project, whoever holds it,
-         *     open or ended: the next holder may already have the Task when the pull request is read.
-         *     Writing the values the Task already carries changes nothing and records nothing. Records
-         *     `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
-         *     a write of `merged`. Errors: `forbidden`, `invalid` (the Task names no Workspace in
-         *     `pull_request` mode, through its own Workspaces or else its Project's default),
-         *     `conflict` (`open` written over a pull request already merged).
+         * @description The Runner is its normal writer: it records a pull request it finds open for the Task's
+         *     branch on GitHub, and again one it finds merged. Any Member of the Task's Project may
+         *     write it, and its Owner, whoever holds the Task, open or ended: the next holder may
+         *     already have the Task when the pull request is read. `url` is kept as given once valid:
+         *     an `https` address on `github.com`, or on the host the server's `GH_HOST` names when it is
+         *     set. Writing the values the Task already carries changes nothing and records nothing.
+         *     Records `task.pull_request_opened` on the first write of `open` and
+         *     `task.pull_request_merged` on a write of `merged`. Errors: `forbidden`, `invalid` (the
+         *     address is not on GitHub; the Task names no Workspace in `pull_request` mode, through its
+         *     own Workspaces or else its Project's default), `conflict` (`open` written over a pull
+         *     request already merged).
          */
         put: operations["setTaskPullRequest"];
         post?: never;
@@ -1296,10 +1299,15 @@ export interface paths {
         /**
          * Merge a Task's open pull request
          * @description The Runner beside this server merges the Task's open pull request on GitHub, as the
-         *     identity its `gh` signs in as, then records it merged on the Task. By the Task's Owner or
-         *     an admin. Errors: `forbidden`, `no_runner` (no Runner is attached to this server),
-         *     `not_found` (the Task carries no open pull request), `conflict` (GitHub refused the
-         *     merge; the message is GitHub's, as the Runner read it).
+         *     identity its `gh` signs in as, once it has checked there that the pull request numbered
+         *     as the record says has the Task's branch as its head and the Workspace's default branch as
+         *     its base. The server then records it merged as the caller, with the Note
+         *     "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who is the
+         *     Task's Owner or an admin; an agent is refused, its Owner too. Errors: `forbidden`,
+         *     `no_runner` (no Runner is attached to this server), `not_found` (the Task carries no open
+         *     pull request, or GitHub has none so numbered open), `conflict` (the pull request's head
+         *     or base is not the Task's, or GitHub refused the merge; the message is the Runner's, as
+         *     it read it from `gh`).
          */
         post: operations["mergeTaskPullRequest"];
         delete?: never;
@@ -2690,6 +2698,7 @@ export interface components {
         SetTaskPullRequestBody: {
             /** Format: int64 */
             number: number;
+            /** @description The pull request's `https` address on `github.com`, or on the host `GH_HOST` names. */
             url: string;
             state: components["schemas"]["PullRequestState"];
         };
