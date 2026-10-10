@@ -800,8 +800,11 @@ func GitHubHost() string {
 	return strings.ToLower(strings.TrimRight(h, "/"))
 }
 
-// pullPath is the path of a pull request's own page on GitHub: /<owner>/<repo>/pull/<number>.
-var pullPath = regexp.MustCompile(`^/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/pull/([1-9][0-9]*)$`)
+// pullPath is the path of a pull request's own page on GitHub: /<owner>/<repo>/pull/<number>. An
+// owner is letters, digits and hyphens, starting with a letter or digit, as GitHub names them; a
+// repository is letters, digits, dots, hyphens and underscores, never . or .. (Validate checks
+// that), since a browser would resolve those to another page than the one written.
+var pullPath = regexp.MustCompile(`^/[A-Za-z0-9][A-Za-z0-9-]*/([A-Za-z0-9._-]+)/pull/([1-9][0-9]*)$`)
 
 // Validate refuses a pull request with no number, a state other than open or merged, or an
 // address that is not the https address of that pull request's own page on GitHub (GitHubHost),
@@ -819,7 +822,7 @@ func (pr PullRequest) Validate() error {
 		return refuse(CodeInvalid, "the pull request's address is not on GitHub: an https address on %s, at most 2000 characters", GitHubHost())
 	}
 	m := pullPath.FindStringSubmatch(u.EscapedPath())
-	if m == nil || m[1] != strconv.FormatInt(pr.Number, 10) || strings.ContainsAny(pr.URL, "?#") {
+	if m == nil || m[1] == "." || m[1] == ".." || m[2] != strconv.FormatInt(pr.Number, 10) || strings.ContainsAny(pr.URL, "?#") {
 		return refuse(CodeInvalid, "the address is not pull request #%d's: https://%s/<owner>/<repo>/pull/%d, with no query or fragment",
 			pr.Number, GitHubHost(), pr.Number)
 	}
@@ -885,7 +888,8 @@ func mayMerge(ctx context.Context, r store.Reader, c *auth.Caller, task Task) er
 // of the Task on GitHub: in one write, its state merged, task.pull_request_merged with the caller
 // as actor, and the Note "<Workspace>: #<n> merged". The caller is held to mayMerge's rules again
 // under the counter. A Task whose pull request is now another is refused conflict; one already
-// carrying number merged is recorded again, since a second recorder of one merge is no error.
+// carrying number merged is recorded again, since a second recorder of one merge is no error: its
+// task.pull_request_merged entry credits the caller who asked, with no second Note.
 func (s *Service) RecordMerge(ctx context.Context, c *auth.Caller, taskID string, number int64, idem Idem) (Task, error) {
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		task, err := taskOf(t, taskID)
@@ -906,7 +910,8 @@ func (s *Service) RecordMerge(ctx context.Context, c *auth.Caller, taskID string
 		if err != nil {
 			return nil, err
 		}
-		if pr.State != PullRequestMerged {
+		already := pr.State == PullRequestMerged
+		if !already {
 			if _, err := t.Exec(ctx, `UPDATE tasks SET pull_request_state = $1 WHERE org_id = $2 AND id = $3`, PullRequestMerged, c.OrgID, task.ID); err != nil {
 				return nil, err
 			}
@@ -914,8 +919,10 @@ func (s *Service) RecordMerge(ctx context.Context, c *auth.Caller, taskID string
 		if err := t.recordByCaller("task.pull_request_merged", task.ID, map[string]any{"number": pr.Number, "url": pr.URL}); err != nil {
 			return nil, err
 		}
-		if err := addNote(t, task.ID, nil, fmt.Sprintf("%s: #%d merged", ws, pr.Number)); err != nil {
-			return nil, err
+		if !already {
+			if err := addNote(t, task.ID, nil, fmt.Sprintf("%s: #%d merged", ws, pr.Number)); err != nil {
+				return nil, err
+			}
 		}
 		return getTask(ctx, t, c.OrgID, task.ID, t.now)
 	})

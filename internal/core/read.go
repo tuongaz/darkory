@@ -456,12 +456,12 @@ func getSkillDetail(ctx context.Context, r store.Reader, orgID, id string) (Skil
 	return d, err
 }
 
-const evidenceCols = `e.id, e.task_id, e.kind, e.filename, e.content_type, e.size, e.sha256, e.attached_by, e.created_at, e.blob_key`
+const evidenceCols = `e.id, e.task_id, e.kind, e.claim_id, e.filename, e.content_type, e.size, e.sha256, e.attached_by, e.created_at, e.blob_key`
 
 func scanEvidence(row interface{ Scan(...any) error }) (Evidence, error) {
 	var e Evidence
 	var at int64
-	err := row.Scan(&e.ID, &e.TaskID, &e.Kind, &e.Filename, &e.ContentType, &e.Size, &e.SHA256, &e.AttachedBy, &at, &e.BlobKey)
+	err := row.Scan(&e.ID, &e.TaskID, &e.Kind, &e.ClaimID, &e.Filename, &e.ContentType, &e.Size, &e.SHA256, &e.AttachedBy, &at, &e.BlobKey)
 	e.CreatedAt = fromMS(at)
 	return e, err
 }

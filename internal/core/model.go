@@ -374,7 +374,11 @@ type Evidence struct {
 	TaskID string
 	// Kind is EvidenceKindEvidence, about the work, or EvidenceKindLog, a Shift's terminal log,
 	// which belongs to the Claim the Shift worked under.
-	Kind        string
+	Kind string
+	// ClaimID is the Claim it was attached under: the attacher's own when it held the Task, or
+	// the Claim a Shift's log belongs to; nil for Evidence attached by a Member who did not hold
+	// the Task, and for Evidence from before it was recorded.
+	ClaimID     *string
 	Filename    string
 	ContentType string
 	Size        int64

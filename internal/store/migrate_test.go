@@ -643,6 +643,10 @@ VALUES ($1, 'o', 't', $2, 'text/plain', 1, 'x', $1, 'm', 0)`, id, name); err != 
 			if err := s.QueryRow(ctx, `SELECT COUNT(*) FROM tasks WHERE pull_request_number IS NULL AND pull_request_url IS NULL AND pull_request_state IS NULL`).Scan(&prs); err != nil || prs != 1 {
 				t.Fatalf("Tasks with no pull request: %d, %v", prs, err)
 			}
+			var noClaim int
+			if err := s.QueryRow(ctx, `SELECT COUNT(*) FROM evidence WHERE claim_id IS NULL`).Scan(&noClaim); err != nil || noClaim != 4 {
+				t.Fatalf("Evidence under no Claim: %d, %v", noClaim, err)
+			}
 		})
 	}
 }

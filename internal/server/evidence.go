@@ -30,7 +30,11 @@ func (s *Server) AttachTaskEvidence(w http.ResponseWriter, r *http.Request, task
 	if params.Kind != nil {
 		kind = *params.Kind
 	}
-	s.attachEvidence(w, r, core.EvidenceTarget{Task: task}, params.Filename, string(kind), params.IdempotencyKey)
+	target := core.EvidenceTarget{Task: task}
+	if params.Claim != nil {
+		target.Claim = string(*params.Claim)
+	}
+	s.attachEvidence(w, r, target, params.Filename, string(kind), params.IdempotencyKey)
 }
 
 func (s *Server) attachEvidence(w http.ResponseWriter, r *http.Request, target core.EvidenceTarget, filename, kind string, key *string) {
@@ -63,7 +67,7 @@ func (s *Server) attachEvidence(w http.ResponseWriter, r *http.Request, target c
 		return
 	}
 	// Refuse before uploading anything; the write checks again under the counter.
-	if err := s.core.MayAttachEvidence(ctx, c, target); err != nil {
+	if err := s.core.MayAttachEvidence(ctx, c, target, kind); err != nil {
 		s.fail(w, r, err)
 		return
 	}
