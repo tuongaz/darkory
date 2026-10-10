@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -16,19 +17,38 @@ import (
 
 // PullRequest is a pull request as gh lists it.
 type PullRequest struct {
-	Number      int    `json:"number"`
+	Number      int64  `json:"number"`
 	Title       string `json:"title"`
 	HeadRefName string `json:"headRefName"`
+	BaseRefName string `json:"baseRefName"`
 	URL         string `json:"url"`
+	// State is as gh gives it: OPEN, MERGED or CLOSED.
+	State string `json:"state"`
 }
 
-// GitHub opens and lists pull requests of the repository at repo.
+// Pull request states as gh gives them.
+const (
+	PROpen   = "OPEN"
+	PRMerged = "MERGED"
+	PRClosed = "CLOSED"
+)
+
+// GitHub opens, reads and merges pull requests of the repository at repo.
 type GitHub interface {
 	// CreatePR opens a pull request of head into base and returns its URL.
 	CreatePR(ctx context.Context, repo, base, head, title, body string) (string, error)
-	// MergedPRs lists the repository's recently merged pull requests.
-	MergedPRs(ctx context.Context, repo string) ([]PullRequest, error)
+	// PullRequests lists the repository's latest pull requests, in every state, newest first.
+	PullRequests(ctx context.Context, repo string) ([]PullRequest, error)
+	// PullRequestsForBranch lists the pull requests whose head is branch, in every state, newest first.
+	PullRequestsForBranch(ctx context.Context, repo, branch string) ([]PullRequest, error)
+	// PullRequest reads pull request n.
+	PullRequest(ctx context.Context, repo string, n int64) (PullRequest, error)
+	// MergePR merges pull request n with a merge commit; GitHub's refusal is the error, in its words.
+	MergePR(ctx context.Context, repo string, n int64) error
 }
+
+// prFields are the fields the Runner reads of a pull request.
+const prFields = "number,title,headRefName,baseRefName,url,state"
 
 // ghCLI is GitHub through the gh CLI, signed in as the person running the Install.
 type ghCLI struct{}
@@ -52,8 +72,8 @@ func (g ghCLI) CreatePR(ctx context.Context, repo, base, head, title, body strin
 	return strings.TrimSpace(string(out)), nil
 }
 
-func (g ghCLI) MergedPRs(ctx context.Context, repo string) ([]PullRequest, error) {
-	out, err := g.gh(ctx, repo, "pr", "list", "--state", "merged", "--json", "number,title,headRefName,url", "--limit", "50")
+func (g ghCLI) list(ctx context.Context, repo string, args ...string) ([]PullRequest, error) {
+	out, err := g.gh(ctx, repo, append(append([]string{"pr", "list"}, args...), "--json", prFields)...)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +82,31 @@ func (g ghCLI) MergedPRs(ctx context.Context, repo string) ([]PullRequest, error
 		return nil, fmt.Errorf("gh pr list: %w", err)
 	}
 	return prs, nil
+}
+
+func (g ghCLI) PullRequests(ctx context.Context, repo string) ([]PullRequest, error) {
+	return g.list(ctx, repo, "--state", "all", "--limit", "100")
+}
+
+func (g ghCLI) PullRequestsForBranch(ctx context.Context, repo, branch string) ([]PullRequest, error) {
+	return g.list(ctx, repo, "--head", branch, "--state", "all")
+}
+
+func (g ghCLI) PullRequest(ctx context.Context, repo string, n int64) (PullRequest, error) {
+	out, err := g.gh(ctx, repo, "pr", "view", strconv.FormatInt(n, 10), "--json", prFields)
+	if err != nil {
+		return PullRequest{}, err
+	}
+	var pr PullRequest
+	if err := json.Unmarshal(out, &pr); err != nil {
+		return PullRequest{}, fmt.Errorf("gh pr view: %w", err)
+	}
+	return pr, nil
+}
+
+func (g ghCLI) MergePR(ctx context.Context, repo string, n int64) error {
+	_, err := g.gh(ctx, repo, "pr", "merge", strconv.FormatInt(n, 10), "--merge")
+	return err
 }
 
 var keyPattern = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]*-[0-9]+)(?:[-/:\s]|$)`)

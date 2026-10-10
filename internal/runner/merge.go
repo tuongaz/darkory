@@ -353,10 +353,10 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 // the merged pull request whose head is the branch, that there was nothing to land, or that it lands
 // when its pull request merges.
 func (r *Runner) pullRequestLine(ctx context.Context, ws Workspace, branch, target, how string) string {
-	prs, err := r.gh.MergedPRs(ctx, ws.Path)
+	prs, err := r.gh.PullRequestsForBranch(ctx, ws.Path, branch)
 	if err == nil {
 		for _, pr := range prs {
-			if pr.HeadRefName == branch {
+			if pr.HeadRefName == branch && pr.State == PRMerged {
 				return fmt.Sprintf("%s: %s was merged into %s through pull request #%d (%s)%s.", ws.Name, branch, target, pr.Number, pr.URL, how)
 			}
 		}
@@ -552,12 +552,15 @@ func (r *Runner) pollOnce(ctx context.Context, seen map[string]bool) {
 		if ws.Mode != ModePullRequest {
 			continue
 		}
-		prs, err := r.gh.MergedPRs(ctx, ws.Path)
+		prs, err := r.gh.PullRequests(ctx, ws.Path)
 		if err != nil {
-			r.log.Warn("listing merged pull requests", "workspace", ws.Name, "err", err)
+			r.log.Warn("listing pull requests", "workspace", ws.Name, "err", err)
 			continue
 		}
 		for _, pr := range prs {
+			if pr.State != PRMerged {
+				continue
+			}
 			id := fmt.Sprintf("%s#%d", ws.Path, pr.Number)
 			key := or(KeyOf(pr.HeadRefName), KeyOf(pr.Title))
 			if seen[id] || key == "" || pr.HeadRefName == ParentBranch(key) {

@@ -219,7 +219,14 @@ type fakeGitHub struct{}
 func (*fakeGitHub) CreatePR(context.Context, string, string, string, string, string) (string, error) {
 	return "", fmt.Errorf("no GitHub here")
 }
-func (*fakeGitHub) MergedPRs(context.Context, string) ([]PullRequest, error) { return nil, nil }
+func (*fakeGitHub) PullRequests(context.Context, string) ([]PullRequest, error) { return nil, nil }
+func (*fakeGitHub) PullRequestsForBranch(context.Context, string, string) ([]PullRequest, error) {
+	return nil, nil
+}
+func (*fakeGitHub) PullRequest(_ context.Context, _ string, n int64) (PullRequest, error) {
+	return PullRequest{}, fmt.Errorf("no pull request #%d here", n)
+}
+func (*fakeGitHub) MergePR(context.Context, string, int64) error { return fmt.Errorf("no GitHub here") }
 
 // ok runs a CLI command as member, in-process.
 func (f *fixture) ok(member string, args ...string) string {

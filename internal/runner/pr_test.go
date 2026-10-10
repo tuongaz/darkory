@@ -2,6 +2,8 @@ package runner
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -13,12 +15,14 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// recordingGitHub stands in for gh: it lists the merged pull requests a test sets and records the
-// ones the runner opens.
+// recordingGitHub stands in for gh: it lists the pull requests a test sets, newest first, records
+// the ones the runner opens and merges, and refuses a merge with refuse when it is set.
 type recordingGitHub struct {
 	mu      sync.Mutex
-	merged  []PullRequest
+	prs     []PullRequest
 	created []string
+	merges  []int64
+	refuse  string
 }
 
 func (g *recordingGitHub) CreatePR(_ context.Context, repo, base, head, title, _ string) (string, error) {
@@ -28,16 +32,67 @@ func (g *recordingGitHub) CreatePR(_ context.Context, repo, base, head, title, _
 	return "https://github.com/acme/web/pull/9", nil
 }
 
-func (g *recordingGitHub) MergedPRs(context.Context, string) ([]PullRequest, error) {
+func (g *recordingGitHub) PullRequests(context.Context, string) ([]PullRequest, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return slices.Clone(g.merged), nil
+	out := slices.Clone(g.prs)
+	slices.Reverse(out)
+	return out, nil
 }
 
-func (g *recordingGitHub) merge(pr PullRequest) {
+func (g *recordingGitHub) PullRequestsForBranch(ctx context.Context, repo, branch string) ([]PullRequest, error) {
+	all, _ := g.PullRequests(ctx, repo)
+	return slices.DeleteFunc(all, func(pr PullRequest) bool { return pr.HeadRefName != branch }), nil
+}
+
+func (g *recordingGitHub) PullRequest(_ context.Context, _ string, n int64) (PullRequest, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.merged = append(g.merged, pr)
+	for _, pr := range g.prs {
+		if pr.Number == n {
+			return pr, nil
+		}
+	}
+	return PullRequest{}, fmt.Errorf("gh pr view: exit status 1: GraphQL: Could not resolve to a PullRequest with the number of %d.", n)
+}
+
+func (g *recordingGitHub) MergePR(_ context.Context, _ string, n int64) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.refuse != "" {
+		return errors.New(g.refuse)
+	}
+	g.merges = append(g.merges, n)
+	for i := range g.prs {
+		if g.prs[i].Number == n {
+			g.prs[i].State = PRMerged
+		}
+	}
+	return nil
+}
+
+// open adds pr to GitHub, open; set replaces the one of its number, or adds it.
+func (g *recordingGitHub) open(pr PullRequest) {
+	pr.State = PROpen
+	g.set(pr)
+}
+
+// merge adds pr to GitHub merged, or merges the one of its number.
+func (g *recordingGitHub) merge(pr PullRequest) {
+	pr.State = PRMerged
+	g.set(pr)
+}
+
+func (g *recordingGitHub) set(pr PullRequest) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for i := range g.prs {
+		if g.prs[i].Number == pr.Number {
+			g.prs[i] = pr
+			return
+		}
+	}
+	g.prs = append(g.prs, pr)
 }
 
 func (g *recordingGitHub) opened() []string {
