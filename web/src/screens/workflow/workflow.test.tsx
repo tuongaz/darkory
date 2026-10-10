@@ -93,12 +93,15 @@ describe("a Workflow's editor", () => {
     expect(onRail()).toEqual(["Build", "Review", "Done"]);
     expect(nameOf("Build")).toHaveValue("Build");
     expect(screen.getByRole("combobox", { name: "Skill of Build" })).toHaveTextContent("engineer");
+    // A Skill reads as the line's tag, its glyph first (vf-9: ⌖ engineer ⌄); a hold has none.
+    expect(screen.getByRole("combobox", { name: "Skill of Build" }).querySelector(".lucide-tag")).not.toBeNull();
     // Review's pass rides the rail; its needs changes is a return beside it, both fields.
     expect(screen.getByRole("textbox", { name: "Outcome pass out of Review" })).toHaveValue("pass");
     expect(screen.getByRole("combobox", { name: "Where needs changes out of Review leads" })).toHaveTextContent("Build");
     const also = within(line.getByRole("region", { name: "Also starts here" }));
     expect(also.getByRole("textbox", { name: "Name of Backlog" })).toBeInTheDocument();
     expect(also.getByRole("combobox", { name: "Skill of Backlog" })).toHaveTextContent(/^Hold$/);
+    expect(also.getByRole("combobox", { name: "Skill of Backlog" }).querySelector(".lucide-tag")).toBeNull();
     expect(also.getByRole("textbox", { name: "Name of Plan" })).toBeInTheDocument();
     const after = within(line.getByRole("region", { name: "When a Parent ends" }));
     expect(after.getByRole("textbox", { name: "Name of Retro" })).toBeInTheDocument();
