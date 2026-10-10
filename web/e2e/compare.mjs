@@ -12,10 +12,12 @@
 //   bin/darkory serve --data "$S" --listen 127.0.0.1:$PORT --runner=off --no-browser --no-update-check &
 //   export DARKORY_URL=http://127.0.0.1:$PORT
 //   node scripts/seed-fixture.mjs                    # prints each Project's counts per Step and the keys it filed
-//   (cd web && node e2e/compare.mjs)                 # writes e2e/screenshots/compare/index.html
+//   (cd web && MOCKUPS=<the wf-round>/dir-e node e2e/compare.mjs)   # writes e2e/screenshots/compare/index.html
 //
-// The token is the seeding admin's; the shots are taken signed in as them. Mockups are read from
-// MOCKUPS (default: the wf-round's dir-e in the session scratchpad). What differs and why it stays
+// The token is the seeding admin's; the shots are taken signed in as them (it writes a login link,
+// so it refuses port 7357 and an Install with Projects the seed did not make, as the seed does).
+// Mockups are read from MOCKUPS, the folder holding the final design's vf-1.png … vf-10.png
+// (the wf-round's dir-e), which must be set. What differs and why it stays
 // is written under each pair from compare.notes.json, keyed by frame, which a reviewer keeps up to
 // date.
 import { chromium } from "@playwright/test";
@@ -25,10 +27,17 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, "screenshots", "compare");
-const mockups = process.env.MOCKUPS ?? "/private/tmp/claude-501/-Users-tuongaz-dev-darkory/066e879e-2e98-43de-93f7-a295eb3f5238/scratchpad/wf-round/dir-e";
+/** Stops with one line saying why. */
+function refuse(why) {
+  console.error(`compare.mjs: ${why}`);
+  process.exit(1);
+}
+const mockups = process.env.MOCKUPS ?? "";
+if (!mockups || !existsSync(join(mockups, "vf-1.png"))) refuse("set MOCKUPS to the mockup folder holding vf-1.png … vf-10.png (the wf-round's dir-e)");
 const base = (process.env.DARKORY_URL ?? "").replace(/\/$/, "");
 const token = process.env.DARKORY_TOKEN ?? "";
-if (!base || !token) throw new Error("set DARKORY_URL and DARKORY_TOKEN");
+if (!base || !token) refuse("set DARKORY_URL and DARKORY_TOKEN");
+if (new URL(base).port === "7357") refuse("7357 is the owner's make dev; shoot a scratch Install on another port");
 
 async function v1(method, path, body) {
   const res = await fetch(`${base}${path}`, {
@@ -41,6 +50,10 @@ async function v1(method, path, body) {
 }
 
 const me = (await v1("GET", "/v1/me")).member;
+// The Projects scripts/seed-fixture.mjs makes: anything else is a real Install, never written to.
+const ours = ["MAIN", "DARK", "DARKG1", "NEWS", "ACME", "OWN"];
+const foreign = ((await v1("GET", "/v1/projects")).items ?? []).filter((p) => !ours.includes(p.key)).map((p) => p.key);
+if (foreign.length) refuse(`this Install has Projects the seed did not make (${foreign.join(", ")}); shoot a freshly seeded one`);
 
 /** A Workflow's page (`/projects/:key/workflows/:id`), by the Workflow's name. */
 async function workflow(key, name) {
