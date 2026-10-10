@@ -149,6 +149,15 @@ type fakeRunner struct {
 	sessions []runnerapi.Session
 	nudged   []string
 	stopped  []string
+	// merge answers Merge, nil for ErrNoPullRequest.
+	merge func(task, by string) error
+}
+
+func (f *fakeRunner) Merge(_ context.Context, task, by string) error {
+	if f.merge == nil {
+		return runnerapi.ErrNoPullRequest
+	}
+	return f.merge(task, by)
 }
 
 func (f *fakeRunner) Sessions() []runnerapi.Session {

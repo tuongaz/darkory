@@ -26,11 +26,20 @@ import (
 // Organisation's counter (ADR 0011); a record that fails deletes the file.
 
 func (s *Server) AttachTaskEvidence(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.AttachTaskEvidenceParams) {
-	s.attachEvidence(w, r, core.EvidenceTarget{Task: task}, params.Filename, params.IdempotencyKey)
+	kind := gen.EvidenceKindEvidence
+	if params.Kind != nil {
+		kind = *params.Kind
+	}
+	s.attachEvidence(w, r, core.EvidenceTarget{Task: task}, params.Filename, string(kind), params.IdempotencyKey)
 }
 
-func (s *Server) attachEvidence(w http.ResponseWriter, r *http.Request, target core.EvidenceTarget, filename string, key *string) {
+func (s *Server) attachEvidence(w http.ResponseWriter, r *http.Request, target core.EvidenceTarget, filename, kind string, key *string) {
 	ctx, c := r.Context(), caller(r)
+	// Refused before the upload; the record checks again.
+	if !gen.EvidenceKind(kind).Valid() {
+		invalid(w, "kind is evidence or log")
+		return
+	}
 	if s.blobs == nil {
 		writeError(w, http.StatusNotImplemented, gen.ErrorCodeNotImplemented, "this Install has no Evidence store")
 		return
@@ -85,7 +94,7 @@ func (s *Server) attachEvidence(w http.ResponseWriter, r *http.Request, target c
 		req := sha256.Sum256([]byte(r.Method + " " + r.URL.RequestURI() + "\n" + contentType + "\n" + sum))
 		idem.Key, idem.Hash = *key, hex.EncodeToString(req[:])
 	}
-	e, err := s.core.AttachEvidence(ctx, c, target, core.NewEvidence{ID: id, BlobKey: blobKey, Filename: filename,
+	e, err := s.core.AttachEvidence(ctx, c, target, core.NewEvidence{ID: id, Kind: kind, BlobKey: blobKey, Filename: filename,
 		ContentType: contentType, Size: r.ContentLength, SHA256: sum}, idem)
 	if err != nil {
 		if derr := s.blobs.Delete(context.WithoutCancel(ctx), blobKey); derr != nil {

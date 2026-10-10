@@ -50,7 +50,7 @@ func memberOut(m core.Member) gen.Member {
 		CreatedAt: m.CreatedAt, DeactivatedAt: m.DeactivatedAt, AvatarFileID: shortid.OfPtr(m.AvatarFileID)}
 	if a := m.Agent; a != nil {
 		out.Agent = &gen.AgentSettings{Command: a.Command, Args: a.Args, Model: a.Model, Env: a.Env, Unattended: a.Unattended,
-			Paused: a.Paused, ProgressFile: optional(a.ProgressFile)}
+			Paused: a.Paused, Shifts: a.Shifts, ProgressFile: optional(a.ProgressFile)}
 	}
 	return out
 }
@@ -75,8 +75,8 @@ func workspaceOut(w core.Workspace) gen.Workspace {
 }
 
 func skillOut(s core.Skill) gen.Skill {
-	return gen.Skill{ID: shortid.Of(s.ID), Name: s.Name, Kind: gen.SkillKind(s.Kind), BaseSkillID: shortid.OfPtr(s.BaseSkillID), Builtin: s.Builtin,
-		CurrentVersion: s.CurrentVersion, CreatedAt: s.CreatedAt}
+	return gen.Skill{ID: shortid.Of(s.ID), Name: s.Name, Kind: gen.SkillKind(s.Kind), BaseSkillID: shortid.OfPtr(s.BaseSkillID), ProjectID: shortid.OfPtr(s.ProjectID),
+		Builtin: s.Builtin, CurrentVersion: s.CurrentVersion, CreatedAt: s.CreatedAt}
 }
 
 func skillVersionOut(v core.SkillVersion) gen.SkillVersion {
@@ -149,6 +149,9 @@ func taskOut(t core.Task) gen.Task {
 		c := claimOut(*t.Claim)
 		out.Claim = &c
 	}
+	if pr := t.PullRequest; pr != nil {
+		out.PullRequest = &gen.PullRequest{Number: pr.Number, URL: pr.URL, State: gen.PullRequestState(pr.State)}
+	}
 	if len(t.OpenBlockers) > 0 {
 		bs := each(t.OpenBlockers, taskBriefOut)
 		out.OpenBlockers = &bs
@@ -195,7 +198,7 @@ func observationOut(o core.Observation) gen.Observation {
 }
 
 func evidenceOut(e core.Evidence) gen.Evidence {
-	return gen.Evidence{ID: shortid.Of(e.ID), TaskID: shortid.Of(e.TaskID), Filename: e.Filename, ContentType: e.ContentType,
+	return gen.Evidence{ID: shortid.Of(e.ID), TaskID: shortid.Of(e.TaskID), Kind: gen.EvidenceKind(e.Kind), Filename: e.Filename, ContentType: e.ContentType,
 		Size: e.Size, Sha256: e.SHA256, AttachedBy: shortid.Of(e.AttachedBy), CreatedAt: e.CreatedAt}
 }
 

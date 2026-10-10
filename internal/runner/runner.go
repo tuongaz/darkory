@@ -464,6 +464,12 @@ func (r *Runner) Stop(task string) error {
 	return s.command(ctx, cmdStop)
 }
 
+// Merge merges a Task's open pull request on GitHub for by, the Member who asked. Not yet: until
+// the Runner reads pull requests it finds none (docs/build/dogfood-followups-plan.md, Task 2).
+func (r *Runner) Merge(_ context.Context, _, _ string) error {
+	return runnerapi.ErrNoPullRequest
+}
+
 // Socket is the tmux server the runner's sessions run on, for `tmux -L`.
 func (r *Runner) Socket() string { return TmuxSocket(r.cfg.Data) }
 

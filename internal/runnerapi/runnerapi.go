@@ -54,6 +54,10 @@ type Session struct {
 // the server answers it not_found.
 var ErrNoSession = errors.New("runnerapi: no Shift on this Task")
 
+// ErrNoPullRequest is what Merge returns for a Task with no open pull request, in the record or on
+// GitHub; the server answers it not_found.
+var ErrNoPullRequest = errors.New("runnerapi: no open pull request for this Task")
+
 // ErrNotJoinable is what Attach returns for a session that runs without tmux; the server answers
 // it conflict when it can still say so.
 var ErrNotJoinable = errors.New("runnerapi: the Shift runs without tmux and cannot be joined")
@@ -68,6 +72,11 @@ type Runner interface {
 	Nudge(taskID string) error
 	// Stop ends the Task's session and releases its Claim with a Note.
 	Stop(taskID string) error
+	// Merge merges the Task's open pull request on GitHub, as the identity the Runner's gh signs
+	// in as, and records it merged on the Task with a Note naming by, the Member who asked. It
+	// returns ErrNoPullRequest when the Task has none open; any other error is GitHub's refusal,
+	// its message as the Runner read it, which the server shows as it is.
+	Merge(ctx context.Context, taskID, by string) error
 	// Attach bridges conn to the Task's terminal until either side ends or ctx is done, and
 	// closes conn. Binary messages carry the terminal's bytes both ways; a text message
 	// {"cols": n, "rows": n} resizes the view. With readonly, what the client sends is ignored.

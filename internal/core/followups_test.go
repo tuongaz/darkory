@@ -110,6 +110,12 @@ func TestSetPullRequest(t *testing.T) {
 				t.Errorf("%s with no pull_request Workspace: %v", k, err)
 			}
 		}
+		// A Subtask works in its Parent's Workspaces.
+		parent := f.fileTask(lead, core.NewTask{Project: ptrStr("WEB"), Title: "Parent", Step: ptrStr("Build"), Workspaces: &[]string{"web"}}).Task
+		sub := f.subtask(lead, parent.Key, "Sub", "Build")
+		if _, err := f.svc.SetPullRequest(ctx, lead, sub.Key, open7, core.Idem{}); err != nil {
+			t.Errorf("a Subtask in its Parent's pull_request Workspace: %v", err)
+		}
 		// Naming none, the Project's default counts.
 		f.projectDefaults("WEB", core.ProjectChange{DefaultWorkspace: ptrStr("web")})
 		if _, err := f.svc.SetPullRequest(ctx, lead, none.Key, open7, core.Idem{}); err != nil {

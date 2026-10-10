@@ -1,11 +1,13 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/runnerapi"
 	"github.com/tuongaz/darkory/internal/server/gen"
 	"github.com/tuongaz/darkory/internal/shortid"
 )
@@ -221,6 +223,44 @@ func (s *Server) PassOwnership(w http.ResponseWriter, r *http.Request, task gen.
 	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.PassOwnershipBody, idem core.Idem) (core.Task, error) {
 		return s.core.PassOwnership(r.Context(), c, task, body.Owner, idem)
 	})
+}
+
+func (s *Server) SetTaskPullRequest(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.SetTaskPullRequestParams) {
+	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.SetTaskPullRequestBody, idem core.Idem) (core.Task, error) {
+		return s.core.SetPullRequest(r.Context(), c, task, core.PullRequest{Number: body.Number, URL: body.URL, State: string(body.State)}, idem)
+	})
+}
+
+// MergeTaskPullRequest asks the Runner beside this server to merge the Task's open pull request,
+// by the Task's Owner or an admin; the Runner records the merge on the Task, which is answered as
+// it reads after. Like Nudge and Stop it accepts an Idempotency-Key and keeps nothing under it:
+// a repeat finds the pull request merged and answers not_found.
+func (s *Server) MergeTaskPullRequest(w http.ResponseWriter, r *http.Request, task gen.TaskRef, _ gen.MergeTaskPullRequestParams) {
+	ctx, c := r.Context(), caller(r)
+	d, err := s.core.GetTask(ctx, c, task)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if d.Task.OwnerID != c.MemberID && !c.Admin {
+		writeError(w, http.StatusForbidden, gen.ErrorCodeForbidden, "only the Owner of "+d.Task.Key+" or an admin may merge its pull request")
+		return
+	}
+	run := s.theRunner()
+	if run == nil {
+		noRunner(w)
+		return
+	}
+	if err := run.Merge(ctx, shortid.Of(d.Task.ID).String(), c.Name); err != nil { // the Runner has ids as the API writes them
+		if errors.Is(err, runnerapi.ErrNoPullRequest) {
+			writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, d.Task.Key+" carries no open pull request")
+			return
+		}
+		writeError(w, http.StatusConflict, gen.ErrorCodeConflict, err.Error())
+		return
+	}
+	t, err := s.core.GetTask(ctx, c, d.Task.ID)
+	s.respond(w, r, as(http.StatusOK, func(d core.TaskDetail) any { return taskOut(d.Task) }), t, err)
 }
 
 func (s *Server) SetTaskLabels(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.SetTaskLabelsParams) {
