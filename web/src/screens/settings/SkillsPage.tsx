@@ -3,16 +3,16 @@ import { ArrowRightIcon, BookOpenIcon, MessageSquareIcon, PlusIcon } from "lucid
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { BarAction } from "@/app/TopBar";
-import type { Skill, SkillDetail, SkillVersion } from "@/api/client";
+import type { Project, Skill, SkillDetail, SkillVersion } from "@/api/client";
 import { useDirectory, useSkills } from "@/api/queries";
-import { createSkill } from "@/api/writes";
+import { createSkill, updateSkill } from "@/api/writes";
 import { FormDialog, FormRow, FormRows } from "@/components/FormDialog";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { Property, PropertiesRail } from "@/components/PropertiesRail";
 import { Markdown } from "@/components/Markdown";
-import { Loaded } from "@/components/Refusal";
+import { Loaded, Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,8 +26,33 @@ import { Avatars, Segmented } from "./parts";
 import { skillPath, skillsPath } from "./paths";
 import { useMemberDetails, useRetrospectives, useSkillDetail, useSkillTasks, useSkillVersions } from "./queries";
 
-// Skill · Kind · Builds on · Built in · Current · Held by. A phone keeps Skill and Held by.
-const cols = "grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_90px_120px_80px_90px_220px]";
+// Skill · Kind · Project · Builds on · Built in · Current · Held by. A phone keeps Skill and Held by.
+const cols = "grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_90px_100px_120px_80px_90px_220px]";
+
+/** The Select's value for a company Skill of the whole Organisation (a Select item cannot be ""). */
+const organisation = "organisation";
+
+/** Where a company Skill belongs, as the Skills page says it: its Project's key, or Organisation. */
+function ProjectOf({ skill, projects }: { skill: Skill; projects: Map<string, Project> }) {
+  if (skill.kind !== "company") return <span className="text-muted-foreground">—</span>;
+  if (!skill.project_id) return <span className="text-muted-foreground">Organisation</span>;
+  const p = projects.get(skill.project_id);
+  return p ? <Key>{p.key}</Key> : <Skeleton className="h-4 w-10" />;
+}
+
+/** The Organisation's Projects and the Organisation itself, as a company Skill's Project select offers them. */
+function ProjectItems({ projects }: { projects: Project[] }) {
+  return (
+    <>
+      <SelectItem value={organisation}>Organisation</SelectItem>
+      {projects.map((p) => (
+        <SelectItem key={p.id} value={p.id}>
+          <span className="font-mono text-xs">{p.key}</span> {p.name}
+        </SelectItem>
+      ))}
+    </>
+  );
+}
 const wide = "hidden md:flex";
 
 /** Settings › Organisation › Skills: every Skill, what it builds on, who holds it, and the proposals waiting for review. */
@@ -38,6 +63,7 @@ export function SkillsPage() {
   const [open, setOpen] = useState(false);
   const holders = holdersBySkill(details);
   const byId = new Map((skills.data ?? []).map((s) => [s.id, s]));
+  const { projects } = useDirectory();
 
   return (
     <SettingsFrame
@@ -52,6 +78,9 @@ export function SkillsPage() {
               <span role="columnheader">Skill</span>
               <span role="columnheader" className={wide}>
                 Kind
+              </span>
+              <span role="columnheader" className={wide}>
+                Project
               </span>
               <span role="columnheader" className={wide}>
                 Builds on
@@ -84,6 +113,9 @@ export function SkillsPage() {
                     {s.kind}
                   </span>
                   <span role="cell" className={wide}>
+                    <ProjectOf skill={s} projects={projects} />
+                  </span>
+                  <span role="cell" className={wide}>
                     {base ? base.name : <span className="text-muted-foreground">—</span>}
                   </span>
                   <span role="cell" className={wide}>
@@ -112,9 +144,18 @@ function NewSkillDialog({ skills, onClose }: { skills: Skill[]; onClose: () => v
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"generic" | "company">("generic");
   const [base, setBase] = useState("");
+  const [project, setProject] = useState(organisation);
   const [body, setBody] = useState("");
+  const { projectList } = useDirectory();
   const create = useMutation({
-    mutationFn: () => createSkill({ name: name.trim(), kind, base_skill: kind === "company" ? base : undefined, body }),
+    mutationFn: () =>
+      createSkill({
+        name: name.trim(),
+        kind,
+        base_skill: kind === "company" ? base : undefined,
+        project: kind === "company" && project !== organisation ? project : undefined,
+        body,
+      }),
     onSuccess: (d) => {
       onClose();
       navigate(skillPath(d.skill));
@@ -178,6 +219,18 @@ function NewSkillDialog({ skills, onClose }: { skills: Skill[]; onClose: () => v
             </Select>
           </FormRow>
         )}
+        {kind === "company" && (
+          <FormRow label="Project" htmlFor="skill-project">
+            <Select value={project} onValueChange={setProject}>
+              <SelectTrigger id="skill-project" size="sm" className="h-8 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" align="start">
+                <ProjectItems projects={projectList} />
+              </SelectContent>
+            </Select>
+          </FormRow>
+        )}
         <FormRow label="Text" htmlFor="skill-body" info="Published as version 1.">
           <Textarea id="skill-body" required rows={6} value={body} onChange={(e) => setBody(e.target.value)} className="font-mono text-xs" />
         </FormRow>
@@ -232,6 +285,11 @@ function SkillRecord({ detail }: { detail: SkillDetail }) {
         </div>
         <aside aria-label="About the Skill" className="min-w-0 lg:border-l lg:pl-6">
           <PropertiesRail compact>
+            {skill.kind === "company" && (
+              <Property label="Project">
+                <SkillProject skill={skill} />
+              </Property>
+            )}
             <Property label="Builds on">
               {base ? (
                 <Link to={skillPath(base)} className="underline underline-offset-2">
@@ -267,6 +325,25 @@ function SkillRecord({ detail }: { detail: SkillDetail }) {
         </aside>
       </div>
     </SettingsFrame>
+  );
+}
+
+/** A company Skill's Project, picked in place (Settings › Organisation is an admin's). */
+function SkillProject({ skill }: { skill: Skill }) {
+  const { projectList } = useDirectory();
+  const save = useMutation({ mutationFn: (project: string) => updateSkill(skill.name, { project: project === organisation ? "" : project }) });
+  return (
+    <span className="flex min-w-0 flex-col items-start gap-1">
+      <Select value={save.isPending ? save.variables : (skill.project_id ?? organisation)} onValueChange={(v) => save.mutate(v)} disabled={save.isPending}>
+        <SelectTrigger aria-label="Project" size="sm" className="-ml-1.5 h-[26px] border-none px-1.5 shadow-none hover:bg-accent">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent position="popper" align="start">
+          <ProjectItems projects={projectList} />
+        </SelectContent>
+      </Select>
+      <Refusal error={save.error} />
+    </span>
   );
 }
 
