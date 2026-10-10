@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { taskBranch } from "@/lib/branch";
+import { branchOf } from "@/lib/branch";
 import { kindLabel } from "@/work";
 import type { TaskActions } from "./actions";
 import { taskPath as pagePath, useMemberName } from "./format";
@@ -221,7 +221,7 @@ function TaskHeader({ detail, ui, heading, steps, path }: { detail: TaskDetail; 
           <>
             <Sep />
             <span className="inline-flex min-w-0 items-center text-foreground">
-              <Branch name={taskBranch(task.key, task.title)} />
+              <Branch name={branchOf(task)} />
             </span>
           </>
         )}

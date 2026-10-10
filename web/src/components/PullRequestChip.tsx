@@ -1,6 +1,7 @@
 import { GitMergeIcon, GitPullRequestArrowIcon } from "lucide-react";
 import type { PullRequest } from "@/api/client";
 import { cn } from "@/lib/utils";
+import { linkable } from "@/screens/task/pullRequest";
 
 /**
  * "#7 open" or "#7 merged": a Task's pull request as the Runner read it on GitHub, a link to it
@@ -20,9 +21,10 @@ export function PullRequestChip({ pr, className }: { pr: PullRequest; className?
       <Icon className="size-3" aria-hidden />#{pr.number} {pr.state}
     </>
   );
-  if (!pr.url.startsWith("https://")) return <span className={look}>{words}</span>;
+  const href = linkable(pr.url);
+  if (!href) return <span className={look}>{words}</span>;
   return (
-    <a href={pr.url} target="_blank" rel="noreferrer noopener" title={pr.url} className={cn(look, "hover:underline")}>
+    <a href={href} target="_blank" rel="noreferrer noopener" title={pr.url} className={cn(look, "hover:underline")}>
       {words}
     </a>
   );

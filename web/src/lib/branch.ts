@@ -33,9 +33,23 @@ export function slug(title: string): string {
 }
 
 /**
- * The branch a Task's session works on, a Parent's included: its key in lower case, then its title
- * made short, as in main-7-support-emoji.
+ * The branch a Task's session works on: its key in lower case, then its title made short, as in
+ * main-7-support-emoji. The Runner names it from the title when it makes it.
  */
 export function taskBranch(key: string, title: string): string {
   return `${key.toLowerCase()}-${slug(title)}`;
+}
+
+/**
+ * A Parent's branch, which its Subtasks start from and merge into, and which merges into the
+ * default branch when the Parent completes: its key alone in lower case, main-7. The Runner's
+ * ParentBranch, character for character.
+ */
+export function parentBranch(key: string): string {
+  return key.toLowerCase();
+}
+
+/** The branch a Task's work is on: a Parent's own branch, else the branch its session works on. */
+export function branchOf(task: { key: string; title: string; subtask_counts?: unknown }): string {
+  return task.subtask_counts ? parentBranch(task.key) : taskBranch(task.key, task.title);
 }

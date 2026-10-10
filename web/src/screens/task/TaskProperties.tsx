@@ -11,7 +11,7 @@ import { Pill } from "@/components/Pill";
 import { Property, PropertiesRail } from "@/components/PropertiesRail";
 import { ClockTime } from "@/components/Time";
 import { WorkGlyph } from "@/components/WorkGlyph";
-import { taskBranch } from "@/lib/branch";
+import { branchOf, parentBranch } from "@/lib/branch";
 import { liveClaim, showsHeartbeat } from "@/work";
 import { useMemberName, useSkillName } from "./format";
 import { MemberName, SkillPill, TaskLink } from "./parts";
@@ -140,8 +140,8 @@ export function TaskProperties({ detail, steps, grouped }: { detail: TaskDetail;
         </span>
       ),
     });
-    work.push({ label: "Branch", value: <Branch name={taskBranch(task.key, task.title)} /> });
-    if (detail.parent) work.push({ label: "Merges into", value: <Branch name={taskBranch(detail.parent.key, detail.parent.title)} /> });
+    work.push({ label: "Branch", value: <Branch name={branchOf(task)} /> });
+    if (detail.parent) work.push({ label: "Merges into", value: <Branch name={parentBranch(detail.parent.key)} /> });
   }
   if (task.pull_request) work.push({ label: "Pull request", value: <PullRequestChip pr={task.pull_request} /> });
 
