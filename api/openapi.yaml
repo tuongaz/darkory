@@ -1833,14 +1833,14 @@ paths:
       tags: [skills]
       summary: Propose a new version of an own Skill from the Retrospective the caller holds
       description: |
-        Written against `based_on_version`, which must be the Skill's current version, for a
+        Written against `based_on_version`, which must be the Skill's current version, for an
         own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
         Step carrying `skill-review`. The caller then advances the Retrospective along it; a
         Member with `skill-review`, other than the author, publishes the proposals by advancing
         it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
         supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
         Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
-        from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
+        from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not an
         own Skill).
       parameters:
         - {$ref: "#/components/parameters/TaskRef"}

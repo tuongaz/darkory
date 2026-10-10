@@ -4685,14 +4685,14 @@ type ClientInterface interface {
 
 	// ProposeSkillVersionWithBody Propose a new version of an own Skill from the Retrospective the caller holds
 	//
-	// Written against `based_on_version`, which must be the Skill's current version, for a
+	// Written against `based_on_version`, which must be the Skill's current version, for an
 	// own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 	// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 	// Member with `skill-review`, other than the author, publishes the proposals by advancing
 	// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 	// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 	// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
-	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
+	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not an
 	// own Skill).
 	//
 	// Takes any type of body and a specified content type.
@@ -4702,14 +4702,14 @@ type ClientInterface interface {
 
 	// ProposeSkillVersion Propose a new version of an own Skill from the Retrospective the caller holds
 	//
-	// Written against `based_on_version`, which must be the Skill's current version, for a
+	// Written against `based_on_version`, which must be the Skill's current version, for an
 	// own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 	// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 	// Member with `skill-review`, other than the author, publishes the proposals by advancing
 	// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 	// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 	// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
-	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
+	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not an
 	// own Skill).
 	//
 	// Takes a body of the `application/json` content type.
@@ -7469,14 +7469,14 @@ func (c *Client) ReleaseTask(ctx context.Context, task TaskRef, params *ReleaseT
 
 // ProposeSkillVersionWithBody Propose a new version of an own Skill from the Retrospective the caller holds
 //
-// Written against `based_on_version`, which must be the Skill's current version, for a
+// Written against `based_on_version`, which must be the Skill's current version, for an
 // own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 // Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 // Member with `skill-review`, other than the author, publishes the proposals by advancing
 // it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 // supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 // Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
-// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
+// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not an
 // own Skill).
 //
 // Takes any type of body and a specified content type.
@@ -7496,14 +7496,14 @@ func (c *Client) ProposeSkillVersionWithBody(ctx context.Context, task TaskRef, 
 
 // ProposeSkillVersion Propose a new version of an own Skill from the Retrospective the caller holds
 //
-// Written against `based_on_version`, which must be the Skill's current version, for a
+// Written against `based_on_version`, which must be the Skill's current version, for an
 // own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 // Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 // Member with `skill-review`, other than the author, publishes the proposals by advancing
 // it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 // supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 // Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
-// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
+// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not an
 // own Skill).
 //
 // Takes a body of the `application/json` content type.
@@ -14520,14 +14520,14 @@ type ClientWithResponsesInterface interface {
 
 	// ProposeSkillVersionWithBodyWithResponse Propose a new version of an own Skill from the Retrospective the caller holds
 	//
-	// Written against `based_on_version`, which must be the Skill's current version, for a
+	// Written against `based_on_version`, which must be the Skill's current version, for an
 	// own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 	// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 	// Member with `skill-review`, other than the author, publishes the proposals by advancing
 	// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 	// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 	// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
-	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
+	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not an
 	// own Skill).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -14537,14 +14537,14 @@ type ClientWithResponsesInterface interface {
 
 	// ProposeSkillVersionWithResponse Propose a new version of an own Skill from the Retrospective the caller holds
 	//
-	// Written against `based_on_version`, which must be the Skill's current version, for a
+	// Written against `based_on_version`, which must be the Skill's current version, for an
 	// own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 	// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 	// Member with `skill-review`, other than the author, publishes the proposals by advancing
 	// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 	// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 	// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
-	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
+	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not an
 	// own Skill).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -21263,14 +21263,14 @@ func (c *ClientWithResponses) ReleaseTaskWithResponse(ctx context.Context, task 
 
 // ProposeSkillVersionWithBodyWithResponse Propose a new version of an own Skill from the Retrospective the caller holds
 //
-// Written against `based_on_version`, which must be the Skill's current version, for a
+// Written against `based_on_version`, which must be the Skill's current version, for an
 // own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 // Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 // Member with `skill-review`, other than the author, publishes the proposals by advancing
 // it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 // supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 // Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
-// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
+// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not an
 // own Skill).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -21286,14 +21286,14 @@ func (c *ClientWithResponses) ProposeSkillVersionWithBodyWithResponse(ctx contex
 
 // ProposeSkillVersionWithResponse Propose a new version of an own Skill from the Retrospective the caller holds
 //
-// Written against `based_on_version`, which must be the Skill's current version, for a
+// Written against `based_on_version`, which must be the Skill's current version, for an
 // own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 // Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 // Member with `skill-review`, other than the author, publishes the proposals by advancing
 // it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 // supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 // Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
-// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
+// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not an
 // own Skill).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
