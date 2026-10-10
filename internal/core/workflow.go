@@ -267,10 +267,12 @@ const (
 	WorkflowCopy    = "copy"
 )
 
-// The two Workflows a default Project starts with (sample-workflows-plan.md).
+// The three Workflows a default Project starts with (sample-workflows-plan.md; decisions.md, the
+// Workflow page vertical, D1).
 const (
 	WorkflowImplementation = "Implementation"
 	WorkflowBugTriage      = "Bug triage"
+	WorkflowRetrospective  = "Retrospective"
 )
 
 // plannedStep and plannedConnector describe a Workflow to make, by Step name and Skill name, and
@@ -294,28 +296,28 @@ type plannedWorkflow struct {
 // (sample-workflows-plan.md), in order.
 //
 // Implementation is the default Workflow of model-v2-plan.md ("The default Workflow"): a Backlog
-// hold, Plan, Build, Review, and the Retrospective's Steps. No Acceptance: a Project that wants
-// one adds the Step and turns it on. It is drawn compact, in the board's order: a column of
-// Backlog, Plan, Build and Retro, with Review beside Build and Skill review beside Retro, so a new
-// Project opens with Done in view (decisions.md, W0). Being first, it holds Build, where a Task
-// filed without a Step starts.
+// hold, Plan, Build and Review. No Acceptance: a Project that wants one adds the Step and turns it
+// on. It is drawn compact, in the board's order: a column of Backlog, Plan and Build, with Review
+// beside Build, so a new Project opens with Done in view (decisions.md, W0). Being first, it holds
+// Build, where a Task filed without a Step starts.
 //
 // Bug triage takes a reported problem: Triage, then Fix, Code review and Verify in a row. Triage
 // leads to Fix (bug), to Done (not a bug), or into Implementation's Build (feature). Its review
 // Step is Code review because Implementation has the Review.
+//
+// Retrospective holds the Steps a Parent's end files work at: Retro, where Darkory files a
+// Parent's Retrospective, and Skill review beside it. They are their own Workflow so
+// Implementation ends on its line (decisions.md, the Workflow page vertical, D1).
 var defaultWorkflows = []plannedWorkflow{
 	{
 		name: WorkflowImplementation,
 		steps: []plannedStep{
 			{"Backlog", "", 0, 0}, {"Plan", SkillBreakdown, 0, 128}, {"Build", SkillEngineer, 0, 256}, {"Review", SkillReview, 448, 256},
-			{"Retro", SkillRetro, 0, 384}, {"Skill review", SkillSkillReview, 448, 384},
 		},
 		connectors: []plannedConnector{
 			{"Plan", "", "done"},
 			{"Build", "Review", "pass"},
 			{"Review", "", "pass"}, {"Review", "Build", "needs changes"},
-			{"Retro", "", "done"}, {"Retro", "Skill review", "propose"},
-			{"Skill review", "", "publish"}, {"Skill review", "Retro", "needs changes"},
 		},
 	},
 	{
@@ -328,6 +330,16 @@ var defaultWorkflows = []plannedWorkflow{
 			{"Fix", "Code review", "ready"},
 			{"Code review", "Verify", "pass"}, {"Code review", "Fix", "needs changes"},
 			{"Verify", "", "pass"}, {"Verify", "Fix", "fail"},
+		},
+	},
+	{
+		name: WorkflowRetrospective,
+		steps: []plannedStep{
+			{"Retro", SkillRetro, 0, 0}, {"Skill review", SkillSkillReview, 448, 0},
+		},
+		connectors: []plannedConnector{
+			{"Retro", "", "done"}, {"Retro", "Skill review", "propose"},
+			{"Skill review", "", "publish"}, {"Skill review", "Retro", "needs changes"},
 		},
 	},
 }
@@ -345,8 +357,8 @@ var emptyWorkflow = plannedWorkflow{
 // row, at its position's place.
 const stepSpacing = 448
 
-// seedWorkflow gives a new Project its first Workflows inside a write: the default two,
-// Implementation and Bug triage, the empty one, Work, or a copy of another Project's, Workflows
+// seedWorkflow gives a new Project its first Workflows inside a write: the default three,
+// Implementation, Bug triage and Retrospective, the empty one, Work, or a copy of another Project's, Workflows
 // and all.
 func seedWorkflow(t *tx, projectID, kind, from string) error {
 	var in WorkflowsInput

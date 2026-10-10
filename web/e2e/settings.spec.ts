@@ -230,11 +230,11 @@ test("scenario 10: a Project's settings under it, Settings from the Organisation
 
   await test.step("every /admin address lands on its Settings page", async () => {
     const mai = (await ada<{ items: { id: string; name: string }[] }>("GET", "/v1/members")).items.find((m) => m.name === "Mai Tran")!;
-    // WEB, made here on the dialog's Default, has the two Workflows a new Project starts with.
+    // WEB, made here on the dialog's Default, has the three Workflows a new Project starts with.
     const workflowsOf = async (key: string) =>
       [...(await ada<{ workflows: { id: string; name: string; position: number }[] }>("GET", `/v1/projects/${key}/workflow`)).workflows].sort((a, b) => a.position - b.position);
     const workflows = await workflowsOf("WEB");
-    expect(workflows.map((w) => w.name)).toEqual(["Implementation", "Bug triage"]);
+    expect(workflows.map((w) => w.name)).toEqual(["Implementation", "Bug triage", "Retrospective"]);
     const work = `/projects/WEB/workflows/${workflows[0].id}`;
     // OPS, empty, has one: Work.
     const opsWorkflows = await workflowsOf("OPS");

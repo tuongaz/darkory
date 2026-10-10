@@ -86,7 +86,7 @@ var testTimings = Timings{Wait: time.Second, ClaimTimeout: 3 * time.Second, Tick
 	Nudge: 400 * time.Millisecond, Exit: 2 * time.Second, Poll: 200 * time.Millisecond, Retry: 200 * time.Millisecond}
 
 // fixture is an Install with Project WEB on the default Workflows (Implementation: Backlog ·
-// Plan · Build · Review · Retro · Skill review), a git repository as its default Workspace, ada
+// Plan · Build · Review; Retrospective: Retro · Skill review), a git repository as its default Workspace, ada
 // as its human admin, and the agents the runner runs, set up through /v1 as a person would.
 type fixture struct {
 	t        *testing.T

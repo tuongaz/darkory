@@ -16,7 +16,7 @@ import (
 // A fresh Install: an empty database takes the migrations, 0001 to 0009, and `darkory init` (the
 // roster on) yields the Organisation, its first Member an admin, the builtin Skills breakdown,
 // retro, skill-review and acceptance, the generic engineer, review, triage and qa, the roster's
-// five agents, and Project MAIN on the default Workflows, Implementation then Bug triage, each
+// five agents, and Project MAIN on the default Workflows, Implementation, Bug triage then Retrospective, each
 // Step at its decided place on the canvas and taken by the agent holding its Skill.
 func TestFreshInit(t *testing.T) {
 	for _, engine := range storetest.Engines() {
@@ -88,7 +88,7 @@ func TestFreshInit(t *testing.T) {
 				t.Fatalf("MAIN %+v holds %v", project.Project, members)
 			}
 
-			// MAIN's Workflows are the default two, compact, and each Step's takers are the agents
+			// MAIN's Workflows are the default three, compact, and each Step's takers are the agents
 			// with its Skill; Backlog, a hold, has none.
 			w, err := f.svc.GetWorkflow(ctx, f.admin, "MAIN")
 			if err != nil {

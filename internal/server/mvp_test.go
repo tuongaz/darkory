@@ -34,15 +34,15 @@ func TestMVPFlowThroughTheClient(t *testing.T) {
 		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "OPS", Name: "Ops"})).
 			want(t, http.StatusCreated)
 
-		// WEB's Workflow: the default's Implementation, with QA (qa-acme) after Build in place of
-		// Review; Bug triage is left out.
+		// WEB's Workflow: one, the default's Implementation then its Retrospective, with QA
+		// (qa-acme) after Build in place of Review; Bug triage is left out.
 		wf := got(ada.GetWorkflowWithResponse(ctx, "WEB")).want(t, http.StatusOK).JSON200
 		in := client.SetWorkflowBody{Workflows: []client.WorkflowInput{{Name: "Work", Position: ptr64(1)}}, Moves: &map[string]string{}}
 		for _, s := range wf.Steps {
-			if s.WorkflowID != wf.Workflows[0].ID {
+			if s.WorkflowID == wf.Workflows[1].ID {
 				continue
 			}
-			si := client.StepInput{ID: &s.ID, Workflow: "Work", Name: s.Name, Position: ptr64(s.Position)}
+			si := client.StepInput{ID: &s.ID, Workflow: "Work", Name: s.Name, Position: ptr64(int64(len(in.Steps) + 1))}
 			if s.SkillID != nil {
 				si.Skill = s.SkillID
 			}

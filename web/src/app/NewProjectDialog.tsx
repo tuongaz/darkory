@@ -29,13 +29,13 @@ export function NewProjectDialog() {
 const noWorkspace = "none";
 
 const workflows: { value: NewWorkflow; label: string; help: string }[] = [
-  { value: "default", label: "Default", help: "Implementation · Bug triage" },
+  { value: "default", label: "Default", help: "Implementation · Bug triage · Retrospective" },
   { value: "copy", label: "Copy from", help: "Another Project's Steps and Connectors, without its Tasks" },
   { value: "empty", label: "Empty", help: "Backlog → Done, to draw your own" },
 ];
 
 /**
- * A new Project: its name and key, the Workflows it starts with (the default two, another Project's,
+ * A new Project: its name and key, the Workflows it starts with (the default three, another Project's,
  * or an empty one to draw), the Members put in it (you among them unless unticked: /v1 adds the
  * creator only when named), and the Workspace its Tasks work in when they name none. Opens its
  * Tasks once made.

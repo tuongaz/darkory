@@ -62,8 +62,8 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		workspaces.Items[0].DefaultBranch != "trunk" || project.Project.DefaultWorkspaceID == nil || *project.Project.DefaultWorkspaceID != workspaces.Items[0].ID {
 		t.Fatalf("Workspaces %+v, MAIN's default %v", workspaces.Items, project.Project.DefaultWorkspaceID)
 	}
-	// MAIN's Workflows are the default two, Implementation then Bug triage: their Steps, their
-	// Skills, and the Connectors out of each.
+	// MAIN's Workflows are the default three, Implementation, Bug triage then Retrospective: their
+	// Steps, their Skills, and the Connectors out of each.
 	var flow client.Workflows
 	ada.json(&flow, "workflow", "show", "MAIN")
 	var workflows, steps []string
@@ -73,8 +73,8 @@ func TestInitSeedsTheRoster(t *testing.T) {
 	for _, s := range flow.Steps {
 		steps = append(steps, s.Name)
 	}
-	if strings.Join(workflows, " · ") != "Implementation · Bug triage" ||
-		strings.Join(steps, " · ") != "Backlog · Plan · Build · Review · Retro · Skill review · Triage · Fix · Code review · Verify" ||
+	if strings.Join(workflows, " · ") != "Implementation · Bug triage · Retrospective" ||
+		strings.Join(steps, " · ") != "Backlog · Plan · Build · Review · Triage · Fix · Code review · Verify · Retro · Skill review" ||
 		len(flow.Connectors) != 16 || flow.Steps[0].SkillID != nil {
 		t.Fatalf("MAIN's Workflows: %v, %v, %d Connectors", workflows, steps, len(flow.Connectors))
 	}

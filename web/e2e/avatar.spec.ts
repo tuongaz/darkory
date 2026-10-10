@@ -117,7 +117,7 @@ test("an admin uploads an agent's Avatar; the Agents table and the Workflow line
   });
 
   await test.step("the Workflow line shows it on builder's Step", async () => {
-    // MAIN's Workflows list Implementation and Bug triage; Implementation's row opens its line, Build builder's.
+    // MAIN's Workflows list Implementation, Bug triage and Retrospective; Implementation's row opens its line, Build builder's.
     await page.goto(`${base}/projects/MAIN/workflows`);
     await page.getByRole("table", { name: "Workflows" }).getByRole("link", { name: "Implementation", exact: true }).click();
     await loaded(page.getByRole("img", { name: /^builder \(agent\)/ }).first());

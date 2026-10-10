@@ -19,7 +19,7 @@ Set up a Project and an agent from the web app, or from the CLI:
 ```sh
 export DARKORY_TOKEN=dk_...            # the token init printed
 eval "$(bin/darkory prime)"            # a Session id for this shell, plus the working rules
-bin/darkory project create WEB "Web"   # one Workflow, Work: Backlog · Plan · Build · Review · Retro · Skill review
+bin/darkory project create WEB "Web"   # three Workflows: Implementation · Bug triage · Retrospective
 bin/darkory member create eng-bot --kind agent
 bin/darkory project add WEB eng-bot
 bin/darkory grant eng-bot engineer
