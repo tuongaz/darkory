@@ -27,7 +27,7 @@ import { ProposalCard, RetrospectiveObservations } from "./Proposal";
 import { useTaskPath, useTaskWorkflow } from "./queries";
 import { useSessionActions } from "./SessionActions";
 import { SessionPanel } from "./SessionPanel";
-import { Stepper, WaitsForNote } from "./Stepper";
+import { Stepper } from "./Stepper";
 import { Subtasks } from "./Subtasks";
 import { TaskLine } from "./TaskLine";
 import { useTaskActionsUI, type TaskActionsUI } from "./TaskActions";
@@ -245,7 +245,6 @@ function TaskHeader({ detail, ui, heading, steps, path }: { detail: TaskDetail; 
             <Stepper detail={detail} path={path} steps={steps} />
           </div>
           <TaskLine detail={detail} />
-          <WaitsForNote detail={detail} steps={steps} />
         </>
       )}
       {task.description && <Markdown text={task.description} className="mt-1" />}

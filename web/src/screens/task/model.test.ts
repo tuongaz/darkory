@@ -5,7 +5,7 @@ import { liveClaimOf } from "../board/testData";
 import { taskActions } from "./actions";
 import { taskRecord } from "./record";
 import { graphSteps, graphSubtasks } from "./graph";
-import { takersOf } from "./takers";
+import { takersOf, waitsFor } from "./takers";
 
 const members = new Map([ada, bob, builder].map((m) => [m.id, m]));
 const now = Date.now();
@@ -223,5 +223,32 @@ describe("a Shift's log in the record", () => {
     const record = taskRecord(detail(dropped, { claims, evidence: [evidence("log-a", builder.id, 8), evidence("stray", bob.id, 9)] }), trail);
     expect(record.find((e) => e.kind === "ended")).toMatchObject({ state: "dropped", logs: [{ id: "log-a" }] });
     expect(record.at(-1)).toMatchObject({ kind: "log", evidence: { id: "stray" } });
+  });
+});
+
+describe("whom a Task waits for at its Step", () => {
+  const now = Date.now();
+  const at = (min: number) => new Date(now + min * 60_000).toISOString();
+  const wf = workflow();
+  const build = wf.steps.find((s) => s.id === step.build)!;
+  const qa = { ...builder, id: "m-qa", name: "qa" };
+  const both = { ...build, takers: [builder, qa].map((m) => ({ id: m.id, name: m.name, kind: m.kind })) };
+  const waiting = task(7, { step_id: step.build });
+  const holds = (n: number, who: string, extra: Parameters<typeof liveClaimOf>[2] = {}) => task(n, { claim: liveClaimOf({ ...builder, id: who }, `k-${n}`, extra) });
+  const members = new Map([builder, qa].map((m) => [m.id, m]));
+
+  it("names the busy taker whose Shift ends soonest, else the one holding longest", () => {
+    const open = [holds(1, builder.id, { expires_at: at(9) }), holds(2, qa.id, { expires_at: at(3) })];
+    expect(waitsFor({ task: waiting, claims: [] }, both, open, members, now)).toBe(qa.id);
+    const untimed = [holds(1, builder.id, { expires_at: undefined, started_at: at(-30) }), holds(2, qa.id, { expires_at: undefined, started_at: at(-5) })];
+    expect(waitsFor({ task: waiting, claims: [] }, both, untimed, members, now)).toBe(builder.id);
+  });
+
+  it("names no one while a taker is free, when the Step has no taker, or the Task is blocked or held", () => {
+    const open = [holds(1, builder.id, { expires_at: at(9) })];
+    expect(waitsFor({ task: waiting, claims: [] }, both, open, members, now)).toBeUndefined();
+    expect(waitsFor({ task: waiting, claims: [] }, { ...build, takers: [] }, open, members, now)).toBeUndefined();
+    expect(waitsFor({ task: { ...waiting, blocked: true }, claims: [] }, build, open, members, now)).toBeUndefined();
+    expect(waitsFor({ task: waiting, claims: [] }, build, open, members, now)).toBe(builder.id);
   });
 });

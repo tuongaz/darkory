@@ -6,7 +6,7 @@ import { mergeBase } from "./pullRequest";
 import { mockApi, refuse, type Call, type Handler } from "@/test/api";
 import { ada, bob, builder, bug, clientX, detail, step, wfId, wfStep, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
-import { basket, cart, checkout, copy, liveClaimOf, payment, receipt, routes } from "../board/testData";
+import { basket, cart, checkout, copy, liveClaimOf, payment, projectTasks, receipt, routes } from "../board/testData";
 
 beforeEach(() => localStorage.clear());
 
@@ -455,12 +455,14 @@ describe("a Task waiting behind a busy taker", () => {
   it("says at its Step whom it waits for when every taker holds as many Tasks as it runs Shifts", async () => {
     // builder, Build's one taker, holds WEB-2; WEB-7 waits at Build.
     const waiting = { ...copy, id: "k-7", key: "WEB-7", title: "Fix the totals", step_id: step.build, step_since: at(50), claim: undefined };
-    mockApi(taskRoutes({ "GET /v1/tasks/:task": detail(waiting) }));
+    const filed: Activity = { seq: 1, at: at(50), kind: "task.filed", subject_type: "task", subject_id: waiting.id, payload: { step_id: step.build } };
+    mockApi(taskRoutes({ "GET /v1/tasks": { items: [...projectTasks, waiting] }, "GET /v1/tasks/:task": detail(waiting), "GET /v1/activity": { items: [filed], last_seq: 1 } }));
     renderApp("/tasks/WEB-7");
     await screen.findByRole("heading", { level: 1, name: "Fix the totals" });
+    // The strip says it for a screen reader; the line draws it under the token at Build.
     const stepper = await screen.findByRole("list", { name: "Path through the Steps" });
     await waitFor(() => expect(stepper).toHaveTextContent("waits for builder"));
-    expect(screen.getAllByText("waits for builder")).toHaveLength(2);
+    await waitFor(() => expect(screen.getAllByText("waits for builder")).toHaveLength(2));
   });
 
   it("says nothing while a taker is free", async () => {

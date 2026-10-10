@@ -8,6 +8,6 @@ export function useWaitsFor(detail: TaskDetail, steps: readonly WorkflowStep[]):
   const now = useNow();
   const { members } = useDirectory();
   const open = useOpenTasks().data ?? [];
-  const ids = waitsFor(detail, steps.find((s) => s.id === detail.task.step_id), open, members, now);
-  return ids.length ? `waits for ${ids.map((id) => members.get(id)?.name ?? "a Member").join(", ")}` : undefined;
+  const id = waitsFor(detail, steps.find((s) => s.id === detail.task.step_id), open, members, now);
+  return id ? `waits for ${members.get(id)?.name ?? "a Member"}` : undefined;
 }
