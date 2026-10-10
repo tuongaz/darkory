@@ -4612,18 +4612,22 @@ type ClientInterface interface {
 	//
 	// The Runner beside this server merges the Task's open pull request on GitHub, as the
 	// identity its `gh` signs in as, once it has checked there that the pull request numbered
-	// as the record says has a head branch starting with the Task's key (the Runner names a
-	// branch from the Task's title when it makes it, so a renamed Task's branch still starts
-	// with its key) and as its base that branch's own base: the Parent's branch for a Subtask,
-	// else the Workspace's default branch. One merge of a Task runs at a time; a second request
-	// waits and then finds the pull request merged. The server then records it merged as the
-	// caller, with the Note
-	// "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who is the
-	// Task's Owner or an admin; an agent is refused, its Owner too. Errors: `forbidden`,
-	// `no_runner` (no Runner is attached to this server), `not_found` (the Task carries no open
-	// pull request, or GitHub has none so numbered open), `conflict` (the pull request's head
-	// or base is not the Task's, or GitHub refused the merge; the message is the Runner's, as
-	// it read it from `gh`).
+	// as the record says, in the Task's Workspace whose pull request has the record's address,
+	// has a head branch starting with the Task's key (the Runner names a branch from the Task's
+	// title when it makes it, so a renamed Task's branch still starts with its key), is not from
+	// a fork (a fork's pull request is never the Task's, whatever its branch is called), and has
+	// as its base that branch's own base: the Parent's branch for a Subtask, else the
+	// Workspace's default branch. It merges the commit it checked: GitHub refuses when the head
+	// moved meanwhile. One merge of a Task runs at a time; a second request waits and then
+	// finds the pull request merged. The server then records it merged as the caller, with the
+	// Note "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who
+	// is the Task's Owner or an admin; an agent is refused, its Owner too. A Dropped Task is not
+	// merged: its Owner closes its pull request on GitHub. Errors: `forbidden`, `no_runner` (no
+	// Runner is attached to this server), `not_found` (the Task carries no open pull request,
+	// or GitHub has none so numbered open in the Workspace its address names), `conflict` (the
+	// Task is Dropped; the pull request's head or base is not the Task's; GitHub refused the
+	// merge, the message GitHub's own words; the Runner did not answer in 90 s; or the request
+	// stopped waiting for another merge of the Task).
 	//
 	// Corresponds with POST /v1/tasks/{task}/pull-request/merge (the `MergeTaskPullRequest` operationId).
 	MergeTaskPullRequest(ctx context.Context, task TaskRef, params *MergeTaskPullRequestParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7342,18 +7346,22 @@ func (c *Client) SetTaskPullRequest(ctx context.Context, task TaskRef, params *S
 //
 // The Runner beside this server merges the Task's open pull request on GitHub, as the
 // identity its `gh` signs in as, once it has checked there that the pull request numbered
-// as the record says has a head branch starting with the Task's key (the Runner names a
-// branch from the Task's title when it makes it, so a renamed Task's branch still starts
-// with its key) and as its base that branch's own base: the Parent's branch for a Subtask,
-// else the Workspace's default branch. One merge of a Task runs at a time; a second request
-// waits and then finds the pull request merged. The server then records it merged as the
-// caller, with the Note
-// "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who is the
-// Task's Owner or an admin; an agent is refused, its Owner too. Errors: `forbidden`,
-// `no_runner` (no Runner is attached to this server), `not_found` (the Task carries no open
-// pull request, or GitHub has none so numbered open), `conflict` (the pull request's head
-// or base is not the Task's, or GitHub refused the merge; the message is the Runner's, as
-// it read it from `gh`).
+// as the record says, in the Task's Workspace whose pull request has the record's address,
+// has a head branch starting with the Task's key (the Runner names a branch from the Task's
+// title when it makes it, so a renamed Task's branch still starts with its key), is not from
+// a fork (a fork's pull request is never the Task's, whatever its branch is called), and has
+// as its base that branch's own base: the Parent's branch for a Subtask, else the
+// Workspace's default branch. It merges the commit it checked: GitHub refuses when the head
+// moved meanwhile. One merge of a Task runs at a time; a second request waits and then
+// finds the pull request merged. The server then records it merged as the caller, with the
+// Note "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who
+// is the Task's Owner or an admin; an agent is refused, its Owner too. A Dropped Task is not
+// merged: its Owner closes its pull request on GitHub. Errors: `forbidden`, `no_runner` (no
+// Runner is attached to this server), `not_found` (the Task carries no open pull request,
+// or GitHub has none so numbered open in the Workspace its address names), `conflict` (the
+// Task is Dropped; the pull request's head or base is not the Task's; GitHub refused the
+// merge, the message GitHub's own words; the Runner did not answer in 90 s; or the request
+// stopped waiting for another merge of the Task).
 //
 // Corresponds with POST /v1/tasks/{task}/pull-request/merge (the `MergeTaskPullRequest` operationId).
 func (c *Client) MergeTaskPullRequest(ctx context.Context, task TaskRef, params *MergeTaskPullRequestParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -14437,18 +14445,22 @@ type ClientWithResponsesInterface interface {
 	//
 	// The Runner beside this server merges the Task's open pull request on GitHub, as the
 	// identity its `gh` signs in as, once it has checked there that the pull request numbered
-	// as the record says has a head branch starting with the Task's key (the Runner names a
-	// branch from the Task's title when it makes it, so a renamed Task's branch still starts
-	// with its key) and as its base that branch's own base: the Parent's branch for a Subtask,
-	// else the Workspace's default branch. One merge of a Task runs at a time; a second request
-	// waits and then finds the pull request merged. The server then records it merged as the
-	// caller, with the Note
-	// "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who is the
-	// Task's Owner or an admin; an agent is refused, its Owner too. Errors: `forbidden`,
-	// `no_runner` (no Runner is attached to this server), `not_found` (the Task carries no open
-	// pull request, or GitHub has none so numbered open), `conflict` (the pull request's head
-	// or base is not the Task's, or GitHub refused the merge; the message is the Runner's, as
-	// it read it from `gh`).
+	// as the record says, in the Task's Workspace whose pull request has the record's address,
+	// has a head branch starting with the Task's key (the Runner names a branch from the Task's
+	// title when it makes it, so a renamed Task's branch still starts with its key), is not from
+	// a fork (a fork's pull request is never the Task's, whatever its branch is called), and has
+	// as its base that branch's own base: the Parent's branch for a Subtask, else the
+	// Workspace's default branch. It merges the commit it checked: GitHub refuses when the head
+	// moved meanwhile. One merge of a Task runs at a time; a second request waits and then
+	// finds the pull request merged. The server then records it merged as the caller, with the
+	// Note "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who
+	// is the Task's Owner or an admin; an agent is refused, its Owner too. A Dropped Task is not
+	// merged: its Owner closes its pull request on GitHub. Errors: `forbidden`, `no_runner` (no
+	// Runner is attached to this server), `not_found` (the Task carries no open pull request,
+	// or GitHub has none so numbered open in the Workspace its address names), `conflict` (the
+	// Task is Dropped; the pull request's head or base is not the Task's; GitHub refused the
+	// merge, the message GitHub's own words; the Runner did not answer in 90 s; or the request
+	// stopped waiting for another merge of the Task).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -21146,18 +21158,22 @@ func (c *ClientWithResponses) SetTaskPullRequestWithResponse(ctx context.Context
 //
 // The Runner beside this server merges the Task's open pull request on GitHub, as the
 // identity its `gh` signs in as, once it has checked there that the pull request numbered
-// as the record says has a head branch starting with the Task's key (the Runner names a
-// branch from the Task's title when it makes it, so a renamed Task's branch still starts
-// with its key) and as its base that branch's own base: the Parent's branch for a Subtask,
-// else the Workspace's default branch. One merge of a Task runs at a time; a second request
-// waits and then finds the pull request merged. The server then records it merged as the
-// caller, with the Note
-// "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who is the
-// Task's Owner or an admin; an agent is refused, its Owner too. Errors: `forbidden`,
-// `no_runner` (no Runner is attached to this server), `not_found` (the Task carries no open
-// pull request, or GitHub has none so numbered open), `conflict` (the pull request's head
-// or base is not the Task's, or GitHub refused the merge; the message is the Runner's, as
-// it read it from `gh`).
+// as the record says, in the Task's Workspace whose pull request has the record's address,
+// has a head branch starting with the Task's key (the Runner names a branch from the Task's
+// title when it makes it, so a renamed Task's branch still starts with its key), is not from
+// a fork (a fork's pull request is never the Task's, whatever its branch is called), and has
+// as its base that branch's own base: the Parent's branch for a Subtask, else the
+// Workspace's default branch. It merges the commit it checked: GitHub refuses when the head
+// moved meanwhile. One merge of a Task runs at a time; a second request waits and then
+// finds the pull request merged. The server then records it merged as the caller, with the
+// Note "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who
+// is the Task's Owner or an admin; an agent is refused, its Owner too. A Dropped Task is not
+// merged: its Owner closes its pull request on GitHub. Errors: `forbidden`, `no_runner` (no
+// Runner is attached to this server), `not_found` (the Task carries no open pull request,
+// or GitHub has none so numbered open in the Workspace its address names), `conflict` (the
+// Task is Dropped; the pull request's head or base is not the Task's; GitHub refused the
+// merge, the message GitHub's own words; the Runner did not answer in 90 s; or the request
+// stopped waiting for another merge of the Task).
 //
 // Returns a wrapper object for the known response body format(s).
 //
