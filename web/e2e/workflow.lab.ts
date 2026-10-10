@@ -215,6 +215,34 @@ for (const size of sizes) {
   });
 }
 
+// A selected Task (vf-7): a click on builder-1's WEB-5 puts its way in a strip above the line and
+// takes the focus there; the other Tasks and the counts fade; × clears it and the focus is back on
+// the chip. On a phone the strip stacks.
+for (const size of sizes) {
+  test(`a selected Task, ${size.name}`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 2 });
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    await mockV1(page);
+    await page.goto("/projects/WEB/workflows/wf-work");
+    const live = page.getByRole("region", { name: "Workflow", exact: true });
+    const chip = live.locator('[data-box="token"][data-task="WEB-5"]');
+    await chip.click();
+    const strip = live.getByRole("region", { name: "WEB-5's way" });
+    await expect(strip).toContainText("next: pass → QA");
+    await expect(strip.getByRole("button", { name: "Open WEB-5" })).toBeFocused();
+    await expect(live.locator('[data-box="token"][data-task="WEB-6"]').locator("xpath=..")).toHaveAttribute("data-dim", "");
+    await page.waitForTimeout(300);
+    await noSidewaysScroll(page);
+    await shot(page, `selected-${size.name}`);
+    await strip.getByRole("button", { name: "Clear" }).click();
+    await expect(strip).toHaveCount(0);
+    await expect(chip).toBeFocused();
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+}
+
 // The live line as things happen: a pickup reads "now" with its tag, a Task travels its Connector
 // (shot mid-way) and lands, a lapse is tagged; in light and dark, at a phone's size, and with
 // reduced motion, no token.
