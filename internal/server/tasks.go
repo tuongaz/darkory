@@ -241,9 +241,10 @@ func (s *Server) SetTaskPullRequest(w http.ResponseWriter, r *http.Request, task
 
 // mergedOnGitHub checks an agent's write of merged on GitHub, through the Runner beside this
 // server when one is attached: the pull request must be merged there, and its head branch must
-// start with the Task's branch prefix, as the Runner names a Task's branches. An agent writes as
-// the Runner's discovery does, so its word that a merge happened is not taken alone. A human's
-// write, a write of open, and a write with no Runner attached are not checked.
+// start with the Task's branch prefix, as the Runner names a Task's branches, and the address
+// written must be the one GitHub gives, since another repository may have a #7 of its own. An
+// agent writes as the Runner's discovery does, so its word that a merge happened is not taken
+// alone. A human's write, a write of open, and a write with no Runner attached are not checked.
 func (s *Server) mergedOnGitHub(ctx context.Context, c *auth.Caller, ref string, body gen.SetTaskPullRequestBody) error {
 	run := s.theRunner()
 	if body.State != gen.PullRequestMerged || run == nil {
@@ -271,6 +272,8 @@ func (s *Server) mergedOnGitHub(ctx context.Context, c *auth.Caller, ref string,
 		return &core.Error{Code: core.CodeConflict, Message: fmt.Sprintf("GitHub has #%d %s, not merged", body.Number, pr.State)}
 	case !strings.HasPrefix(pr.Head, branch.Prefix(key)):
 		return &core.Error{Code: core.CodeInvalid, Message: fmt.Sprintf("pull request #%d's branch %s is not %s's", body.Number, pr.Head, key)}
+	case pr.URL != body.URL:
+		return &core.Error{Code: core.CodeInvalid, Message: fmt.Sprintf("the address written is not pull request #%d's on GitHub", body.Number)}
 	}
 	return nil
 }

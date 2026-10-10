@@ -250,9 +250,13 @@ func TestAgentMergedWriteIsCheckedOnGitHub(t *testing.T) {
 		}
 
 		var asked []string
+		var ghErr error
 		github := runnerapi.PullRequest{Number: 7, URL: "https://github.com/acme/web/pull/7", State: "open", Head: "web-2-checkout", Base: "main"}
 		h.srv.AttachRunner(&fakeRunner{pullRequest: func(task string, number int64) (runnerapi.PullRequest, error) {
 			asked = append(asked, fmt.Sprintf("%s #%d", task, number))
+			if ghErr != nil {
+				return runnerapi.PullRequest{}, ghErr
+			}
 			return github, nil
 		}})
 		task := file("Checkout") // WEB-2
@@ -274,6 +278,26 @@ func TestAgentMergedWriteIsCheckedOnGitHub(t *testing.T) {
 		if res.StatusCode() != http.StatusBadRequest || !strings.Contains(res.JSONDefault.Message, "pull request #7's branch web-9-other is not WEB-2's") {
 			t.Fatalf("another Task's branch: %s", res.Body)
 		}
+		// Merged on the Task's branch, but the Workspaces' #7 is another repository's.
+		github.Head, github.URL = "web-2-checkout", "https://github.com/acme/api/pull/7"
+		res = write(bob, task, client.PullRequestMerged)
+		if res.StatusCode() != http.StatusBadRequest || !strings.Contains(res.JSONDefault.Message, "the address written is not pull request #7's on GitHub") {
+			t.Fatalf("another repository's #7: %s", res.Body)
+		}
+		github.URL = "https://github.com/acme/web/pull/7"
+		// GitHub has no #7 in the Task's Workspaces.
+		ghErr = runnerapi.ErrNoPullRequest
+		res = write(bob, task, client.PullRequestMerged)
+		if res.StatusCode() != http.StatusConflict || !strings.Contains(res.JSONDefault.Message, "GitHub has no pull request #7 in WEB-2's Workspaces") {
+			t.Fatalf("no #7 on GitHub: %s", res.Body)
+		}
+		// GitHub cannot be asked: the Runner's words are given.
+		ghErr = errors.New("gh: could not reach github.com")
+		res = write(bob, task, client.PullRequestMerged)
+		if res.StatusCode() != http.StatusConflict || !strings.Contains(res.JSONDefault.Message, "gh: could not reach github.com") {
+			t.Fatalf("GitHub not reached: %s", res.Body)
+		}
+		ghErr = nil
 		// Merged, on the Task's branch: a renamed Task's branch still starts with its key.
 		github.Head = "web-2-old-title"
 		if res := write(bob, task, client.PullRequestMerged); res.StatusCode() != http.StatusOK || res.JSON200.PullRequest.State != client.PullRequestMerged {
