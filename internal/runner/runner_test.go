@@ -607,6 +607,11 @@ func TestRunnerAttachesTheShiftsLogAsALog(t *testing.T) {
 			if e.Kind != client.EvidenceKindLog {
 				t.Fatalf("the Shift's log %s is of kind %q", e.Filename, e.Kind)
 			}
+			// It names the builder's Claim, though that Claim had ended when it was attached.
+			d := f.task("WEB-1")
+			if e.ClaimID == nil || len(d.Claims) == 0 || *e.ClaimID != d.Claims[0].ID {
+				t.Fatalf("the Shift's log names the Claim %v; the Claims are %+v", e.ClaimID, d.Claims)
+			}
 			logs++
 		case e.Kind != client.EvidenceKindEvidence:
 			t.Fatalf("the agent's own %s is of kind %q", e.Filename, e.Kind)
@@ -684,9 +689,10 @@ func TestRunnerStartsTheNextSessionOnceTheEarlierEnds(t *testing.T) {
 	if gap := started.Sub(ended); gap < 0 || gap > 2*time.Second {
 		t.Fatalf("the reviewer's session started %s after the builder's ended", gap)
 	}
-	// The builder's log waited for the reviewer's Claim to end, and is on the Task.
-	if !strings.Contains(log, `msg="the Task is held by its next holder; the Shift's log is attached once it is free" component=runner agent=builder task=WEB-1`) {
-		t.Fatalf("the builder's log was not kept for later:\n%s", log)
+	// The builder's log names its own ended Claim, so the record took it while the reviewer held
+	// WEB-1: nothing was kept for later.
+	if !strings.Contains(log, `msg="attached the Shift's log" component=runner agent=builder task=WEB-1`) || strings.Contains(log, "is attached once it is free") {
+		t.Fatalf("the builder's log was not attached at once:\n%s", log)
 	}
 	eventually(t, 10*time.Second, "the builder's log on WEB-1", func() bool {
 		return sessionLogs(evidenceNames(f.task("WEB-1").Evidence), "WEB-1", "builder") == 1

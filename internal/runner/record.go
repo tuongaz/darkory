@@ -106,9 +106,10 @@ type Record interface {
 	// Nudged records that the Runner nudged the agent holding task, nudge 1 or 2.
 	Nudged(ctx context.Context, task string, nudge int) error
 	File(ctx context.Context, body client.FileTaskBody) (*client.Task, error)
-	// Attach attaches content to task as Evidence of kind: refused not_holder while another Member
-	// holds it.
-	Attach(ctx context.Context, task, filename string, kind client.EvidenceKind, content []byte) error
+	// Attach attaches content to task as Evidence of kind, under the Claim claim when it is not
+	// empty: a Shift's log names its own Claim, ended or not, and is taken whoever holds the Task
+	// now. Without a Claim it is refused not_holder while another Member holds the Task.
+	Attach(ctx context.Context, task, filename string, kind client.EvidenceKind, claim string, content []byte) error
 	// SetPullRequest records on task the pull request its branch lands through, as GitHub has it.
 	SetPullRequest(ctx context.Context, task string, pr client.PullRequest) error
 	// Activity reads one connection of the Activity stream from after, calling each for every
@@ -316,9 +317,11 @@ func (r *conn) File(ctx context.Context, body client.FileTaskBody) (*client.Task
 	return &res.JSON201.Task, nil
 }
 
-func (r *conn) Attach(ctx context.Context, task, filename string, kind client.EvidenceKind, content []byte) error {
-	_, _, err := r.c.Attach(ctx, task, filename, contentType(filename, content), kind, content)
-	return err
+func (r *conn) Attach(ctx context.Context, task, filename string, kind client.EvidenceKind, claim string, content []byte) error {
+	params := &client.AttachTaskEvidenceParams{Filename: filename, Kind: &kind, Claim: opt(claim)}
+	// A *bytes.Reader lets a retry resend the body.
+	res, err := r.c.AttachTaskEvidenceWithBodyWithResponse(ctx, task, params, contentType(filename, content), bytes.NewReader(content))
+	return remote.Check(res, err, http.StatusCreated)
 }
 
 func (r *conn) SetPullRequest(ctx context.Context, task string, pr client.PullRequest) error {

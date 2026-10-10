@@ -875,10 +875,11 @@ func (s *session) shutdown(ctx context.Context) {
 }
 
 // attachLog attaches the session's log to the Task as a log, the Claim's and not the Task's
-// Evidence. When another Member holds the Task by now, as the next holder may as soon as the agent
-// advanced it, the record takes attachments from that holder alone (plan invariant 6), so the log
-// waits on disk and the runner attaches it the moment the Task is free (attachPending). It is named for the Task, the agent and the time the
-// session began (UTC), so the builder's and the reviewer's logs of one Task tell apart.
+// Evidence, naming the Shift's Claim: the record takes it so whoever holds the Task now, as the
+// next holder may as soon as the agent advanced it. A log that cannot be attached (the record
+// refuses it, or does not answer) waits on disk with its Claim, and the runner attaches it later
+// (attachKept). It is named for the Task, the agent and the time the session began (UTC), so the
+// builder's and the reviewer's logs of one Task tell apart.
 func (s *session) attachLog(ctx context.Context) {
 	b, err := readTail(s.logPath, maxLog)
 	if err != nil || len(b) == 0 {
@@ -888,18 +889,18 @@ func (s *session) attachLog(ctx context.Context) {
 		return
 	}
 	name := SessionLogName(s.key, s.a.name(), s.started)
-	err = s.rec.Attach(ctx, s.key, name, client.EvidenceKindLog, b)
+	err = s.rec.Attach(ctx, s.key, name, client.EvidenceKindLog, s.claimID, b)
 	switch {
 	case err == nil:
 		s.log.Info("attached the Shift's log", "evidence", name, "bytes", len(b))
 	case refusedBy(err, client.ErrorCodeNotHolder):
-		if err := s.r.keepLog(s.a, s.key, name, b); err != nil {
+		if err := s.r.keepLog(s.a, s.key, s.claimID, name, b); err != nil {
 			s.log.Error("could not keep the Shift's log for later", "evidence", name, "err", err)
 			return
 		}
 		s.log.Info("the Task is held by its next holder; the Shift's log is attached once it is free", "evidence", name)
 	default:
-		if err := s.r.keepLog(s.a, s.key, name, b); err != nil {
+		if err := s.r.keepLog(s.a, s.key, s.claimID, name, b); err != nil {
 			s.log.Error("could not attach the Shift's log, nor keep it for later", "evidence", name, "err", err)
 			return
 		}

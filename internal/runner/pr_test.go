@@ -2,9 +2,12 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -705,5 +708,50 @@ func TestNewestPullRequest(t *testing.T) {
 	r.pollOnce(t.Context(), seen)
 	if pr := rec.tasks[0].Task.PullRequest; pr == nil || pr.Number != 7 || pr.State != client.PullRequestMerged {
 		t.Fatalf("DARK-3 carries %+v", pr)
+	}
+}
+
+func (f *taskRecord) Attach(_ context.Context, task, filename string, kind client.EvidenceKind, claim string, _ []byte) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if code, ok := f.refuse[task]; ok {
+		return &remote.Error{Status: 500, Code: code, Message: "refused"}
+	}
+	f.writes = append(f.writes, fmt.Sprintf("%s attached %s to %s as %s under %s", f.name, filename, task, kind, claim))
+	return nil
+}
+
+// A Shift's log names the Shift's Claim, attached at once or kept and attached by a Runner started
+// again: the kept log's record carries the Claim.
+func TestShiftsLogNamesItsClaim(t *testing.T) {
+	rec := mergeFixture()
+	rec.name = "builder"
+	r := pollRunner(t, rec, &recordingGitHub{})
+	a := r.agents[0]
+	logPath := filepath.Join(t.TempDir(), "pane.log")
+	if err := os.WriteFile(logPath, []byte("fakeagent: working\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	started := time.Date(2026, 10, 10, 10, 15, 0, 0, time.UTC)
+	s := &session{r: r, a: a, rec: rec, key: "DARK-3", taskID: "t-3", claimID: "c-1", started: started, logPath: logPath, log: r.log}
+	s.attachLog(t.Context())
+	if got := rec.written(); !slices.Equal(got, []string{"builder attached shift-DARK-3-builder-101500.log to DARK-3 as log under c-1"}) {
+		t.Fatalf("attached %v", got)
+	}
+
+	rec.refuse = map[string]client.ErrorCode{"DARK-3": client.ErrorCodeInternal}
+	s.attachLog(t.Context())
+	b, err := os.ReadFile(filepath.Join(r.cfg.Data, "sessions", "DARK-3", keptDir, "shift-DARK-3-builder-101500.log.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var k keptLog
+	if err := json.Unmarshal(b, &k); err != nil || k.Claim != "c-1" {
+		t.Fatalf("the kept log's record %s: %v", b, err)
+	}
+	rec.refuse = nil
+	r.attachKeptOnce(t.Context())
+	if got := rec.written(); len(got) != 2 || got[1] != "builder attached shift-DARK-3-builder-101500.log to DARK-3 as log under c-1" {
+		t.Fatalf("attached %v", got)
 	}
 }

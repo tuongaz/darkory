@@ -21,14 +21,16 @@ import (
 // keptDir holds a Task's session logs waiting to be attached: each <name> beside <name>.json.
 const keptDir = "kept"
 
-// keptLog is a session log waiting to be attached to Task, as the agent Member whose session it was.
+// keptLog is a session log waiting to be attached to Task, as the agent Member whose session it
+// was, under the Shift's Claim (empty in a log kept before the Runner named it).
 type keptLog struct {
 	Task, Agent, Name string
+	Claim             string `json:",omitempty"`
 	At                time.Time
 }
 
 // keepLog keeps a session's log until it can be attached, and wakes attachKept.
-func (r *Runner) keepLog(a *agent, task, name string, content []byte) error {
+func (r *Runner) keepLog(a *agent, task, claim, name string, content []byte) error {
 	dir := filepath.Join(r.cfg.Data, "sessions", task, keptDir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -36,7 +38,7 @@ func (r *Runner) keepLog(a *agent, task, name string, content []byte) error {
 	if err := os.WriteFile(filepath.Join(dir, name), content, 0o600); err != nil {
 		return err
 	}
-	b, err := json.Marshal(keptLog{Task: task, Agent: a.me.Member.ID, Name: name, At: time.Now().UTC()})
+	b, err := json.Marshal(keptLog{Task: task, Agent: a.me.Member.ID, Name: name, Claim: claim, At: time.Now().UTC()})
 	if err != nil {
 		return err
 	}
@@ -101,7 +103,7 @@ func (r *Runner) attachKeptOnce(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		err = a.rec.Attach(ctx, k.Task, k.Name, client.EvidenceKindLog, content)
+		err = a.rec.Attach(ctx, k.Task, k.Name, client.EvidenceKindLog, k.Claim, content)
 		switch {
 		case err == nil:
 			os.Remove(strings.TrimSuffix(meta, ".json"))
