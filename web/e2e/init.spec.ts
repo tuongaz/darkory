@@ -5,8 +5,8 @@ import { startInstall, type Install } from "./server";
 // Scenario 11 of docs/build/model-v2-plan.md in the browser: a fresh `darkory init` with its roster
 // (outside a git repository, so no Workspace) makes the Organisation, the builtin Skills,
 // engineer, review, triage and qa, the five agents (planner, builder, reviewer, tester and retro),
-// and MAIN on the default Workflows (Implementation and
-// Bug triage, docs/build/sample-workflows-plan.md), and prints a login link; the
+// and MAIN on the default Workflows (Implementation, Bug triage and Retrospective,
+// docs/build/sample-workflows-plan.md), and prints a login link; the
 // Install checklist leads from there to the first Task. Init on each engine is e2e/init_test.go's
 // (`make e2e`, `make e2e-pg`); this is the SQLite Install the web suite runs.
 const shots = fileURLToPath(new URL("./screenshots/init/", import.meta.url));
@@ -65,10 +65,11 @@ test("scenario 11: a fresh init's record, its printed link, and the checklist to
     expect(projects.map((p) => p.key)).toEqual(["MAIN"]);
     const wf = await ask<{ workflows: { id: string; name: string; position: number }[]; steps: { name: string; workflow_id: string; position: number }[] }>("/v1/projects/MAIN/workflow");
     const workflows = [...wf.workflows].sort((a, b) => a.position - b.position);
-    expect(workflows.map((w) => w.name)).toEqual(["Implementation", "Bug triage"]);
+    expect(workflows.map((w) => w.name)).toEqual(["Implementation", "Bug triage", "Retrospective"]);
     const stepsOf = (id: string) => wf.steps.filter((s) => s.workflow_id === id).sort((a, b) => a.position - b.position).map((s) => s.name);
-    expect(stepsOf(workflows[0].id)).toEqual(["Backlog", "Plan", "Build", "Review", "Retro", "Skill review"]);
+    expect(stepsOf(workflows[0].id)).toEqual(["Backlog", "Plan", "Build", "Review"]);
     expect(stepsOf(workflows[1].id)).toEqual(["Triage", "Fix", "Code review", "Verify"]);
+    expect(stepsOf(workflows[2].id)).toEqual(["Retro", "Skill review"]);
   });
 
   await test.step("init's printed link signs in once serve runs", async () => {
@@ -108,12 +109,13 @@ test("scenario 11: a fresh init's record, its printed link, and the checklist to
     await page.goto(`${install.base}/projects/MAIN/tasks?view=board`);
     await expect(page.getByRole("region", { name: "Build", exact: true }).locator("[data-task=MAIN-1]")).toContainText("Write the README");
     await shot(page, "04-first-task-on-the-board");
-    // MAIN's Workflows list its two, Implementation first; its row opens its page, the line.
+    // MAIN's Workflows list its three, Implementation first; its row opens its page, the line.
     await page.goto(`${install.base}/projects/MAIN/workflows`);
     const rows = page.getByRole("table", { name: "Workflows" }).getByRole("row");
-    await expect(rows).toHaveCount(3);
+    await expect(rows).toHaveCount(4);
     await expect(rows.nth(1).getByRole("link").first()).toHaveText("Implementation");
     await expect(rows.nth(2).getByRole("link").first()).toHaveText("Bug triage");
+    await expect(rows.nth(3).getByRole("link").first()).toHaveText("Retrospective");
     await rows.nth(1).getByRole("link").first().click();
     await expect(page).toHaveURL(new RegExp(`^${install.base}/projects/MAIN/workflows/[^/?]+$`));
     await expect(page.getByRole("region", { name: "Workflow", exact: true }).locator('button[data-task="MAIN-1"]')).toBeVisible();

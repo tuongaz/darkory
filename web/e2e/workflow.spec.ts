@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { startInstall } from "./server";
 
 // Scenarios 6 and 9 of docs/build/model-v2-plan.md against the real binary, on an Install of
-// their own (init's MAIN with the default Workflows, Implementation and Bug triage, and the roster's
-// agents; the scenarios edit Implementation):
+// their own (init's MAIN with the default Workflows, Implementation, Bug triage and Retrospective,
+// and the roster's agents; the scenarios edit Implementation):
 //   6. Workflow editing in the list and panel: rename a Step, add one between two with a new Skill
 //      and wire it, delete one with Tasks (asked where they go and where the outcome into it
 //      leads), the changes listed, all saved in one go; the open board's columns follow; then who
@@ -164,7 +164,7 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await board.page.screenshot({ path: `${shots}6-01-board-before.png`, animations: "disabled" });
 
   // C1: the Steps as text, none open until one is picked; then Build, where New Tasks start.
-  // MAIN's Workflows list Implementation and Bug triage; Implementation's pencil opens its editor.
+  // MAIN's Workflows list Implementation, Bug triage and Retrospective; Implementation's pencil opens its editor.
   const { page, errors, ctx } = await open(browser, "/projects/MAIN/workflows");
   await page.getByRole("table", { name: "Workflows" }).getByRole("link", { name: "Edit Implementation" }).click();
   const list = page.getByRole("list", { name: "Steps" });
@@ -184,15 +184,14 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   const make = list.getByRole("listitem", { name: "3. Make" });
   const band = page.getByRole("button", { name: "Add a Step after Make" });
   const below = list.getByRole("listitem", { name: "4. Review" });
-  const last = list.getByRole("listitem", { name: "6. Skill review" });
-  const rest = [await band.boundingBox(), await below.boundingBox(), await last.boundingBox()];
+  const rest = [await band.boundingBox(), await below.boundingBox()];
   await expect(band).toHaveCSS("opacity", "0");
   const box = (await make.boundingBox())!;
   await page.mouse.move(box.x + 120, box.y + box.height + 2);
   await band.hover();
   await expect(band).toHaveCSS("opacity", "1");
   await expect(band).toHaveText("Add Step");
-  expect([await band.boundingBox(), await below.boundingBox(), await last.boundingBox()]).toEqual(rest);
+  expect([await band.boundingBox(), await below.boundingBox()]).toEqual(rest);
   await page.screenshot({ path: `${shots}6-04-add-band.png`, animations: "disabled" });
   await band.click();
   await expect(page.getByRole("textbox", { name: "Name of Step 4" })).toBeFocused();
@@ -230,7 +229,7 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await page.screenshot({ path: `${shots}6-06-delete-asks.png`, animations: "disabled" });
   await dialog.getByRole("button", { name: "Delete Review" }).click();
   await expect(list.getByRole("listitem", { name: /Review$/ })).toHaveCount(0);
-  // Review was the last Step on the line: the panel moves to QA above it, not to Retro after a Parent.
+  // Review was Implementation's last Step: the panel moves to QA above it.
   await expect(page.getByRole("textbox", { name: "Name of Step 4" })).toHaveValue("QA");
   // The changes, listed from the header.
   const chip = page.getByRole("button", { name: /^Editing · \d+ changes: list them$/ });
@@ -256,13 +255,18 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   expect(wf.connectors.find((c) => c.from_step_id === qaStep.id && c.name === "pass")!.to_step_id).toBeUndefined();
   const { items: skillList } = (await v1("GET", "/v1/skills")) as { items: { id: string; name: string }[] };
   expect(qaStep.skill_id).toBe(skillList.find((s) => s.name === "usability")!.id);
-  // Implementation's Save sent MAIN's whole graph: Bug triage comes back whole, its feature into Make.
+  // Implementation's Save sent MAIN's whole graph: Bug triage comes back whole, its feature into
+  // Make, and Retrospective whole.
   const bugTriage = wf.workflows.find((w) => w.name === "Bug triage")!;
   const bugSteps = wf.steps.filter((s) => s.workflow_id === bugTriage.id).sort((a, b) => a.position - b.position);
   expect(bugSteps.map((s) => s.name)).toEqual(["Triage", "Fix", "Code review", "Verify"]);
   expect(wf.connectors.filter((c) => bugSteps.some((s) => s.id === c.from_step_id))).toHaveLength(8);
   const triage = bugSteps.find((s) => s.name === "Triage")!;
   expect(wf.connectors.find((c) => c.from_step_id === triage.id && c.name === "feature")!.to_step_id).toBe(madeStep.id);
+  const retrospective = wf.workflows.find((w) => w.name === "Retrospective")!;
+  const retroSteps = wf.steps.filter((s) => s.workflow_id === retrospective.id).sort((a, b) => a.position - b.position);
+  expect(retroSteps.map((s) => s.name)).toEqual(["Retro", "Skill review"]);
+  expect(wf.connectors.filter((c) => retroSteps.some((s) => s.id === c.from_step_id))).toHaveLength(4);
 
   // C3: QA's Skill exists now and nobody has it: its Owner takes it. A new agent for it, at once: its token shows once.
   const work = wf.workflows.find((w) => w.name === "Implementation")!.id;
