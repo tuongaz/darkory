@@ -1461,8 +1461,10 @@ export interface paths {
          *     Parent as a whole is attached to the Parent. `kind=log` is a Shift's terminal log, which
          *     the Runner attaches when the Shift ends. `claim` names the Claim the Evidence belongs to:
          *     a Claim on this Task whose holder is the caller, ended or not; the Runner names the Claim a
-         *     Shift's log belongs to. Without it the Evidence belongs to the caller's Claim when the
-         *     caller holds the Task, else to none. Records `task.evidence_attached` with `kind` and
+         *     Shift's log belongs to. A `log` naming the caller's own ended Claim is that Claim's, not
+         *     the current holder's work, so it is taken whoever holds the Task now; anything else needs
+         *     the Task's Claim while it is held. Without `claim` the Evidence belongs to the caller's
+         *     Claim when the caller holds the Task, else to none. Records `task.evidence_attached` with `kind` and
          *     `claim_id`. Errors: `not_holder`, `forbidden` (also: the Claim named is not the caller's
          *     on this Task), `too_large`.
          */
