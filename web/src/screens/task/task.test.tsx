@@ -451,6 +451,27 @@ describe("a Task's pull request", () => {
   });
 });
 
+describe("a Task waiting behind a busy taker", () => {
+  it("says at its Step whom it waits for when every taker holds as many Tasks as it runs Shifts", async () => {
+    // builder, Build's one taker, holds WEB-2; WEB-7 waits at Build.
+    const waiting = { ...copy, id: "k-7", key: "WEB-7", title: "Fix the totals", step_id: step.build, step_since: at(50), claim: undefined };
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": detail(waiting) }));
+    renderApp("/tasks/WEB-7");
+    await screen.findByRole("heading", { level: 1, name: "Fix the totals" });
+    const stepper = await screen.findByRole("list", { name: "Path through the Steps" });
+    await waitFor(() => expect(stepper).toHaveTextContent("waits for builder"));
+    expect(screen.getAllByText("waits for builder")).toHaveLength(2);
+  });
+
+  it("says nothing while a taker is free", async () => {
+    const waiting = { ...copy, id: "k-7", key: "WEB-7", title: "Fix the totals", step_id: step.build, step_since: at(50), claim: undefined };
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": detail(waiting), "GET /v1/tasks": { items: [copy, waiting] } }));
+    renderApp("/tasks/WEB-7");
+    await screen.findByRole("list", { name: "Path through the Steps" });
+    expect(screen.queryByText("waits for builder")).not.toBeInTheDocument();
+  });
+});
+
 describe("a Task's record", () => {
   it("hangs a Shift's log on the row that ended its Claim, never as the Task's Evidence", async () => {
     const t = { ...copy, state: "done" as const, ended_at: at(30), step_id: undefined };

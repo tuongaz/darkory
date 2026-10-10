@@ -1,7 +1,7 @@
 import type { Activity, Member, PullRequest, RunnerSessionState, Skill, Task, TaskDetail, Workflows } from "@/api/client";
 import { stepTitle } from "@/components/workflowLine/model";
 import { stepsInOrder } from "@/screens/board/derive";
-import { liveClaim } from "@/work";
+import { allShiftsBusy, liveClaim } from "@/work";
 
 // The rules the four screens read, apart from rendering, so the tests can hold them to the plan.
 
@@ -360,7 +360,7 @@ export function queueOf({
   projectId: string;
   now: number;
 }): Task[] {
-  if (!workflow || held.length === 0 || held.length < (agent.agent?.shifts ?? 1)) return [];
+  if (!workflow || !allShiftsBusy(agent, held.length)) return [];
   const takes = new Set(workflow.steps.filter((s) => s.takers.some((t) => t.id === agent.id)).map((s) => s.id));
   const since = (t: Task) => Date.parse(t.step_since ?? t.waiting_since);
   return open

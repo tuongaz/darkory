@@ -62,3 +62,13 @@ export function liveAgents(tasks: Task[], members: Map<string, Member>, now: num
   }
   return ids;
 }
+
+/** How many Shifts a Member works at once: an agent's settings say (1 unless set); a human works one. */
+export function shiftsOf(member: Pick<Member, "agent"> | undefined): number {
+  return member?.agent?.shifts ?? 1;
+}
+
+/** Whether a Member holding `held` Tasks has every Shift busy, so nothing more is taken now. */
+export function allShiftsBusy(member: Pick<Member, "agent"> | undefined, held: number): boolean {
+  return held > 0 && held >= shiftsOf(member);
+}
