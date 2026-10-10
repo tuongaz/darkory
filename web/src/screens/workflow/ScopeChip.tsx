@@ -50,6 +50,11 @@ export function ScopeChip({
                 <span className="flex-none font-mono text-[11.5px] text-muted-foreground">{task.key}</span>
                 <span className="min-w-0 truncate">{task.title}</span>
               </>
+            ) : data.scope.kind === "all" ? (
+              // On a phone the bar has room for one word: "All", never "All …".
+              <span className="whitespace-nowrap">
+                All<span className="hidden @md/page:inline"> Tasks</span>
+              </span>
             ) : (
               <span className="truncate">{label}</span>
             )}
