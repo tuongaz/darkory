@@ -1,5 +1,5 @@
 import { LoaderIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useSkills, useTasks, useWorkflow } from "@/api/queries";
@@ -286,6 +286,8 @@ function EditingPage() {
     navigate(workflowsPath(project, saved?.id ?? id));
   };
   const n = editor.changes;
+  // The bar's "+ Step": the editor sets what it does (a Step at the end of the line).
+  const addStepRef = useRef<(() => void) | null>(null);
   // An address naming the Workflow by name goes to its id first: a rename then keeps the address.
   if (shown.redirect) return <Navigate to={{ pathname: workflowEditPath(project, shown.redirect), search }} state={state} replace />;
   if (editor.draft && !shown.id) return <NotFound crumbs={editorCrumbs(project, "Not found")} />;
@@ -293,11 +295,14 @@ function EditingPage() {
     <>
       <TopBar
         crumbs={editorCrumbs(project, shown.workflow?.name.trim() || "…")}
-        view={<ChangesChip editor={editor} />}
+        view={<BarAction variant="outline" icon={<PlusIcon aria-hidden />} label="Step" aria-label="Add a Step at the end of the line" disabled={!editor.draft} onClick={() => addStepRef.current?.()} />}
         actions={
-          <Button variant="outline" size="sm" className="text-xs" onClick={() => (n > 0 ? setDiscarding(true) : navigate(page))}>
-            Cancel
-          </Button>
+          <>
+            <ChangesChip editor={editor} />
+            <Button variant="ghost" size="sm" className="text-xs" onClick={() => (n > 0 ? setDiscarding(true) : navigate(page))}>
+              Cancel
+            </Button>
+          </>
         }
         primary={
           <Button size="sm" className="text-xs" disabled={!editor.draft || editor.saving || n === 0} onClick={() => void save()}>
@@ -307,7 +312,7 @@ function EditingPage() {
         }
       />
       <Content className="flex flex-col overflow-hidden">
-        <EditingWorkflow project={project} editor={editor} draft={editor.draft} base={editor.base} skills={editor.skills} focusStep={focusStep} focusName={focusName} />
+        <EditingWorkflow project={project} editor={editor} draft={editor.draft} base={editor.base} skills={editor.skills} focusStep={focusStep} focusName={focusName} addStepRef={addStepRef} />
       </Content>
       {discarding && (
         <FormDialog

@@ -236,7 +236,8 @@ describe("the Workflows page of a Project of several", () => {
     await waitFor(() => expect(name).toHaveFocus());
     const made = current().workflows.find((w) => w.name === "Workflow 6")!;
     expect(address()).toBe(`/projects/WEB/workflows/${made.id}/edit`);
-    expect(within(screen.getByRole("list", { name: "Steps" })).queryAllByRole("listitem")).toEqual([]);
+    // No Step yet: the line is Done alone.
+    expect(within(screen.getByRole("list", { name: "Steps on the line" })).getAllByRole("listitem").map((li) => li.getAttribute("data-head"))).toEqual(["Done"]);
     expect(await screen.findByText("Added Workflow 6")).toBeInTheDocument();
     // Named at once and saved with the draft; Save lands on its page.
     await userEvent.clear(name);

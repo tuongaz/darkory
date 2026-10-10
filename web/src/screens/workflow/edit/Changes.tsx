@@ -21,8 +21,9 @@ const tone: Record<Change["kind"], PillTone> = {
 };
 
 /**
- * The header's "Editing · N changes": with changes, a button that lists them — each with what it
- * changed — and what moves because of them (where New Tasks start). ⌘Z undoes the last.
+ * The bar's "N changes ⌄" (vf-9), in the changed colour: a button that lists the changes — each with
+ * what it changed — and what moves because of them (where New Tasks start). ⌘Z undoes the last.
+ * With none, "Editing".
  */
 export function ChangesChip({ editor }: { editor: DraftEditor }) {
   const n = editor.changes;
@@ -40,15 +41,16 @@ export function ChangesChip({ editor }: { editor: DraftEditor }) {
     <span role="status" aria-label="Editing">
       <Popover>
         <PopoverTrigger asChild>
-          <button type="button" aria-label={`Editing · ${n} ${n === 1 ? "change" : "changes"}: list them`} className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
-            <Pill tone="claimed" className="gap-1 font-normal">
-              <span className="max-sm:sr-only">Editing · </span>
-              {n} {n === 1 ? "change" : "changes"}
-              <ChevronDownIcon aria-hidden className="size-3" />
-            </Pill>
+          <button
+            type="button"
+            aria-label={`${n} ${n === 1 ? "change" : "changes"}: list them`}
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-ring bg-background px-2.5 text-xs font-medium whitespace-nowrap text-ring outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent"
+          >
+            {n} {n === 1 ? "change" : "changes"}
+            <ChevronDownIcon aria-hidden className="size-3" />
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-[400px] max-w-[calc(100vw-32px)] p-3.5">
+        <PopoverContent align="end" className="w-[400px] max-w-[calc(100vw-32px)] p-3.5">
           <h2 className="mb-2 text-[13px] font-semibold">
             {n} {n === 1 ? "change" : "changes"}, not saved
           </h2>
