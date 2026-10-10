@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { emit, mockV1 } from "./workflowMock";
+import { emit, mockV1, threeWorkflows } from "./workflowMock";
 
 // The Workflow screens under `vite dev` with a mocked /v1 (`npm run lab`): the live canvas and a
 // Step's peek, the text view, and the list editor (F5a–c of frag-d), at desktop and phone sizes in
@@ -121,6 +121,33 @@ for (const scheme of ["light", "dark"] as const) {
       await context.close();
     });
   }
+}
+
+// The Workflows list (vf-8): each Workflow its own line, side by side; three to a row at 1184,
+// stacked on a phone, with no sideways scroll; the strip of a selected Task in its own column.
+for (const size of [{ name: "1184", width: 1184, height: 900 }, { name: "1440", width: 1440, height: 900 }, { name: "phone", width: 390, height: 844 }] as const) {
+  test(`the Workflows list, ${size.name}`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 2 });
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    await mockV1(page, "ada", { workflow: threeWorkflows });
+    await page.goto("/projects/WEB/workflows");
+    const list = page.getByRole("list", { name: "Workflows", exact: true });
+    await expect(list.locator(":scope > li")).toHaveCount(3);
+    await expect(list.locator(':scope > li[aria-label="Implementation"] button[data-task="WEB-5"]')).toBeVisible();
+    await page.waitForTimeout(300);
+    await noSidewaysScroll(page);
+    const boxes = await list.locator(":scope > li").evaluateAll((lis) => lis.map((li) => li.getBoundingClientRect().toJSON() as DOMRect));
+    if (size.name === "phone") expect(boxes.every((b) => b.x === boxes[0].x)).toBe(true);
+    else expect(boxes.every((b) => b.y === boxes[0].y)).toBe(true);
+    await shot(page, `list-${size.name}`);
+    await list.locator(':scope > li[aria-label="Implementation"] button[data-task="WEB-5"]').click();
+    await expect(page.getByRole("region", { name: "WEB-5's way" })).toHaveCount(1);
+    await noSidewaysScroll(page);
+    await shot(page, `list-selected-${size.name}`);
+    expect(errors).toEqual([]);
+    await context.close();
+  });
 }
 
 test("editing: nothing is sent until Save; then the new Skill, then one PUT", async ({ page }) => {

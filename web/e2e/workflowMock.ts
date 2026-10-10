@@ -99,6 +99,43 @@ export function initialWorkflow(): { project_id: string; workflows: WorkflowRec[
   };
 }
 
+/**
+ * The Project as vf-8 draws it: three Workflows. Implementation (Backlog, Plan, Build, QA, Review,
+ * Acceptance: the default one's Steps), Bug triage (Triage, Fix, Code review, Verify; a feature
+ * crosses into Build) and Retrospective (Retro, Skill review).
+ */
+export function threeWorkflows(): ReturnType<typeof initialWorkflow> {
+  const base = initialWorkflow();
+  const retro = new Set(["st-retro", "st-skill-review"]);
+  const bug = (id: string, name: string, position: number, skillName: string, takers: string[], median: number): StepRec => ({ ...st(id, name, position, 0, 0, skillName, takers, 0, 0, median), workflow_id: "wf-bugs" });
+  return {
+    project_id: base.project_id,
+    workflows: [
+      { id: "wf-work", name: "Implementation", position: 1 },
+      { id: "wf-bugs", name: "Bug triage", position: 2 },
+      { id: "wf-retro", name: "Retrospective", position: 3 },
+    ],
+    steps: [
+      ...base.steps.map((x) => (retro.has(x.id) ? { ...x, workflow_id: "wf-retro", position: x.id === "st-retro" ? 1 : 2 } : x)),
+      bug("st-triage", "Triage", 1, "review", ["m-planner"], 6 * 60_000),
+      bug("st-fix", "Fix", 2, "engineer", ["m-builder-1"], 2 * 60_000),
+      bug("st-creview", "Code review", 3, "review", ["m-reviewer", "m-ada"], 3 * 60_000),
+      bug("st-verify", "Verify", 4, "qa", ["m-qa"], 7 * 60_000),
+    ],
+    connectors: [
+      ...base.connectors,
+      { id: "c-triage-done", from_step_id: "st-triage", name: "not a bug", position: 1 },
+      { id: "c-triage-build", from_step_id: "st-triage", to_step_id: "st-build", name: "feature", position: 2 },
+      { id: "c-triage-fix", from_step_id: "st-triage", to_step_id: "st-fix", name: "bug", position: 3 },
+      { id: "c-fix-creview", from_step_id: "st-fix", to_step_id: "st-creview", name: "ready", position: 1 },
+      { id: "c-creview-verify", from_step_id: "st-creview", to_step_id: "st-verify", name: "pass", position: 1 },
+      { id: "c-creview-fix", from_step_id: "st-creview", to_step_id: "st-fix", name: "needs changes", position: 2 },
+      { id: "c-verify-done", from_step_id: "st-verify", name: "pass", position: 1 },
+      { id: "c-verify-fix", from_step_id: "st-verify", to_step_id: "st-fix", name: "fail", position: 2 },
+    ],
+  };
+}
+
 const claim = (n: number, holder: string, minutesAgo = 20) => ({
   id: `cl-${n}`,
   task_id: `k-${n}`,
@@ -312,8 +349,8 @@ export function applyBody(wf: ReturnType<typeof initialWorkflow>, body: Body): R
 }
 
 /** Answers every /v1 read the shell and the Workflow screens make, as `who`; returns the Tasks it serves, to change. */
-export async function mockV1(page: Page, who: "ada" | "bob" = "ada", opts: { busy?: boolean } = {}) {
-  let wf = initialWorkflow();
+export async function mockV1(page: Page, who: "ada" | "bob" = "ada", opts: { busy?: boolean; workflow?: () => ReturnType<typeof initialWorkflow> } = {}) {
+  let wf = (opts.workflow ?? initialWorkflow)();
   const skillList = skills.map((x) => ({ ...x }));
   // This page's own Tasks, which a lab may change before it delivers the entry that says so.
   const list: Record<string, unknown>[] = (opts.busy ? busyTasks() : tasks).map((t) => ({ ...t }));
