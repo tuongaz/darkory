@@ -129,15 +129,22 @@ describe("a Workflow's editor", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
   });
 
-  it("draws a changed Step and outcome in the changed colour", async () => {
+  it("draws a changed Step and outcome in the waiting blue", async () => {
     serve();
     const line = await openEditor();
     expect(line.getByRole("list", { name: "Steps on the line" }).querySelectorAll("[data-changed]")).toHaveLength(0);
     await userEvent.type(nameOf("Review"), "s");
-    expect(line.getByRole("list", { name: "Steps on the line" }).closest("div")!.parentElement!.querySelector(`circle[data-dot="${step.review}"]`)).toHaveAttribute("data-changed");
+    const dot = line.getByRole("list", { name: "Steps on the line" }).closest("div")!.parentElement!.querySelector(`circle[data-dot="${step.review}"]`);
+    expect(dot).toHaveAttribute("data-changed");
+    // The frame's waiting blue (vf-9), never --ring.
+    expect(dot).toHaveAttribute("stroke", "var(--state-waiting)");
+    expect(nameOf("Reviews")).toHaveClass("border-state-waiting", "text-state-waiting");
     await userEvent.click(screen.getByRole("combobox", { name: "Where needs changes out of Reviews leads" }));
     await userEvent.click(await screen.findByRole("option", { name: "Plan" }));
-    expect(screen.getByRole("combobox", { name: "Where needs changes out of Reviews leads" }).closest("[data-outcome]")).toHaveAttribute("data-changed");
+    const outcome = screen.getByRole("combobox", { name: "Where needs changes out of Reviews leads" }).closest("[data-outcome]");
+    expect(outcome).toHaveAttribute("data-changed");
+    expect(outcome).toHaveClass("text-state-waiting", "ring-state-waiting");
+    expect(screen.getByRole("button", { name: "2 changes: list them" })).toHaveClass("border-state-waiting", "text-state-waiting");
   });
 
   it("lands a Project of one on its Workflow's page after Save, not the list", async () => {
