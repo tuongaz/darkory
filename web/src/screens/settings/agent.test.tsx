@@ -192,14 +192,20 @@ describe("an agent's settings", () => {
     await waitFor(() => expect(patches(api.calls)).toHaveLength(1));
     expect(patches(api.calls)[0].body).toEqual({ shifts: 2 });
 
-    // Out of bounds or left as it was: nothing is sent, and the field shows the saved count.
+    // Out of bounds: nothing is sent; the field keeps what was typed and says what /v1 takes.
     await waitFor(() => expect(within(card).getByRole("spinbutton", { name: "Shifts" })).toHaveValue(2));
     const again = within(card).getByRole("spinbutton", { name: "Shifts" });
     await user.clear(again);
     await user.type(again, "9");
     await user.tab();
-    await waitFor(() => expect(within(card).getByRole("spinbutton", { name: "Shifts" })).toHaveValue(2));
+    expect(await within(card).findByRole("alert")).toHaveTextContent("1 to 8");
+    expect(again).toHaveValue(9);
+    expect(again).toHaveAttribute("aria-invalid", "true");
     expect(patches(api.calls)).toHaveLength(1);
+    // Escape puts the saved count back.
+    await user.type(again, "{Escape}");
+    expect(again).toHaveValue(2);
+    expect(within(card).queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("sends nothing for a field left as it was, a blank command or a line /v1 would refuse", async () => {
