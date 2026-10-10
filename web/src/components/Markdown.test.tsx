@@ -74,6 +74,13 @@ describe("Markdown", () => {
     expect(ps[0].querySelector("br")).not.toBeNull();
     expect(ps[0].textContent).toBe("Ran the tests.\nAll pass.");
     expect(ps[1]).toHaveTextContent("Next: the PR.");
+    // remark-breaks, as GitHub comments do: "a\nb" is one paragraph with a <br>; "a\n\nb" is two.
+    const one = md("a\nb");
+    expect(one.querySelectorAll("p")).toHaveLength(1);
+    expect(one.querySelectorAll("p > br")).toHaveLength(1);
+    const two = md("a\n\nb");
+    expect([...two.querySelectorAll("p")].map((p) => p.textContent)).toEqual(["a", "b"]);
+    expect(two.querySelector("br")).toBeNull();
   });
 
   it("renders emphasis, strong and strikethrough", () => {
