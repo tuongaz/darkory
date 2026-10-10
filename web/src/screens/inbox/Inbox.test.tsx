@@ -190,6 +190,24 @@ describe("the Inbox", () => {
       expect(await screen.findByRole("heading", { name: "Nothing needs you" })).toBeInTheDocument();
     });
 
+    it("shows Merge pending while it reads the Task, and a failed read in a toast", async () => {
+      let answer: (r: Response) => void = () => {};
+      recordApi({
+        tasks: [landed(1, "open")],
+        extra: { ...runner(true), "GET /v1/tasks/:task": () => new Promise<Response>((r) => (answer = r)) },
+      });
+      renderApp("/inbox");
+      const needs = await section("Needs you");
+      const merge = await within(needs).findByRole("button", { name: "Merge WEB-1" });
+      await userEvent.click(merge);
+      await waitFor(() => expect(merge).toBeDisabled());
+      expect(merge).toHaveAttribute("aria-busy", "true");
+      answer(refuse(500, "internal", "The record could not be read"));
+      expect(await screen.findByText("The record could not be read")).toBeInTheDocument();
+      await waitFor(() => expect(merge).toBeEnabled());
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
     it("says GitHub's refusal in a toast", async () => {
       recordApi({
         tasks: [landed(1, "open")],
