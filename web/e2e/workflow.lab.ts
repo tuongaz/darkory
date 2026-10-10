@@ -43,6 +43,21 @@ for (const scheme of ["light", "dark"] as const) {
       await noSidewaysScroll(page);
       await shot(page, `live-${tag}`);
 
+      // The rail and a return track say what they mean on hover: nothing drawn over them takes the pointer.
+      // (A line is a zero-width box to Playwright, so the pointer goes to its middle by hand.)
+      const pointAt = async (selector: string) => {
+        const b = await live.locator(selector).first().evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        });
+        await page.mouse.move(b.x, b.y);
+      };
+      await pointAt('svg path[data-hint^="Build → QA"]');
+      await expect(page.getByRole("tooltip")).toHaveText("Build → QA: when the holder says pass");
+      await pointAt('svg path[data-connectors][data-hint*="when the holder says needs changes"]');
+      await expect(page.getByRole("tooltip")).toContainText("when the holder says needs changes");
+      await page.mouse.move(0, 0);
+
       // Text view: the same switch at every size.
       await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Text" }).click();
       await expect(page.getByRole("list", { name: "Steps", exact: true })).toBeVisible();

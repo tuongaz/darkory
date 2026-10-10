@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { wfId } from "@/test/fixtures";
 import { BIG, DARK, FIVE, MAIN, NEWS, SOFTWARE } from "./fixtures";
@@ -24,6 +25,27 @@ describe("the line, top to bottom", () => {
     expect(before(start, first)).toBe(true);
     expect(document.querySelector('[data-dot="build"]')).toHaveAttribute("data-start");
     expect(stations(rail()).map((li) => li.getAttribute("data-head"))).toEqual(["Build", "Review", "Done"]);
+  });
+
+  it("says Start's sentence to the keyboard: Start takes the focus, shows it, and is described by it", async () => {
+    render(<WorkflowLine workflow={DARK("impl")} tasks={[]} now={0} />);
+    const start = document.querySelector<HTMLElement>("[data-start-label]")!;
+    await userEvent.tab();
+    expect(start).toHaveFocus();
+    expect(screen.getByRole("tooltip")).toHaveTextContent("New Tasks start at Build, unless the filer names another Step");
+    expect(start).toHaveAccessibleDescription("New Tasks start at Build, unless the filer names another Step");
+    await userEvent.tab();
+    expect(start).not.toHaveFocus();
+  });
+
+  it("describes every word that has a sentence, and lets each take the focus", () => {
+    render(<WorkflowLine workflow={DARK("bugs")} tasks={[]} now={0} />);
+    const carriers = [...document.querySelectorAll<HTMLElement>("[data-hint]")].filter((el) => !(el instanceof SVGElement));
+    expect(carriers.length).toBeGreaterThan(8);
+    for (const el of carriers) {
+      expect(el, el.textContent ?? "").toHaveAttribute("tabindex", "0");
+      expect(el).toHaveAccessibleDescription(el.getAttribute("data-hint")!);
+    }
   });
 
   it("puts a crossing in beside Start, in the entry's words (vf-1: Bug triage · feature)", () => {

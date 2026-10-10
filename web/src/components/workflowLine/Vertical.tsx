@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent, type ReactNode } from "react";
 import { TagIcon } from "lucide-react";
 import { InfoTip } from "@/components/InfoTip";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -50,7 +50,63 @@ const LANE = 12;
 /** How far above or below a station's centre a track's stub meets it. */
 const STUB = 5;
 
-type Hover = (text: string | undefined) => Record<string, unknown>;
+type Hover = (text: string | undefined, opts?: { focus?: boolean }) => Record<string, unknown>;
+type Tip = { x: number; y: number; w: number; text: string };
+
+/**
+ * The hover sentences of one drawing: each carrier shows its sentence while the pointer is on it
+ * or it has the focus (it takes the focus unless it is a line in the drawing, whose sentence its
+ * label carries too), and is described by it for a screen reader. `pool` renders the sentences
+ * the carriers point at; it is rendered after them.
+ */
+function hints(base: string, onTip: (tip: Tip | null) => void): { hover: Hover; pool: () => ReactNode } {
+  const ids = new Map<string, string>();
+  const at = (el: Element, x?: number, y?: number) => {
+    const r = el.closest("[data-line-root]")?.getBoundingClientRect();
+    if (!r) return undefined;
+    const b = el.getBoundingClientRect();
+    return { x: (x ?? b.left) - r.left, y: (y ?? b.bottom - 12) - r.top, w: r.width };
+  };
+  const hover: Hover = (text, opts) => {
+    if (!text) return {};
+    const focus = opts?.focus ?? true;
+    if (focus && !ids.has(text)) ids.set(text, `${base}-${ids.size}`);
+    return {
+      "data-hint": text,
+      onMouseEnter: (e: MouseEvent) => {
+        const p = at(e.currentTarget as Element, e.clientX, e.clientY);
+        if (p) onTip({ ...p, text });
+      },
+      onMouseLeave: () => onTip(null),
+      ...(focus
+        ? {
+            tabIndex: 0,
+            "aria-describedby": ids.get(text),
+            onFocus: (e: FocusEvent) => {
+              const p = at(e.currentTarget as Element);
+              if (p) onTip({ ...p, text });
+            },
+            onBlur: () => onTip(null),
+          }
+        : {}),
+    };
+  };
+  // A component, so it reads the sentences when it renders: after the rails, whose rows say theirs as they render.
+  const pool = () => <HintPool ids={ids} />;
+  return { hover, pool };
+}
+
+function HintPool({ ids }: { ids: ReadonlyMap<string, string> }) {
+  return (
+    <div hidden>
+      {[...ids].map(([text, id]) => (
+        <span key={id} id={id}>
+          {text}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 /** How a Connector reads: on a traced Task's way, one of its next moves, carrying a token now, changed by an edit, or as it is. */
 type Tone = "trace" | "next" | "lit" | "changed" | "plain";
@@ -106,19 +162,9 @@ export function VerticalLine({
   const { lead, rail } = useMemo(() => railOf(t), [t]);
   const mainTracks = useMemo(() => railTracks(t), [t]);
 
-  // What a line or a word means, in a sentence, while the pointer is on it.
-  const [tip, setTip] = useState<{ x: number; y: number; w: number; text: string } | null>(null);
-  const hover: Hover = (text) =>
-    text
-      ? {
-          "data-hint": text,
-          onMouseEnter: (e: MouseEvent) => {
-            const r = (e.currentTarget as Element).closest("[data-line-root]")?.getBoundingClientRect();
-            if (r) setTip({ x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, text });
-          },
-          onMouseLeave: () => setTip(null),
-        }
-      : {};
+  // What a line or a word means, in a sentence, while the pointer is on it or it has the focus.
+  const [tip, setTip] = useState<Tip | null>(null);
+  const { hover, pool } = hints(useId(), setTip);
 
   const at = new Map<string, LineTask[]>();
   for (const task of tasks) if (task.stepId && !flow.transit.has(task.id)) at.set(task.stepId, [...(at.get(task.stepId) ?? []), task]);
@@ -529,7 +575,7 @@ export function VerticalLine({
         segs={quietSegs}
         tracks={quietTracks}
         row={quietRow}
-        hover={hover}
+        onTip={setTip}
         name={name}
         tone={tone}
         holdAt={() => false}
@@ -548,7 +594,7 @@ export function VerticalLine({
         tracks={mainTracks}
         before={startRow}
         row={mainRow}
-        hover={hover}
+        onTip={setTip}
         name={name}
         tone={tone}
         holdAt={(id) => {
@@ -563,6 +609,7 @@ export function VerticalLine({
       />
       {branch}
       {footer}
+      {pool()}
       {tip && (
         <div
           role="tooltip"
@@ -589,7 +636,7 @@ function RailLine({
   tracks,
   before,
   row,
-  hover,
+  onTip,
   name,
   tone,
   holdAt,
@@ -606,7 +653,7 @@ function RailLine({
   tracks: readonly LaneTrack[];
   before?: ReactNode;
   row: (id: string, i: number) => { name: ReactNode; tasks: ReactNode; marks: ReactNode };
-  hover: Hover;
+  onTip: (tip: Tip | null) => void;
   name: (id: string | null) => string;
   tone: (ids: readonly string[]) => Tone;
   holdAt: (id: string) => boolean;
@@ -617,6 +664,7 @@ function RailLine({
   outcomeOf?: (connectorId: string) => string | undefined;
   measureKey: unknown[];
 }) {
+  const { hover, pool } = hints(useId(), onTip);
   const box = useRef<HTMLDivElement>(null);
   const dots = useRef(new Map<string, HTMLElement>());
   const [ys, setYs] = useState<Map<string, number>>(new Map());
@@ -665,7 +713,7 @@ function RailLine({
         <path data-rail={s.from} data-gap={gap ? "true" : undefined} d={`M${RAIL} ${top} V${tip - (gap ? 0 : 6)}`} stroke={col} strokeWidth={tn === "trace" ? 4 : weight} strokeDasharray={gap ? "2 5" : s.hand ? "3 3" : tn === "next" ? "5 4" : undefined} fill="none" />
         {!gap && <path data-arrow={s.from} d={`M${RAIL - 4.5} ${tip - 7} L${RAIL} ${tip} L${RAIL + 4.5} ${tip - 7} Z`} fill={col} />}
         <path
-          {...hover(s.connector ? outcomeHint(s.connector, name) : hint)}
+          {...hover(s.connector ? outcomeHint(s.connector, name) : hint, { focus: false })}
           data-connector={s.connector?.id}
           d={`M${RAIL} ${top} V${tip}`}
           stroke="transparent"
@@ -700,7 +748,7 @@ function RailLine({
               <path d={`M${into ? edge + 6 : edge} ${v} H${x}`} stroke={col} strokeWidth={1.5} fill="none" />
               {into && <path data-arrow-in={k.target} d={`M${edge + 7} ${v - 4.5} L${edge} ${v} L${edge + 7} ${v + 4.5} Z`} fill={col} />}
               <path
-                {...hover(into ? outcomesHint(k.connectors, name) : outcomesHint(e.connectors, name))}
+                {...hover(into ? outcomesHint(k.connectors, name) : outcomesHint(e.connectors, name), { focus: false })}
                 data-connectors={JSON.stringify((into ? k.connectors : e.connectors).map((c) => c.id))}
                 d={`M${edge} ${v} H${x}`}
                 stroke="transparent"
@@ -764,7 +812,7 @@ function RailLine({
     <div className="flex flex-col">
       {before && <div style={{ paddingLeft: bodyLeft }}>{before}</div>}
       <div ref={box} className="relative">
-        <svg aria-hidden className="pointer-events-none absolute top-0 left-0 overflow-visible" width={bodyLeft} height={Math.max(1, height)}>
+        <svg aria-hidden className="pointer-events-none absolute top-0 left-0 z-[1] overflow-visible" width={bodyLeft} height={Math.max(1, height)}>
           {svgRail}
           {svgTracks}
           {svgDots}
@@ -815,6 +863,7 @@ function RailLine({
           </div>
         ))}
       </div>
+      {pool()}
     </div>
   );
 }
