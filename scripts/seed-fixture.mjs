@@ -66,6 +66,12 @@ const projectsBefore = (await v1("GET", "/v1/projects")).items ?? [];
 const foreign = projectsBefore.filter((p) => !ours.includes(p.key)).map((p) => p.key);
 if (foreign.length) throw new Error(`this Install has Projects the seed did not make (${foreign.join(", ")}); seed a fresh one`);
 if (!me.admin) throw new Error("DARKORY_TOKEN must be an admin's");
+// A real Install may have its own DARK; the seed's DARK starts with its dropped fillers.
+if (projectsBefore.some((p) => p.key === "DARK")) {
+  const first = (await v1("GET", "/v1/tasks?project=DARK&state=dropped&limit=1")).items?.[0];
+  const any = (await v1("GET", "/v1/tasks?project=DARK&limit=1")).items?.[0];
+  if ((first ?? any) && first?.title !== "Not in the fixture (dropped)") throw new Error("this Install's DARK is not the seed's; seed a fresh one");
+}
 say(`seeding ${base} as ${me.name}`);
 
 // ------------------------------------------------------------------ Skills and Members
