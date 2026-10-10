@@ -342,8 +342,9 @@ export function sizeText(bytes: number): string {
 /**
  * What waits for a busy agent in a Project: while it holds as many Tasks as it has Shifts (its
  * settings' `shifts`, 1 unless set), the open Tasks of the Project nobody holds and nothing blocks,
- * at a Step whose takers include it (its Skill there), not aimed at someone else and not Parents.
- * The longest waiting at its Step comes first.
+ * at a Step whose takers include it (its Skill there), not aimed at someone else and not Parents,
+ * and never one it held under another Skill (no one judges their own work), as its claims in
+ * `history` say. The longest waiting at its Step comes first.
  */
 export function queueOf({
   agent,
@@ -352,6 +353,7 @@ export function queueOf({
   workflow,
   projectId,
   now,
+  history = [],
 }: {
   agent: Member;
   held: readonly Task[];
@@ -359,9 +361,18 @@ export function queueOf({
   workflow: Pick<Workflows, "steps"> | undefined;
   projectId: string;
   now: number;
+  /** Activity that carries the agent's `task.claimed` entries: the Skills it held each Task under. */
+  history?: readonly Activity[];
 }): Task[] {
   if (!workflow || !allShiftsBusy(agent, held.length)) return [];
   const takes = new Set(workflow.steps.filter((s) => s.takers.some((t) => t.id === agent.id)).map((s) => s.id));
+  const skillAt = new Map(workflow.steps.map((s) => [s.id, s.skill_id]));
+  const heldUnder = new Map<string, Set<string>>();
+  for (const e of history) {
+    const skill = str(e.payload, "skill_id");
+    if (e.kind === "task.claimed" && e.actor_id === agent.id && skill) heldUnder.set(e.subject_id, (heldUnder.get(e.subject_id) ?? new Set()).add(skill));
+  }
+  const judgesOwn = (t: Task) => [...(heldUnder.get(t.id) ?? [])].some((skill) => skill !== skillAt.get(t.step_id ?? ""));
   const since = (t: Task) => Date.parse(t.step_since ?? t.waiting_since);
   return open
     .filter(
@@ -373,7 +384,8 @@ export function queueOf({
         !liveClaim(t, now) &&
         !!t.step_id &&
         takes.has(t.step_id) &&
-        (!t.aimed_at_id || t.aimed_at_id === agent.id),
+        (!t.aimed_at_id || t.aimed_at_id === agent.id) &&
+        !judgesOwn(t),
     )
     .sort((a, b) => since(a) - since(b));
 }
