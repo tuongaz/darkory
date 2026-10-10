@@ -360,7 +360,7 @@ for (const scheme of ["light", "dark"] as const) {
   });
 }
 
-test("live moments, phone: the line runs down the page and a pickup reads now", async ({ browser }) => {
+test("live moments, phone: the line fits 390 and a pickup reads now", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const page = await context.newPage();
   const errors = watchErrors(page);

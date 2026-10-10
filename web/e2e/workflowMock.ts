@@ -198,7 +198,7 @@ const busyWaiting: [title: string, minutes: number][] = [
   ["Labels: colour picker keeps the hue", 14],
   ["Tasks list: group by Workflow", 21],
   ["Record: Evidence previews for logs", 27],
-  ["Workflow page: the Loops list folds", 33],
+  ["Workflow page: a Step's list opens in place", 33],
   ["Settings: Workspace kind picker", 41],
   ["CLI: tasks --workflow on a Project of one", 48],
   ["Runner: nudge after a silent Shift", 55],
