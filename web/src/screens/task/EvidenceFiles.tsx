@@ -43,7 +43,7 @@ export function EvidenceFiles({ files, plain = true }: { files: readonly Evidenc
         <ul className="flex flex-col gap-1">
           {rest.map((f) => (
             <li key={f.id}>
-              <FileLink file={f} />
+              <FileLink file={f} open />
             </li>
           ))}
         </ul>
@@ -52,8 +52,11 @@ export function EvidenceFiles({ files, plain = true }: { files: readonly Evidenc
   );
 }
 
-/** "📎 trace.zip 900 kB": the file's name, a download, and its size. */
-export function FileLink({ file }: { file: Evidence }) {
+/**
+ * "📎 trace.zip 900 kB": the file's name, a download, and its size; with `open`, an "open ↗" after
+ * them, as a text box's caption has, for a file listed under a folded row.
+ */
+export function FileLink({ file, open }: { file: Evidence; open?: boolean }) {
   return (
     <span className="inline-flex max-w-full min-w-0 items-center gap-1.5">
       <a href={evidenceURL(file.id)} download={file.filename} className="inline-flex min-w-0 items-center gap-1 hover:underline">
@@ -61,6 +64,11 @@ export function FileLink({ file }: { file: Evidence }) {
         <span className="truncate">{file.filename}</span>
       </a>
       <span className="whitespace-nowrap text-muted-foreground">{sizeText(file.size)}</span>
+      {open && (
+        <a href={evidenceURL(file.id)} target="_blank" rel="noreferrer noopener" className="whitespace-nowrap text-muted-foreground hover:text-foreground">
+          open ↗
+        </a>
+      )}
     </span>
   );
 }
@@ -105,7 +113,7 @@ function TextBox({ file, plain }: { file: Evidence; plain: boolean }) {
     if (pre.current) setOverflows(pre.current.scrollHeight > boxHeight);
   }, [text.data]);
   // A single Evidence's row names its file already.
-  if (text.isError) return plain ? <FileLink file={file} /> : null;
+  if (text.isError) return plain ? <FileLink file={file} open /> : null;
   return (
     <figure aria-label={file.filename} className="flex min-w-0 flex-col overflow-hidden rounded-md border bg-card text-xs">
       <figcaption className="flex min-w-0 items-center gap-1.5 border-b px-2.5 py-1.5">

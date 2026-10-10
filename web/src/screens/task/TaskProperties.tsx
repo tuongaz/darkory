@@ -12,7 +12,7 @@ import { Property, PropertiesRail } from "@/components/PropertiesRail";
 import { ClockTime } from "@/components/Time";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { taskBranch } from "@/lib/branch";
-import { liveClaim } from "@/work";
+import { liveClaim, showsHeartbeat } from "@/work";
 import { useMemberName, useSkillName } from "./format";
 import { MemberName, SkillPill, TaskLink } from "./parts";
 import { lapsedClaim } from "./record";
@@ -75,7 +75,7 @@ export function TaskProperties({ detail, steps, grouped }: { detail: TaskDetail;
     if (claim.skill_id) hold.push({ label: "Under", value: <span>{skill(claim.skill_id)}{claim.skill_version !== undefined && ` version ${claim.skill_version}`}</span> });
     // A human's own Claim with no expiry is held until they let it go: no Heartbeat to read, and
     // its Session is theirs, not a Shift's. An agent's keeps both, for whoever debugs the Shift.
-    if (claim.expires_at || members.get(claim.holder_id)?.kind !== "human") {
+    if (showsHeartbeat(claim, members.get(claim.holder_id)?.kind)) {
       hold.push({ label: "Heartbeat", value: <HeartbeatMeter claim={claim} /> });
       hold.push({ label: "Session", value: <SessionId id={claim.session_id} /> });
     }

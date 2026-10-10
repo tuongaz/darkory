@@ -1,6 +1,7 @@
 import { ArrowRightIcon, BanIcon, CheckIcon, ClockIcon, PaperclipIcon, SplitIcon } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { evidenceURL, type Activity, type Claim, type Evidence, type TaskDetail, type WorkflowStep } from "@/api/client";
+import { useDirectory } from "@/api/queries";
 import { useNow } from "@/clock";
 import { SessionId } from "@/components/CopyValue";
 import { Key } from "@/components/Key";
@@ -12,6 +13,7 @@ import { durationText } from "@/lib/time";
 import { Avatar, TaskLink } from "./parts";
 import { taskRecord, type RecordEntry } from "./record";
 import { Markdown } from "@/components/Markdown";
+import { showsHeartbeat } from "@/work";
 import { EvidenceFiles, FileLink } from "./EvidenceFiles";
 
 /** A Task's record, oldest first, grouped by day when it spans more than today. */
@@ -44,6 +46,7 @@ const kinds = { breakdown: "Breakdown", acceptance: "Acceptance", retrospective:
 function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDetail; stepName: (id: string | undefined) => string }) {
   const name = useMemberName();
   const skill = useSkillName();
+  const { members } = useDirectory();
   const when = <ClockTime at={entry.at} />;
   const row = (who: string | undefined, children: ReactNode, sub?: ReactNode) => (
     <TimelineRow who={who ? <Avatar id={who} /> : <SystemMark />} when={when}>
@@ -84,10 +87,14 @@ function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDe
           <b>{name(c.holder_id)}</b> claimed{s && ` under ${s}`}
           {s && c.skill_version !== undefined && ` version ${c.skill_version}`}
         </>,
-        <span className="inline-flex max-w-full min-w-0 items-center gap-1">
-          Session <SessionId id={c.session_id} />
-          {c.model_label && <span className="truncate font-mono">· {c.model_label}</span>}
-        </span>,
+        showsHeartbeat(c, members.get(c.holder_id)?.kind) ? (
+          <span className="inline-flex max-w-full min-w-0 items-center gap-1">
+            Session <SessionId id={c.session_id} />
+            {c.model_label && <span className="truncate font-mono">· {c.model_label}</span>}
+          </span>
+        ) : (
+          c.model_label && <span className="truncate font-mono">{c.model_label}</span>
+        ),
       );
     }
     case "claim-ended":

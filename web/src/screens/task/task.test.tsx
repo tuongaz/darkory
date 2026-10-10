@@ -485,6 +485,11 @@ describe("a held Task's rail", () => {
     await waitFor(() => expect(terms().filter((t) => t === "Held by")).toHaveLength(2));
     expect(terms()).not.toContain("Heartbeat");
     expect(terms()).not.toContain("Session");
+    // The record's claimed row says no Session either.
+    const record = screen.getAllByRole("list", { name: "Record" })[0];
+    const claimed = within(record).getByText(/claimed/).closest("li")!;
+    expect(claimed).toHaveTextContent("ada claimed");
+    expect(claimed).not.toHaveTextContent("Session");
   });
 
   it("keeps an agent's Heartbeat, as the bar with working and the hold's age, and its Session", async () => {
@@ -495,6 +500,8 @@ describe("a held Task's rail", () => {
     expect(screen.getAllByRole("term").filter((t) => t.textContent === "Session")).toHaveLength(2);
     expect(screen.getAllByRole("meter").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/^working \d+m$/).length).toBeGreaterThan(0);
+    const record = screen.getAllByRole("list", { name: "Record" })[0];
+    expect(within(record).getByText(/claimed/).closest("li")).toHaveTextContent("Session");
   });
 });
 
@@ -580,6 +587,8 @@ describe("Evidence in a Task's record", () => {
     const zip = within(row).getByRole("link", { name: /trace\.zip/ });
     expect(zip).toHaveAttribute("href", "/v1/evidence/e-zip/content");
     expect(row.contains(zip)).toBe(true);
+    const plain = zip.closest("li")!;
+    expect(within(plain).getByRole("link", { name: "open ↗" })).toHaveAttribute("href", "/v1/evidence/e-zip/content");
     expect(within(row).queryByRole("img", { name: "trace.zip" })).toBeNull();
   });
 
