@@ -146,7 +146,7 @@ describe("the Inbox", () => {
     const runner = (on: boolean) => ({ "GET /v1/runner/sessions": { items: [], runner: on } });
 
     it("lists my Done Task whose pull request is open, not one merged nor someone else's; without a Runner its act is the link", async () => {
-      recordApi({ tasks: [landed(1, "open"), landed(2, "merged"), landed(3, "open", { owner_id: bob.id })], extra: runner(false) });
+      const { calls } = recordApi({ tasks: [landed(1, "open"), landed(2, "merged"), landed(3, "open", { owner_id: bob.id })], extra: runner(false) });
       renderApp("/inbox");
       const needs = await section("Needs you");
       await waitFor(() => expect([...needs.querySelectorAll("[data-task]")].map((r) => r.getAttribute("data-task"))).toEqual(["WEB-1"]));
@@ -159,6 +159,9 @@ describe("the Inbox", () => {
       expect(open).toHaveAttribute("rel", "noreferrer noopener");
       expect(within(r).queryByRole("button", { name: /Merge/ })).not.toBeInTheDocument();
       expect(within(r).getByRole("time")).toHaveAttribute("datetime", doneAt);
+      // The read asks /v1 for exactly these: my Done Tasks whose pull request is open.
+      const read = calls.find((c) => c.path === "/v1/tasks" && c.query.get("state") === "done");
+      expect(read?.query.getAll("filter")).toEqual([`owner:is:${ada.id}`, "pull_request:is:open"]);
     });
 
     it("merges through the Runner after the confirm, and the row leaves once it is merged", async () => {
