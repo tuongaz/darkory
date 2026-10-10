@@ -64,22 +64,17 @@ for (const scheme of ["light", "dark"] as const) {
       await noSidewaysScroll(page);
       await shot(page, `live-text-${tag}`);
 
-      // Editing: the list beside the picked Step's panel, the line above (on a phone, the line behind its toggle).
+      // Editing: the draft on the line, its fields in place (vf-9).
       await page.goto("/projects/WEB/workflows/wf-work/edit");
-      await expect(page.getByRole("list", { name: "Steps", exact: true })).toBeVisible();
+      await expect(page.getByRole("region", { name: "The line, editing" })).toBeVisible();
       await page.waitForTimeout(300);
       await noSidewaysScroll(page);
       await shot(page, `edit-${tag}`);
-      if (size.name === "phone") {
-        await page.getByRole("button", { name: "Show the line" }).click();
-        await shot(page, `edit-line-${tag}`);
-      }
 
-      // F5a: a Step added after Review from its panel's menu, named, its Skill picker open on a Skill that does not exist.
-      await page.getByRole("list", { name: "Steps", exact: true }).getByRole("button", { name: /^\d+\. Review$/ }).click();
+      // F5a: a Step added after Review from its menu, named, its Skill picker open on a Skill that does not exist.
       await page.getByRole("button", { name: "More for Review" }).click();
       await page.getByRole("menuitem", { name: "Add Step after Review" }).click();
-      await page.getByRole("textbox", { name: "Name of Step 6" }).fill("Security review");
+      await page.getByRole("textbox", { name: "Name of the new Step" }).fill("Security review");
       await page.getByRole("combobox", { name: "Skill of Security review" }).click();
       await page.getByPlaceholder("Find or name a Skill").fill("security");
       await page.waitForTimeout(200);
@@ -162,33 +157,58 @@ test("editing: nothing is sent until Save; then the new Skill, then one PUT", as
   const writes: string[] = [];
   page.on("request", (r) => r.method() !== "GET" && r.url().includes("/v1/") && writes.push(`${r.method()} ${new URL(r.url()).pathname}`));
   await page.goto("/projects/WEB/workflows/wf-work/edit?step=st-qa");
-  const name = page.getByRole("textbox", { name: "Name of Step 4" });
+  const name = page.getByRole("textbox", { name: "Name of QA" });
   await expect(name).toBeFocused();
   await name.fill("Test");
-  await expect(page.getByText("Editing · 1 change")).toBeVisible();
-  // Alt+↓ on its row moves it after Review, and keeps the focus.
-  await page.getByRole("button", { name: "4. Test" }).press("Alt+ArrowDown");
-  await expect(page.getByRole("listitem", { name: "5. Test" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "5. Test" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "1 change: list them" })).toBeVisible();
+  const rail = page.getByRole("list", { name: "Steps on the line" });
+  const order = () => rail.locator(":scope > li").evaluateAll((els) => els.map((el) => el.getAttribute("data-head")));
+  // Alt+↓ on its grip moves it after Review, and keeps the focus.
+  await page.getByRole("button", { name: /^Move Test/ }).press("Alt+ArrowDown");
+  await expect.poll(order).toEqual(["Build", "Review", "Test", "Done"]);
+  await expect(page.getByRole("button", { name: /^Move Test/ })).toBeFocused();
   await page.getByRole("combobox", { name: "Skill of Test" }).click();
   await page.getByPlaceholder("Find or name a Skill").fill("testing");
   await page.getByRole("option", { name: /New Skill “testing”/ }).click();
   await page.getByRole("dialog").getByRole("textbox", { name: "Text" }).fill("Test it.");
   await page.getByRole("dialog").getByRole("button", { name: "Use this Skill" }).click();
   // Its grip dragged onto Build's row: it lands in Build's place.
-  await page.getByRole("listitem", { name: "5. Test" }).hover();
-  const grip = await page.getByRole("button", { name: /^Reorder Test/ }).boundingBox();
-  const build = await page.getByRole("listitem", { name: "3. Build" }).boundingBox();
+  const grip = await page.getByRole("button", { name: /^Move Test/ }).boundingBox();
+  const build = await page.getByRole("textbox", { name: "Name of Build" }).boundingBox();
   await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
   await page.mouse.down();
   await page.mouse.move(grip!.x + 4, grip!.y - 10, { steps: 4 });
   await page.mouse.move(grip!.x + 4, build!.y + 6, { steps: 12 });
   await page.mouse.up();
-  await expect(page.getByRole("listitem", { name: "3. Test" })).toBeVisible();
-  await expect(page.getByRole("listitem", { name: "4. Build" })).toBeVisible();
+  await expect.poll(order).toEqual(["Test", "Build", "Review", "Done"]);
   expect(writes).toEqual([]);
   await page.getByRole("button", { name: "Save" }).click();
-  await expect.poll(() => writes).toEqual(["POST /v1/skills", "PUT /v1/projects/WEB/workflow"]);
+  // The new Skill rides in the Workflow's one PUT (since dfaecb4): no POST /v1/skills.
+  await expect.poll(() => writes).toEqual(["PUT /v1/projects/WEB/workflow"]);
+  expect(errors).toEqual([]);
+});
+
+// vf-9: a Step added after Review on the line, its Skill picked, its way back to Build, Review's
+// pass led into it; the changes in the changed colour, the name in focus.
+test("editing on the line, vf-9", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockV1(page);
+  await page.goto("/projects/WEB/workflows/wf-work/edit");
+  await page.getByRole("button", { name: "Add a Step at the end of the line" }).click();
+  await page.getByRole("textbox", { name: "Name of the new Step" }).fill("Verify");
+  await page.getByRole("combobox", { name: "Skill of Verify" }).click();
+  await page.getByRole("option", { name: /^qa/ }).click();
+  await page.getByRole("button", { name: "Add an outcome out of Verify" }).click();
+  await page.getByRole("textbox", { name: "Outcome out of Verify" }).fill("fail");
+  await page.getByRole("combobox", { name: "Where fail out of Verify leads" }).click();
+  await page.getByRole("option", { name: "Build", exact: true }).click();
+  await page.getByRole("combobox", { name: "Where pass out of Review leads" }).click();
+  await page.getByRole("option", { name: "Verify", exact: true }).click();
+  await page.getByRole("textbox", { name: "Name of Verify" }).focus();
+  await page.waitForTimeout(300);
+  await noSidewaysScroll(page);
+  await shot(page, "edit-vf9");
   expect(errors).toEqual([]);
 });
 

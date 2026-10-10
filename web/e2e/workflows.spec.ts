@@ -326,7 +326,7 @@ test("6 · the Workflows list: added, named and saved; moved later and back; del
   await name.fill("Releases");
   await name.press("Enter");
   await expect(name).not.toBeFocused();
-  await expect(page.getByRole("button", { name: "Editing · 1 change: list them" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "1 change: list them" })).toBeVisible();
   await shot(page, "editor-rename");
   // Escape puts back the name the field had when entered.
   await name.click();
@@ -336,11 +336,11 @@ test("6 · the Workflows list: added, named and saved; moved later and back; del
 
   // A Step, Deploy at devops; Save opens the Workflow's live page.
   await page.getByRole("button", { name: "Add a Step at the end of the line" }).click();
-  await page.getByRole("textbox", { name: "Name of Step 1" }).fill("Deploy");
+  await page.getByRole("textbox", { name: "Name of the new Step" }).fill("Deploy");
   await page.getByRole("combobox", { name: "Skill of Deploy" }).click();
   await page.getByPlaceholder("Find or name a Skill").fill("devops");
   await page.getByRole("option", { name: /^devops/ }).click();
-  await expect(page.getByRole("button", { name: "Editing · 2 changes: list them" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "2 changes: list them" })).toBeVisible();
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page).toHaveURL(address("/projects/ACC/workflows/[^/?]+$"));
   await expect(chip(page)).toHaveText("Releases");
@@ -374,9 +374,8 @@ test("6 · the Workflows list: added, named and saved; moved later and back; del
 
   // An outcome out of Triage into Deploy: a crossing the delete must ask about.
   await page.goto(`${base}/projects/ACC/workflows/${wf("Triage")}/edit`);
-  await page.getByRole("list", { name: "Steps", exact: true }).getByRole("button", { name: "1. Triage" }).click();
   await page.getByRole("button", { name: "Add an outcome out of Triage" }).click();
-  await page.getByRole("textbox", { name: "Outcome out of Triage" }).last().fill("release");
+  await page.getByRole("textbox", { name: "Outcome out of Triage" }).fill("release");
   await page.getByRole("combobox", { name: "Where release out of Triage leads" }).click();
   await page.getByRole("option", { name: "Deploy", exact: true }).click();
   await page.getByRole("button", { name: "Save" }).click();
