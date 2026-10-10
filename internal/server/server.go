@@ -35,11 +35,13 @@ type Server struct {
 	// runnerTimeout bounds what the server asks the Runner about a pull request: a merge, or the
 	// check of an agent's merged write.
 	runnerTimeout time.Duration
-	store         *store.Store
-	core          *core.Service
-	auth          *auth.Authenticator
-	wake          *wake.Notifier
-	log           *slog.Logger
+	// onMergeWait, for tests, is told a request waits for another merge of the Task taskID.
+	onMergeWait func(taskID string)
+	store       *store.Store
+	core        *core.Service
+	auth        *auth.Authenticator
+	wake        *wake.Notifier
+	log         *slog.Logger
 	// publicURL is where the Install is reached, for login links; empty to use the request's host.
 	publicURL string
 	keepAlive time.Duration

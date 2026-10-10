@@ -208,6 +208,8 @@ func TestMergeOneAtATime(t *testing.T) {
 			}
 			return res.StatusCode(), nil
 		}
+		waiting := make(chan struct{}, 2)
+		h.srv.onMergeWait = func(string) { waiting <- struct{}{} }
 		codes := make(chan int, 2)
 		go func() {
 			c, err := merge(ctx)
@@ -231,7 +233,8 @@ func TestMergeOneAtATime(t *testing.T) {
 			}
 			codes <- c
 		}()
-		time.Sleep(100 * time.Millisecond) // both waiters reach the lock; the test's outcome holds either way
+		<-waiting // both waiters wait at the lock
+		<-waiting
 		cancel()
 		if err := <-cancelled; !errors.Is(err, context.Canceled) {
 			t.Fatalf("the cancelled waiter: %v", err)
@@ -460,6 +463,34 @@ func TestEvidenceClaimThroughTheAPI(t *testing.T) {
 		}
 		if res := attach(ada, &held, &log); res.StatusCode() != http.StatusForbidden || !strings.Contains(res.JSONDefault.Message, "the Claim is not yours") {
 			t.Fatalf("another Member's Claim: %d %s", res.StatusCode(), res.Body)
+		}
+	})
+}
+
+// The check of an agent's merged write waits for the Runner at most the Runner timeout: a Runner
+// that does not answer is answered conflict.
+func TestMergedWriteCheckTimesOut(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		h := newHarness(t, st)
+		h.srv.runnerTimeout = 200 * time.Millisecond
+		ctx := t.Context()
+		ada := h.admin
+		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(ada.AddProjectMemberWithResponse(ctx, "WEB", "ada", &client.AddProjectMemberParams{})).want(t, http.StatusNoContent)
+		mode := client.WorkspaceModePullRequest
+		got(ada.CreateWorkspaceWithResponse(ctx, &client.CreateWorkspaceParams{}, client.CreateWorkspaceBody{Name: "web", Path: "/src/web", Mode: &mode})).
+			want(t, http.StatusCreated)
+		bob, _ := h.member("bob", client.Agent, "WEB")
+		task := got(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Checkout",
+			Workspaces: &[]string{"web"}})).want(t, http.StatusCreated).JSON201.Task
+		h.srv.AttachRunner(&fakeRunner{pullRequest: func(ctx context.Context, _ string, _ int64, _ string) (runnerapi.PullRequest, error) {
+			<-ctx.Done() // gh hangs
+			return runnerapi.PullRequest{}, ctx.Err()
+		}})
+		res := got(bob.SetTaskPullRequestWithResponse(ctx, task.Key, &client.SetTaskPullRequestParams{},
+			client.SetTaskPullRequestBody{Number: 7, URL: "https://github.com/acme/web/pull/7", State: client.PullRequestMerged})).want(t, http.StatusConflict)
+		if !strings.Contains(res.JSONDefault.Message, "the Runner did not answer in 200ms") {
+			t.Fatalf("the refusal reads %q", res.JSONDefault.Message)
 		}
 	})
 }

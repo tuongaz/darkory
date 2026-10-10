@@ -372,6 +372,14 @@ func (s *Server) lockMerge(ctx context.Context, taskID string) (func(), error) {
 	select {
 	case slot <- struct{}{}:
 		return func() { <-slot }, nil
+	default:
+	}
+	if s.onMergeWait != nil {
+		s.onMergeWait(taskID)
+	}
+	select {
+	case slot <- struct{}{}:
+		return func() { <-slot }, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
