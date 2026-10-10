@@ -756,7 +756,7 @@
           },
           {
             "key": "DARK-34",
-            "title": "Workflow page: the Loops list folds",
+            "title": "Workflow page: a Step's list opens in place",
             "step": "Build",
             "since": "2026-10-10T13:57:00+11:00",
             "age": "33m"

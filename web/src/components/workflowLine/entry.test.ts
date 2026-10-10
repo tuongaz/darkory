@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { BIG, MAIN } from "./fixtures";
 import { lineTopology } from "./layout";
 import { DONE_STATION, sideSteps, startStep, type LineWorkflow } from "./model";
+import { breakdownOutcomeHint } from "./words";
 
 /** The one Workflow of the Steps written here. */
 const work = { id: "work", name: "Work", position: 1 };
@@ -21,10 +22,14 @@ describe("where Tasks enter the line (MAIN)", () => {
     expect(t.holds).toEqual(["backlog"]);
   });
 
-  it("names Plan's outcome into Done in words beside it, with its sentence", () => {
+  it("makes Plan's outcome into Done the topology's chip by Plan; the line hovers it with where the Subtasks Plan files start", () => {
     const chip = t.chips.find((c) => c.stepId === "plan")!;
     expect(chip.text).toBe("done → Done");
     expect(chip.hint).toBe("Plan → Done: when the holder says done, and the Task is complete");
+    const name = (id: string | null) => (id === null ? "Done" : t.steps.get(id)!.name);
+    expect(breakdownOutcomeHint(chip.connector, name, name(t.start!))).toBe(
+      "Plan's Breakdown Subtask ends Done when its holder says done; the Subtasks it filed start each at the Step its filer names, Build when they name none",
+    );
   });
 });
 
