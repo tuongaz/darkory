@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Activity, Claim } from "@/api/client";
-import { chainOf, scopedLine, scopeMenu, traceOf, unblocksWhen } from "./data";
+import { chainOf, scopedLine, scopeMenu, scopePills, traceOf, unblocksWhen } from "./data";
 import { workflowsSkills, workflowsFixture } from "@/test/fixtures";
 import { MAIN } from "./fixtures";
 import { startStep, stepsOf, type LineTask, type LineWorkflow } from "./model";
@@ -184,3 +184,13 @@ describe("the scope menu", () => {
     expect(scopeMenu(all, new Set(["retro"]), () => undefined).parents).toEqual([{ id: "k-1", key: "…", title: "", open: 1 }]);
   });
 });
+
+describe("scopePills", () => {
+  it("stands a Parent's scope for its Subtasks, No Parent for the Tasks with none, and every Task for nothing", () => {
+    expect(scopePills({ kind: "parent", id: "k-7" })).toEqual([{ field: "parent", op: "is", values: ["k-7"] }]);
+    expect(scopePills({ kind: "none" })).toEqual([{ field: "parent", op: "is", values: ["none"] }]);
+    expect(scopePills({ kind: "all" })).toEqual([]);
+    expect(scopePills({ kind: "task", id: "k-2" })).toEqual([]);
+  });
+});
+
