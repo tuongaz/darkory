@@ -4525,17 +4525,21 @@ type ClientInterface interface {
 	// already have the Task when the pull request is read. `url` is kept as given once valid:
 	// the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
 	// with no query, fragment or trailing slash, on `github.com` or on the host the server's
-	// `GH_HOST` names when it is set. An agent's write of `merged` is checked on GitHub through
-	// the Runner beside this server, when one is attached: the pull request must be merged there
-	// and its head branch must start with the Task's key, as the Runner names a Task's branches.
-	// A human's write, a write of `open`, and any write with no Runner attached are not checked.
+	// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+	// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+	// checked on GitHub through the Runner beside this server, when one is attached: the pull
+	// request must be merged there, its head branch must start with the Task's key, as the
+	// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
+	// write, a write of `open`, and any write with no Runner attached are not checked.
 	// Writing the values the Task already carries changes nothing and records nothing. Records
 	// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 	// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
 	// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 	// own Workspaces or else its Project's default; the pull request's branch is not the
-	// Task's), `conflict` (`open` written over a pull request already merged; GitHub has the
-	// pull request open, not merged).
+	// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+	// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
+	// such pull request in the Task's Workspaces; GitHub could not be asked).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -4550,17 +4554,21 @@ type ClientInterface interface {
 	// already have the Task when the pull request is read. `url` is kept as given once valid:
 	// the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
 	// with no query, fragment or trailing slash, on `github.com` or on the host the server's
-	// `GH_HOST` names when it is set. An agent's write of `merged` is checked on GitHub through
-	// the Runner beside this server, when one is attached: the pull request must be merged there
-	// and its head branch must start with the Task's key, as the Runner names a Task's branches.
-	// A human's write, a write of `open`, and any write with no Runner attached are not checked.
+	// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+	// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+	// checked on GitHub through the Runner beside this server, when one is attached: the pull
+	// request must be merged there, its head branch must start with the Task's key, as the
+	// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
+	// write, a write of `open`, and any write with no Runner attached are not checked.
 	// Writing the values the Task already carries changes nothing and records nothing. Records
 	// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 	// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
 	// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 	// own Workspaces or else its Project's default; the pull request's branch is not the
-	// Task's), `conflict` (`open` written over a pull request already merged; GitHub has the
-	// pull request open, not merged).
+	// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+	// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
+	// such pull request in the Task's Workspaces; GitHub could not be asked).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -7207,17 +7215,21 @@ func (c *Client) PassOwnership(ctx context.Context, task TaskRef, params *PassOw
 // already have the Task when the pull request is read. `url` is kept as given once valid:
 // the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
 // with no query, fragment or trailing slash, on `github.com` or on the host the server's
-// `GH_HOST` names when it is set. An agent's write of `merged` is checked on GitHub through
-// the Runner beside this server, when one is attached: the pull request must be merged there
-// and its head branch must start with the Task's key, as the Runner names a Task's branches.
-// A human's write, a write of `open`, and any write with no Runner attached are not checked.
+// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+// checked on GitHub through the Runner beside this server, when one is attached: the pull
+// request must be merged there, its head branch must start with the Task's key, as the
+// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
+// write, a write of `open`, and any write with no Runner attached are not checked.
 // Writing the values the Task already carries changes nothing and records nothing. Records
 // `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 // a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
 // pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 // own Workspaces or else its Project's default; the pull request's branch is not the
-// Task's), `conflict` (`open` written over a pull request already merged; GitHub has the
-// pull request open, not merged).
+// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
+// such pull request in the Task's Workspaces; GitHub could not be asked).
 //
 // Takes any type of body and a specified content type.
 //
@@ -7242,17 +7254,21 @@ func (c *Client) SetTaskPullRequestWithBody(ctx context.Context, task TaskRef, p
 // already have the Task when the pull request is read. `url` is kept as given once valid:
 // the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
 // with no query, fragment or trailing slash, on `github.com` or on the host the server's
-// `GH_HOST` names when it is set. An agent's write of `merged` is checked on GitHub through
-// the Runner beside this server, when one is attached: the pull request must be merged there
-// and its head branch must start with the Task's key, as the Runner names a Task's branches.
-// A human's write, a write of `open`, and any write with no Runner attached are not checked.
+// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+// checked on GitHub through the Runner beside this server, when one is attached: the pull
+// request must be merged there, its head branch must start with the Task's key, as the
+// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
+// write, a write of `open`, and any write with no Runner attached are not checked.
 // Writing the values the Task already carries changes nothing and records nothing. Records
 // `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 // a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
 // pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 // own Workspaces or else its Project's default; the pull request's branch is not the
-// Task's), `conflict` (`open` written over a pull request already merged; GitHub has the
-// pull request open, not merged).
+// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
+// such pull request in the Task's Workspaces; GitHub could not be asked).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -14282,17 +14298,21 @@ type ClientWithResponsesInterface interface {
 	// already have the Task when the pull request is read. `url` is kept as given once valid:
 	// the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
 	// with no query, fragment or trailing slash, on `github.com` or on the host the server's
-	// `GH_HOST` names when it is set. An agent's write of `merged` is checked on GitHub through
-	// the Runner beside this server, when one is attached: the pull request must be merged there
-	// and its head branch must start with the Task's key, as the Runner names a Task's branches.
-	// A human's write, a write of `open`, and any write with no Runner attached are not checked.
+	// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+	// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+	// checked on GitHub through the Runner beside this server, when one is attached: the pull
+	// request must be merged there, its head branch must start with the Task's key, as the
+	// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
+	// write, a write of `open`, and any write with no Runner attached are not checked.
 	// Writing the values the Task already carries changes nothing and records nothing. Records
 	// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 	// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
 	// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 	// own Workspaces or else its Project's default; the pull request's branch is not the
-	// Task's), `conflict` (`open` written over a pull request already merged; GitHub has the
-	// pull request open, not merged).
+	// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+	// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
+	// such pull request in the Task's Workspaces; GitHub could not be asked).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -14307,17 +14327,21 @@ type ClientWithResponsesInterface interface {
 	// already have the Task when the pull request is read. `url` is kept as given once valid:
 	// the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
 	// with no query, fragment or trailing slash, on `github.com` or on the host the server's
-	// `GH_HOST` names when it is set. An agent's write of `merged` is checked on GitHub through
-	// the Runner beside this server, when one is attached: the pull request must be merged there
-	// and its head branch must start with the Task's key, as the Runner names a Task's branches.
-	// A human's write, a write of `open`, and any write with no Runner attached are not checked.
+	// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+	// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+	// checked on GitHub through the Runner beside this server, when one is attached: the pull
+	// request must be merged there, its head branch must start with the Task's key, as the
+	// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
+	// write, a write of `open`, and any write with no Runner attached are not checked.
 	// Writing the values the Task already carries changes nothing and records nothing. Records
 	// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 	// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
 	// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 	// own Workspaces or else its Project's default; the pull request's branch is not the
-	// Task's), `conflict` (`open` written over a pull request already merged; GitHub has the
-	// pull request open, not merged).
+	// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+	// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
+	// such pull request in the Task's Workspaces; GitHub could not be asked).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -20951,17 +20975,21 @@ func (c *ClientWithResponses) PassOwnershipWithResponse(ctx context.Context, tas
 // already have the Task when the pull request is read. `url` is kept as given once valid:
 // the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
 // with no query, fragment or trailing slash, on `github.com` or on the host the server's
-// `GH_HOST` names when it is set. An agent's write of `merged` is checked on GitHub through
-// the Runner beside this server, when one is attached: the pull request must be merged there
-// and its head branch must start with the Task's key, as the Runner names a Task's branches.
-// A human's write, a write of `open`, and any write with no Runner attached are not checked.
+// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+// checked on GitHub through the Runner beside this server, when one is attached: the pull
+// request must be merged there, its head branch must start with the Task's key, as the
+// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
+// write, a write of `open`, and any write with no Runner attached are not checked.
 // Writing the values the Task already carries changes nothing and records nothing. Records
 // `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 // a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
 // pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 // own Workspaces or else its Project's default; the pull request's branch is not the
-// Task's), `conflict` (`open` written over a pull request already merged; GitHub has the
-// pull request open, not merged).
+// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
+// such pull request in the Task's Workspaces; GitHub could not be asked).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20982,17 +21010,21 @@ func (c *ClientWithResponses) SetTaskPullRequestWithBodyWithResponse(ctx context
 // already have the Task when the pull request is read. `url` is kept as given once valid:
 // the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
 // with no query, fragment or trailing slash, on `github.com` or on the host the server's
-// `GH_HOST` names when it is set. An agent's write of `merged` is checked on GitHub through
-// the Runner beside this server, when one is attached: the pull request must be merged there
-// and its head branch must start with the Task's key, as the Runner names a Task's branches.
-// A human's write, a write of `open`, and any write with no Runner attached are not checked.
+// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+// checked on GitHub through the Runner beside this server, when one is attached: the pull
+// request must be merged there, its head branch must start with the Task's key, as the
+// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
+// write, a write of `open`, and any write with no Runner attached are not checked.
 // Writing the values the Task already carries changes nothing and records nothing. Records
 // `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 // a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
 // pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 // own Workspaces or else its Project's default; the pull request's branch is not the
-// Task's), `conflict` (`open` written over a pull request already merged; GitHub has the
-// pull request open, not merged).
+// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
+// such pull request in the Task's Workspaces; GitHub could not be asked).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
