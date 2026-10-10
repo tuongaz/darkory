@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { wfId, wfStep } from "@/test/fixtures";
-import { BIG, DEFAULT, FIVE, MAIN, SACCA, SOFTWARE } from "./fixtures";
+import { BIG, DARK, DEFAULT, FIVE, MAIN, SACCA, SOFTWARE } from "./fixtures";
 import { crossings, densityFor, horizontal, laneTracks, lineTopology, railOf, topologyCrossings, trackCrossings, tracks, type Arc, type Track } from "./layout";
 import { DONE_STATION, type LineConnector, type LineWorkflow } from "./model";
 import { overlaps } from "./place";
@@ -353,7 +353,9 @@ describe("the line down the page: returns as tracks in lanes beside the rail", (
   });
 
   it("crosses nothing on MAIN, the default, the Sacca Workflow and Bug triage's shared track", () => {
-    for (const wf of [MAIN, DEFAULT, SACCA]) expect(trackCrossings(tracks(lineTopology(wf)))).toBe(0);
+    for (const wf of [MAIN, DEFAULT, SACCA, DARK("bugs")]) expect(trackCrossings(tracks(lineTopology(wf)))).toBe(0);
+    // Bug triage's two returns into Fix are the one track.
+    expect(tracks(lineTopology(DARK("bugs"))).map((k) => k.connectors.length)).toEqual([2]);
   });
 
   it("never carries a Connector into Done, nor one the rail carries", () => {

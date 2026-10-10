@@ -4,7 +4,7 @@ import { MemberAvatar } from "@/components/MemberAvatar";
 import { cn } from "@/lib/utils";
 import { ChainCallout } from "./Callout";
 import { chainOf, type Chain, type Ghost, type Trace } from "./data";
-import { lineTopology, type Loop } from "./layout";
+import { lineTopology } from "./layout";
 import type { LineFacts, LineTask } from "./model";
 import { VerticalLine } from "./Vertical";
 import { AFTER_BRANCH } from "./words";
@@ -115,32 +115,5 @@ export function WorkflowLine(props: WorkflowLineProps) {
         footer={props.footer}
       />
     </div>
-  );
-}
-
-/** The loops back by name, so each can be found without tracing a line; hovering one lights it. */
-export function LoopsList({ loops, onHover }: { loops: readonly Loop[]; onHover?: (connectorId: string | null) => void }) {
-  return (
-    <section aria-label="Loops" className="border-t px-5 py-3">
-      <h3 className="mb-1.5 flex items-baseline gap-2 text-[13px] font-semibold">
-        Loops <span className="font-medium text-muted-foreground">{loops.length}</span>
-      </h3>
-      <ul className="grid grid-cols-1 gap-x-8 sm:grid-cols-2 xl:grid-cols-3">
-        {loops.map((l) => (
-          <li
-            key={l.connector.id}
-            onMouseEnter={() => onHover?.(l.connector.id)}
-            onMouseLeave={() => onHover?.(null)}
-            className="grid h-[26px] grid-cols-[14px_minmax(0,1fr)_auto] items-center gap-2.5 rounded px-1 text-[12.5px] hover:bg-state-claimed-bg"
-          >
-            <span aria-hidden className="size-[7px] rotate-45 rounded-[2px] border-[1.5px] border-foreground" />
-            <span className="truncate">
-              {l.from} <span className="text-muted-foreground">↩</span> {l.to}
-            </span>
-            <span className="text-xs text-muted-foreground">{l.connector.name}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }

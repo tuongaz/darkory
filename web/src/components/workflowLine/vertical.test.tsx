@@ -129,7 +129,7 @@ describe("Also starts here", () => {
     expect(within(backlog).getByRole("button", { name: "DARK-30 Later, in the hold" })).toBeInTheDocument();
     expect(backlog.querySelector("[data-mark]")).toHaveTextContent("⇢ Build");
     const plan = group.querySelector<HTMLElement>('[data-side="plan"]')!;
-    expect([...plan.querySelectorAll("[data-mark]")].map((m) => m.textContent)).toEqual(["● Done", "↳ Build"]);
+    expect([...plan.querySelectorAll("[data-mark]")].map((m) => m.textContent)).toEqual(["● done → Done", "↳ Build"]);
     // Neither is a station on the rail.
     expect(stations(rail()).map((li) => li.getAttribute("data-station"))).toEqual(["build", "review", "done"]);
   });
@@ -163,6 +163,10 @@ describe("When a Parent ends", () => {
     expect(line.querySelector('[data-segment="retro"]')).toHaveTextContent("propose");
     expect(line.querySelector('[data-segment="skillreview"]')).toHaveTextContent("publish");
     expect(after.querySelector('[data-track="retro"]')).not.toBeNull();
+    // Its words read outcome → target: Retro's done into its own Done, Acceptance's fail back into the main line's Build.
+    expect(line.querySelector('[data-connector="retro:done"]')).toHaveTextContent("● done → Done");
+    expect(line.querySelector('[data-connector="acceptance:fail"]')).toHaveTextContent("↩ fail → Build");
+    expect(line.querySelector('[data-connector="acceptance:fail"]')).toHaveAttribute("data-mark", "return");
     // No Connector of the branch is drawn on the main rail.
     for (const id of ["retro:done", "retro:propose", "skillreview:publish", "skillreview:needs changes", "acceptance:pass"]) expect(mainRail.querySelector(`[data-connector="${id}"]`), id).toBeNull();
   });
@@ -178,7 +182,8 @@ describe("the Retrospective at Done", () => {
   });
 
   it("is not there on the Workflow that holds it, nor on a Project of one Workflow, nor where no Step carries retro", () => {
-    for (const wf of [DARK("retros"), MAIN, FIVE(wfId.triage)]) {
+    // NEWS: one Workflow, no retro Step, drawn as the Project's line and drawn by name.
+    for (const wf of [DARK("retros"), MAIN, NEWS, { ...NEWS, drawn: "work" }, FIVE(wfId.triage)]) {
       const { unmount } = render(<WorkflowLine workflow={wf} tasks={[]} now={0} />);
       expect(document.querySelector("[data-retro]")).toBeNull();
       unmount();

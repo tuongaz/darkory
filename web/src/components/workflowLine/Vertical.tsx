@@ -115,9 +115,9 @@ type Tone = "trace" | "next" | "lit" | "changed" | "plain";
 type Seg = { from: string; to: string; connector?: LineConnector; hand?: boolean } | null;
 
 /** A mark beside a Step, for what leaves the line: into Done, another Workflow, by hand, a Breakdown's Subtasks. */
-type MarkKind = "done" | "exit" | "hand" | "files" | "chip";
+type MarkKind = "done" | "exit" | "hand" | "files" | "chip" | "return";
 
-const glyphs: Record<MarkKind, string> = { done: "●", exit: "↗", hand: "⇢", files: "↳", chip: "↗" };
+const glyphs: Record<MarkKind, string> = { done: "●", exit: "↗", hand: "⇢", files: "↳", chip: "↗", return: "↩" };
 
 export function VerticalLine({
   topology: t,
@@ -241,8 +241,8 @@ export function VerticalLine({
       <span className="min-w-0 truncate">{text}</span>
     </span>
   );
-  /** "done → Done" says Done once; "pass → Triage" both. */
-  const said = (c: LineConnector, target: string) => (c.name.toLowerCase() === target.toLowerCase() ? target : `${c.name} → ${target}`);
+  /** Every mark reads outcome → target: "done → Done", "pass → Triage". */
+  const said = (c: LineConnector, target: string) => `${c.name} → ${target}`;
 
   // A crossing in, beside the Step it reaches (beside Start, where that is the first): "Bug triage · feature ↙".
   const entryChips = (id: string) =>
@@ -334,7 +334,7 @@ export function VerticalLine({
         <>
           {past && (
             <span className="flex flex-col items-start gap-0.5">
-              <Token task={{ ...(tasks[0] ?? { id: "p", key: "", title: "", kind: "work", blockers: [] }), holder: past.holder, blockers: [] }} hold={false} now={now} past={{ text: spanText(past.worked) }} noKey />
+              <Token task={{ id: `stay:${id}`, key: name(id), title: `worked ${spanText(past.worked)}`, kind: "work", holder: past.holder, blockers: [] }} hold={false} now={now} past={{ text: spanText(past.worked) }} noKey />
               {past.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {spanText(past.waited)}</span>}
             </span>
           )}
@@ -529,7 +529,11 @@ export function VerticalLine({
   };
 
   // ---- When a Parent ends: the branch's Steps as a quiet line of their own.
-  const quietStations = [...t.rows.flatMap((r) => r.stations), DONE_STATION];
+  // Everything of the quiet line derives from the topology alone.
+  const { quietStations, quietTracks } = useMemo(() => {
+    const stations = [...t.rows.flatMap((r) => r.stations), DONE_STATION];
+    return { quietStations: stations, quietTracks: laneTracks(stations, t.rows.flatMap((r) => r.loops.map((l) => l.connector)), new Set()) };
+  }, [t]);
   const quietSegs: Seg[] = quietStations.slice(0, -1).map((from, i) => {
     const to = quietStations[i + 1];
     const row = t.rows.find((r) => r.stations.includes(from))!;
@@ -540,7 +544,6 @@ export function VerticalLine({
     return { from, to, connector: seg?.connector };
   });
   const lastRow = t.rows.at(-1);
-  const quietTracks = useMemo(() => laneTracks(quietStations, t.rows.flatMap((r) => r.loops.map((l) => l.connector)), new Set()), [t]); // eslint-disable-line react-hooks/exhaustive-deps
   const quietRow = (id: string) => {
     const terminal = id === DONE_STATION;
     const s = steps.get(id);
@@ -554,7 +557,7 @@ export function VerticalLine({
         <>
           {entryChips(id)}
           {returns(id, quietTracks, quietStations)}
-          {chipsAt(t, id).filter((c) => c.kind !== "entry").map((c) => mark(c.kind === "exit" ? "exit" : c.connector.to === null ? "done" : "chip", c.connector.id, said(c.connector, fullName(c.connector.to)), c.hint, { "data-connector": c.connector.id, "data-chip": c.kind, "data-exit": c.kind === "exit" ? c.connector.id : undefined }))}
+          {chipsAt(t, id).filter((c) => c.kind !== "entry").map((c) => mark(c.kind === "exit" ? "exit" : c.connector.to === null ? "done" : rail.includes(c.connector.to) ? "return" : "chip", c.connector.id, said(c.connector, fullName(c.connector.to)), c.hint, { "data-connector": c.connector.id, "data-chip": c.kind, "data-exit": c.kind === "exit" ? c.connector.id : undefined }))}
           {exit && mark("done", exit.id, said(exit, "Done"), outcomeHint(exit, fullName), { "data-connector": exit.id })}
           {nextWords(id, quietStations)}
         </>

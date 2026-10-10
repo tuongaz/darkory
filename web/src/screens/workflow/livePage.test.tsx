@@ -77,7 +77,7 @@ describe("the Workflow page", () => {
     expect(tokenOf("WEB-3")).toHaveAttribute("data-state", "hold");
     expect(tokenOf("WEB-4")).toBeInTheDocument();
     // Plan's done is a mark beside it, not a line.
-    expect(line().querySelector('[data-hint^="Plan\'s Breakdown Subtask ends Done"]')).toHaveTextContent("● Done");
+    expect(line().querySelector('[data-hint^="Plan\'s Breakdown Subtask ends Done"]')).toHaveTextContent("● done → Done");
   });
 
   it("explains every line on hover, in words", async () => {
