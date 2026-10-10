@@ -65,16 +65,18 @@ const LANE = 12;
 const STUB = 5;
 
 type Hover = (text: string | undefined, opts?: { focus?: boolean }) => Record<string, unknown>;
+type Describe = (texts: readonly string[]) => Record<string, unknown>;
 /** A hover sentence and where it shows, in the line root's box. */
 export type Tip = { x: number; y: number; w: number; text: string };
 
 /**
  * The hover sentences of one drawing: each carrier shows its sentence while the pointer is on it
  * or it has the focus (it takes the focus unless it is a line in the drawing, whose sentence its
- * label carries too), and is described by it for a screen reader. `pool` renders the sentences
- * the carriers point at; it is rendered after them.
+ * label carries too), and is described by it for a screen reader. `describe` makes one carrier the
+ * keyboard's stop for several words' sentences (a Step's name, for its Skill tag and median), shown
+ * together on focus. `pool` renders the sentences the carriers point at; it is rendered after them.
  */
-function hints(base: string, onTip: (tip: Tip | null) => void): { hover: Hover; pool: () => ReactNode } {
+function hints(base: string, onTip: (tip: Tip | null) => void): { hover: Hover; describe: Describe; pool: () => ReactNode } {
   const ids = new Map<string, string>();
   const at = (el: Element, x?: number, y?: number) => {
     const r = el.closest("[data-line-root]")?.getBoundingClientRect();
@@ -82,10 +84,14 @@ function hints(base: string, onTip: (tip: Tip | null) => void): { hover: Hover; 
     const b = el.getBoundingClientRect();
     return { x: (x ?? b.left) - r.left, y: (y ?? b.bottom - 12) - r.top, w: r.width };
   };
+  const idOf = (text: string) => {
+    if (!ids.has(text)) ids.set(text, `${base}-${ids.size}`);
+    return ids.get(text)!;
+  };
   const hover: Hover = (text, opts) => {
     if (!text) return {};
     const focus = opts?.focus ?? true;
-    if (focus && !ids.has(text)) ids.set(text, `${base}-${ids.size}`);
+    if (focus) idOf(text);
     return {
       "data-hint": text,
       onMouseEnter: (e: MouseEvent) => {
@@ -106,9 +112,22 @@ function hints(base: string, onTip: (tip: Tip | null) => void): { hover: Hover; 
         : {}),
     };
   };
+  const describe: Describe = (texts) => {
+    if (texts.length === 0) return {};
+    const text = texts.join(" · ");
+    return {
+      tabIndex: 0,
+      "aria-describedby": texts.map(idOf).join(" "),
+      onFocus: (e: FocusEvent) => {
+        const p = at(e.currentTarget as Element);
+        if (p) onTip({ ...p, text });
+      },
+      onBlur: () => onTip(null),
+    };
+  };
   // A component, so it reads the sentences when it renders: after the rails, whose rows say theirs as they render.
   const pool = () => <HintPool ids={ids} />;
-  return { hover, pool };
+  return { hover, describe, pool };
 }
 
 function HintPool({ ids }: { ids: ReadonlyMap<string, string> }) {
@@ -183,7 +202,7 @@ export function VerticalLine({
 
   // What a line or a word means, in a sentence, while the pointer is on it or it has the focus.
   const [tip, setTip] = useState<Tip | null>(null);
-  const { hover, pool } = hints(useId(), setTip);
+  const { hover, describe, pool } = hints(useId(), setTip);
 
   // The one Step whose list is open under its count: a second click closes it, and Escape with the
   // focus on the count or in the list, which then goes no further (the selection stays).
@@ -342,6 +361,9 @@ export function VerticalLine({
     return out;
   };
 
+  /** A Step's name: the keyboard's one stop for its facts, described by their sentences together. */
+  const named = (s: LineStepFacts | undefined) => describe(s ? [...(s.skill ? [SKILL_HINT] : []), ...(s.medianMs !== undefined ? [MEDIAN_HINT] : [])] : []);
+
   const facts1 = (s: LineStepFacts | undefined, small = false, inline = false) => {
     if (!s) return null;
     const takers = s.takers ?? [];
@@ -351,13 +373,13 @@ export function VerticalLine({
       // Narrow, a row of its own under the name (vf-10); wide, and in "Also starts here", beside it.
       <span data-facts className={narrow && !inline ? "flex basis-full flex-wrap items-center gap-x-2.5 gap-y-1" : "contents"}>
         {s.skill && (
-          <span {...hover(SKILL_HINT)} className="inline-flex items-center gap-[3px] font-mono text-[11px] font-normal text-muted-foreground">
+          <span {...hover(SKILL_HINT, { focus: false })} className="inline-flex items-center gap-[3px] font-mono text-[11px] font-normal text-muted-foreground">
             <TagIcon aria-hidden className="size-[11px]" />
             {s.skill.name}
           </span>
         )}
         {s.medianMs !== undefined && (
-          <span {...hover(MEDIAN_HINT)} className="text-xs font-normal text-muted-foreground tabular-nums">
+          <span {...hover(MEDIAN_HINT, { focus: false })} className="text-xs font-normal text-muted-foreground tabular-nums">
             {spanText(s.medianMs)}
           </span>
         )}
@@ -543,7 +565,7 @@ export function VerticalLine({
         );
         return (
           <div key={id} data-side={id} data-head={s.name} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-            <span {...hover(hold ? holdHint(s.name) : undefined)} className="text-[13px] font-medium">
+            <span {...(hold ? hover(holdHint(s.name)) : named(s))} className="text-[13px] font-medium">
               {s.name}
             </span>
             {hold ? (
@@ -617,7 +639,9 @@ export function VerticalLine({
         </>
       ) : (
         <>
-          <span className="text-sm font-semibold">{s?.name}</span>
+          <span {...named(s)} className="text-sm font-semibold">
+            {s?.name}
+          </span>
           {s && isHoldStep(s) && holdPill(s.name)}
           {narrow && returns(id, mainTracks, rail)}
           {facts1(s)}
@@ -647,7 +671,9 @@ export function VerticalLine({
     return {
       name: (
         <>
-          <span className="text-[13px] font-medium text-muted-foreground">{terminal ? "Done" : s?.name}</span>
+          <span {...(terminal ? {} : named(s))} className="text-[13px] font-medium text-muted-foreground">
+            {terminal ? "Done" : s?.name}
+          </span>
           {!terminal && narrow && returns(id, quietTracks, quietStations)}
           {!terminal && facts1(s, true)}
         </>

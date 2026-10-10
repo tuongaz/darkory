@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { MemoryRouter } from "react-router";
@@ -42,14 +42,29 @@ describe("the line, top to bottom", () => {
     expect(start).not.toHaveFocus();
   });
 
-  it("describes every word that has a sentence, and lets each take the focus", () => {
+  it("lets each mark, label, crossing in and Start take the focus, described by its sentence", () => {
     render(<WorkflowLine workflow={DARK("bugs")} tasks={[]} now={0} />);
-    const carriers = [...document.querySelectorAll<HTMLElement>("[data-hint]")].filter((el) => !(el instanceof SVGElement));
-    expect(carriers.length).toBeGreaterThan(8);
+    const facts = new Set(["the Skill a Member needs to take Tasks here", "median time a Task spends here"]);
+    const carriers = [...document.querySelectorAll<HTMLElement>("[data-hint]")].filter((el) => !(el instanceof SVGElement) && !facts.has(el.getAttribute("data-hint")!));
+    expect(carriers.length).toBeGreaterThan(5);
     for (const el of carriers) {
       expect(el, el.textContent ?? "").toHaveAttribute("tabindex", "0");
       expect(el).toHaveAccessibleDescription(el.getAttribute("data-hint")!);
     }
+  });
+
+  it("makes a Step's name the one stop for its facts: the Skill tag and the median are no stops, the name is described by both sentences", () => {
+    const wf = DARK("bugs");
+    render(<WorkflowLine workflow={{ ...wf, steps: wf.steps.map((x) => ({ ...x, medianMs: 120_000 })) }} tasks={[]} now={0} />);
+    for (const hint of ["the Skill a Member needs to take Tasks here", "median time a Task spends here"]) {
+      const words = [...document.querySelectorAll<HTMLElement>(`[data-hint="${hint}"]`)];
+      expect(words.length).toBeGreaterThan(1);
+      for (const el of words) expect(el).not.toHaveAttribute("tabindex");
+    }
+    const fix = screen.getByText("Fix", { selector: "[tabindex]" });
+    expect(fix).toHaveAccessibleDescription("the Skill a Member needs to take Tasks here median time a Task spends here");
+    act(() => fix.focus());
+    expect(screen.getByRole("tooltip")).toHaveTextContent("the Skill a Member needs to take Tasks here · median time a Task spends here");
   });
 
   it("puts a crossing in beside Start, in the entry's words (vf-1: Bug triage · feature)", () => {
