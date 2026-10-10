@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -739,7 +741,7 @@ func (s *Service) PassOwnership(ctx context.Context, c *auth.Caller, ref, ownerR
 // merged pull request is refused conflict. Records task.pull_request_opened on the first write of
 // an open pull request and task.pull_request_merged on a write of merged.
 func (s *Service) SetPullRequest(ctx context.Context, c *auth.Caller, ref string, pr PullRequest, idem Idem) (Task, error) {
-	if err := pr.validate(); err != nil {
+	if err := pr.Validate(); err != nil {
 		return Task{}, err
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
@@ -782,19 +784,30 @@ WHERE org_id = $4 AND id = $5`, pr.Number, pr.URL, pr.State, c.OrgID, task.ID); 
 	return res.(Task), nil
 }
 
-// GitHubHost is the host a pull request's address must be on: GH_HOST, gh's own variable for
-// GitHub Enterprise, when the server's environment sets it, else github.com.
+// GitHubHost is the host a pull request's address must be on, port included when it names one:
+// GH_HOST, gh's own variable for GitHub Enterprise, when the server's environment sets it, else
+// github.com. GH_HOST may be written with a scheme or a trailing slash; only its host part counts.
 func GitHubHost() string {
-	if h := strings.TrimSpace(os.Getenv("GH_HOST")); h != "" {
-		return strings.ToLower(h)
+	h := strings.TrimSpace(os.Getenv("GH_HOST"))
+	if h == "" {
+		return "github.com"
 	}
-	return "github.com"
+	if strings.Contains(h, "://") {
+		if u, err := url.Parse(h); err == nil && u.Host != "" {
+			h = u.Host
+		}
+	}
+	return strings.ToLower(strings.TrimRight(h, "/"))
 }
 
-// validate refuses a pull request with no number, a state other than open or merged, or an
-// address that is not an https address on GitHub (GitHubHost): the app links to it, so nothing
-// else may be written there. A valid address is kept exactly as given.
-func (pr PullRequest) validate() error {
+// pullPath is the path of a pull request's own page on GitHub: /<owner>/<repo>/pull/<number>.
+var pullPath = regexp.MustCompile(`^/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/pull/([1-9][0-9]*)$`)
+
+// Validate refuses a pull request with no number, a state other than open or merged, or an
+// address that is not the https address of that pull request's own page on GitHub (GitHubHost),
+// with no query or fragment: the app links to it, so nothing else may be written there. A valid
+// address is kept exactly as given.
+func (pr PullRequest) Validate() error {
 	if pr.Number < 1 {
 		return refuse(CodeInvalid, "a pull request's number is 1 or more")
 	}
@@ -804,6 +817,11 @@ func (pr PullRequest) validate() error {
 	u, err := url.Parse(pr.URL)
 	if err != nil || u.Scheme != "https" || u.User != nil || !strings.EqualFold(u.Host, GitHubHost()) || len(pr.URL) > 2000 {
 		return refuse(CodeInvalid, "the pull request's address is not on GitHub: an https address on %s, at most 2000 characters", GitHubHost())
+	}
+	m := pullPath.FindStringSubmatch(u.EscapedPath())
+	if m == nil || m[1] != strconv.FormatInt(pr.Number, 10) || strings.ContainsAny(pr.URL, "?#") {
+		return refuse(CodeInvalid, "the address is not pull request #%d's: https://%s/<owner>/<repo>/pull/%d, with no query or fragment",
+			pr.Number, GitHubHost(), pr.Number)
 	}
 	return nil
 }

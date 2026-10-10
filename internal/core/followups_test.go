@@ -50,6 +50,14 @@ func TestSetPullRequest(t *testing.T) {
 			{Number: 7, URL: "https://github.com.evil.example/acme/web/pull/7", State: "open"},
 			{Number: 7, URL: "https://user@github.com/acme/web/pull/7", State: "open"},
 			{Number: -1, URL: "https://github.com/acme/web/pull/7", State: "open"},
+			// The address names the number, and nothing else.
+			{Number: 7, URL: "https://github.com/acme/web/pull/99", State: "open"},
+			{Number: 7, URL: "https://github.com/acme/web/pull/7?x=1", State: "open"},
+			{Number: 7, URL: "https://github.com/acme/web/pull/7#top", State: "open"},
+			{Number: 7, URL: "https://github.com/acme/web/pull/7/", State: "open"},
+			{Number: 7, URL: "https://github.com/acme/web/issues/7", State: "open"},
+			{Number: 7, URL: "https://github.com/acme/web/pull/7/files", State: "open"},
+			{Number: 7, URL: "https://github.com/acme/pull/7", State: "open"},
 		} {
 			if _, err := f.svc.SetPullRequest(ctx, lead, task.Key, bad, core.Idem{}); codeOf(err) != core.CodeInvalid {
 				t.Errorf("%+v: %v, want invalid", bad, err)
@@ -455,4 +463,36 @@ func TestMergePullRequest(t *testing.T) {
 		wantCode(t, err, core.CodeNotFound)
 		f.checkActivity()
 	})
+}
+
+// GH_HOST may be written with a scheme, a port or a trailing slash: the address is compared with
+// the host part it carries, port included when GH_HOST has one.
+func TestGitHubHostForms(t *testing.T) {
+	for _, c := range []struct {
+		env, addr string
+		ok        bool
+	}{
+		{"", "https://github.com/a/b/pull/7", true},
+		{"", "https://GitHub.com/a/b/pull/7", true},
+		{"https://ghe.example.com", "https://ghe.example.com/a/b/pull/7", true},
+		{"https://ghe.example.com/", "https://ghe.example.com/a/b/pull/7", true},
+		{"ghe.example.com:8443", "https://ghe.example.com:8443/a/b/pull/7", true},
+		{"ghe.example.com:8443", "https://ghe.example.com/a/b/pull/7", false},
+		{"https://ghe.example.com:8443", "https://ghe.example.com:8443/a/b/pull/7", true},
+		{"ghe.example.com", "https://github.com/a/b/pull/7", false},
+		{"ghe.example.com", "https://ghe.example.com:8443/a/b/pull/7", false},
+	} {
+		t.Run(c.env+" "+c.addr, func(t *testing.T) {
+			t.Setenv("GH_HOST", c.env)
+			err := core.PullRequest{Number: 7, URL: c.addr, State: core.PullRequestOpen}.Validate()
+			if (err == nil) != c.ok {
+				t.Errorf("GH_HOST %q, %s: %v", c.env, c.addr, err)
+			}
+		})
+	}
+	t.Setenv("GH_HOST", "")
+	err := core.PullRequest{Number: 7, URL: "https://github.com/a/b/pull/99", State: core.PullRequestOpen}.Validate()
+	if codeOf(err) != core.CodeInvalid || !strings.Contains(err.Error(), "not pull request #7's") {
+		t.Errorf("another number's address: %v", err)
+	}
 }
