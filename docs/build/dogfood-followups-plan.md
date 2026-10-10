@@ -65,6 +65,8 @@ EvidenceKind:
 
 `Evidence.kind` (required). `attachTaskEvidence` gains query parameter `kind` (`EvidenceKind`, default `evidence`). The Activity payload of `task.evidence_attached` gains `kind`. Column `evidence.kind TEXT NOT NULL DEFAULT 'evidence' CHECK (kind IN ('evidence', 'log'))`, with the backfill `UPDATE evidence SET kind = 'log' WHERE filename LIKE 'shift-%-%.log'` (the Runner's `SessionLogName` shape, `shift-<KEY>-<agent>-<HHMMSS>.log`). The prompt's `## Evidence` lists `evidence` only.
 
+`Evidence.claim_id` (optional, `format: id`): the Claim the Evidence was attached under. `attachTaskEvidence` gains query parameter `claim` (optional, id), allowed only when that Claim is the Task's and its holder is the caller, ended or not (`forbidden` otherwise: "the Claim is not yours"); without it, the caller's current Claim on the Task when the caller holds it, else null. The `task.evidence_attached` payload gains `claim_id`. Column `evidence.claim_id TEXT REFERENCES claims (id)`, null, no backfill. The Runner passes `claim` for a Shift's log through the client.
+
 ### AgentSettings.shifts (item 3)
 
 `AgentSettings.shifts` (required, integer, minimum 1, maximum 8): "How many Shifts the Runner runs for the agent at once, one Session and one Claim each; 1 unless set." `SetAgentSettingsBody.shifts` (optional, same bounds). Stored in the members.agent JSON as `shifts`; absent reads as 1. CLI `agent set --shifts n`. ADR 0013 gains a dated amendment.
