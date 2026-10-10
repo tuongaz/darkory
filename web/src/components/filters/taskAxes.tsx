@@ -258,6 +258,17 @@ export type ClaimTrail = {
   evidence?: number;
 };
 
+/**
+ * Whether a `task.evidence_attached` entry is a Shift's log, which is its Claim's and not the
+ * Task's Evidence: its payload says `kind: "log"`; an entry written before Evidence had a kind
+ * says nothing, and is a log when its file has the Runner's name for one, as the server's
+ * migration decided for the Evidence itself (`shift-%-%.log`).
+ */
+export function isShiftLog(payload: Record<string, unknown>): boolean {
+  if (payload.kind !== undefined) return payload.kind === "log";
+  return typeof payload.filename === "string" && /^shift-.*-.*\.log$/.test(payload.filename);
+}
+
 /** The Activity kinds `claimTrails` reads. */
 export const trailKinds = ["task.claimed", "task.lapsed", "task.completed", "task.evidence_attached"] as const satisfies Activity["kind"][];
 
@@ -275,7 +286,10 @@ export function claimTrails(entries: readonly Activity[]): Map<string, ClaimTrai
     if (e.kind === "task.claimed") t.lapsedAt = undefined;
     else if (e.kind === "task.lapsed") t.lapsedAt = t.lastLapseAt = e.at;
     else if (e.kind === "task.completed") t.completedBy = e.actor_id;
-    else if (e.kind === "task.evidence_attached") t.evidence = (t.evidence ?? 0) + 1;
+    else if (e.kind === "task.evidence_attached") {
+      if (isShiftLog(e.payload)) continue;
+      t.evidence = (t.evidence ?? 0) + 1;
+    }
     else continue;
     out.set(e.subject_id, t);
   }

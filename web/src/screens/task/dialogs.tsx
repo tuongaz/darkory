@@ -301,7 +301,7 @@ export function StopSessionDialog({ detail, session, open, onOpenChange }: Dialo
         <Consequence mark={<Avatar id={session.member_id} />}>{name(session.member_id)}&apos;s Shift ends now</Consequence>
         <Consequence mark={<MessageSquareIcon />}>Its Claim is released, with a Note saying so</Consequence>
         <Consequence mark={<ArrowRightIcon />}>{step ? `It stays at ${step.name}` : "It stays where it is"}</Consequence>
-        <Consequence mark={<FileTextIcon />}>The Shift&apos;s log is attached as Evidence</Consequence>
+        <Consequence mark={<FileTextIcon />}>The Shift&apos;s log is kept with its Claim</Consequence>
       </Consequences>
     </FormDialog>
   );

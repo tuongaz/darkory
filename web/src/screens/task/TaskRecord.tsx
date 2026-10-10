@@ -1,6 +1,6 @@
 import { ArrowRightIcon, BanIcon, CheckIcon, ClockIcon, PaperclipIcon, SplitIcon } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
-import { evidenceURL, type Activity, type Claim, type TaskDetail, type WorkflowStep } from "@/api/client";
+import { evidenceURL, type Activity, type Claim, type Evidence, type TaskDetail, type WorkflowStep } from "@/api/client";
 import { useNow } from "@/clock";
 import { SessionId } from "@/components/CopyValue";
 import { Key } from "@/components/Key";
@@ -152,6 +152,8 @@ function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDe
         </span>,
       );
     }
+    case "log":
+      return row(entry.evidence.attached_by, <ShiftLog log={entry.evidence} />);
     case "question": {
       const q = entry.question;
       return row(
@@ -195,6 +197,7 @@ function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDe
           ) : (
             "Dropped"
           )}
+          <ShiftLogs logs={entry.logs} />
         </TimelineRow>
       );
   }
@@ -221,6 +224,7 @@ function ClaimEnded({ entry, when, stepName }: { entry: Extract<RecordEntry, { k
         when={when}
       >
         Claim lapsed{claim.heartbeat_timeout_seconds ? `: no Heartbeat in ${durationText(claim.heartbeat_timeout_seconds * 1000)}` : ""}
+        <ShiftLogs logs={entry.logs} />
         <div className="text-xs text-muted-foreground">Recorded by Darkory</div>
       </TimelineRow>
     );
@@ -260,7 +264,41 @@ function ClaimEnded({ entry, when, stepName }: { entry: Extract<RecordEntry, { k
   return (
     <TimelineRow who={<Avatar id={claim.holder_id} />} when={when}>
       {what}
+      <ShiftLogs logs={entry.logs} />
     </TimelineRow>
+  );
+}
+
+/** " · 📎 Shift log 57 KB" after the words that end a Claim: its Shift's log, opened in a new tab. */
+function ShiftLogs({ logs }: { logs?: Evidence[] }) {
+  if (!logs?.length) return null;
+  return (
+    <>
+      {logs.map((l) => (
+        <span key={l.id} className="inline-flex items-center">
+          <span className="mx-1.5 text-muted-foreground" aria-hidden>
+            ·
+          </span>
+          <ShiftLog log={l} />
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** A Shift's log as a chip: "Shift log · 57 KB", a link to the file. */
+function ShiftLog({ log }: { log: Evidence }) {
+  return (
+    <a
+      href={evidenceURL(log.id)}
+      target="_blank"
+      rel="noreferrer noopener"
+      title={log.filename}
+      className="inline-flex h-5 items-center gap-1 rounded-md border px-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+    >
+      <PaperclipIcon className="size-3 flex-none" aria-hidden />
+      Shift log · {sizeText(log.size)}
+    </a>
   );
 }
 

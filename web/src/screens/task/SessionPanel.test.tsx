@@ -253,7 +253,7 @@ describe("the peek's keys beside a terminal", () => {
     expect(confirm).toHaveTextContent("builder's Shift ends now");
     expect(confirm).toHaveTextContent("Its Claim is released, with a Note saying so");
     expect(confirm).toHaveTextContent("It stays at Build");
-    expect(confirm).toHaveTextContent("The Shift's log is attached as Evidence");
+    expect(confirm).toHaveTextContent("The Shift's log is kept with its Claim");
     expect(api.calls.some((c) => c.path.endsWith("/stop"))).toBe(false);
     await userEvent.click(within(confirm).getByRole("button", { name: "Stop Shift" }));
     await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path === "/v1/runner/sessions/k-3/stop")).toBe(true));

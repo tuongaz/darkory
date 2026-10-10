@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Activity, RunnerSession } from "@/api/client";
+import type { Activity, Claim, Evidence, RunnerSession } from "@/api/client";
 import { ada, bob, builder, detail, parentTask, review, skills, step, subtask, task, workflow } from "@/test/fixtures";
 import { liveClaimOf } from "../board/testData";
 import { taskActions } from "./actions";
@@ -147,5 +147,64 @@ describe("the record's end", () => {
     const end = taskRecord(detail(p, { subtasks: [breakdown, acceptance] }), trail).at(-1);
     expect(end).toMatchObject({ kind: "ended", auto: true, after: acceptance.key });
     expect(end).not.toHaveProperty("by");
+  });
+});
+
+describe("a Shift's log in the record", () => {
+  const t0 = Date.parse("2026-10-10T10:00:00Z");
+  const iso = (min: number) => new Date(t0 + min * 60_000).toISOString();
+  const claim = (id: string, holder: string, from: number, to?: number, how: Claim["how_ended"] = "advanced"): Claim => ({
+    id,
+    task_id: "k-1",
+    holder_id: holder,
+    session_id: `s-${id}`,
+    started_at: iso(from),
+    ...(to !== undefined ? { ended_at: iso(to), how_ended: how } : {}),
+  });
+  const evidence = (id: string, by: string, min: number, kind: Evidence["kind"] = "log"): Evidence => ({
+    id,
+    task_id: "k-1",
+    kind,
+    filename: kind === "log" ? `shift-WEB-1-${by}-100000.log` : "pw-all.log",
+    content_type: "text/plain",
+    size: 56_800,
+    sha256: "x",
+    attached_by: by,
+    created_at: iso(min),
+  });
+  const t = task(1, { created_at: iso(-1) });
+  const ends = (r: ReturnType<typeof taskRecord>) => r.filter((e) => e.kind === "claim-ended");
+
+  it("hangs the log on its Claim's end row and lists only the holder's Evidence as Evidence", () => {
+    const claims = [claim("a", builder.id, 0, 7)];
+    const record = taskRecord(detail(t, { claims, evidence: [evidence("pw", builder.id, 6, "evidence"), evidence("log", builder.id, 7)] }));
+    expect(record.filter((e) => e.kind === "evidence").map((e) => e.kind === "evidence" && e.evidence.id)).toEqual(["pw"]);
+    expect(ends(record)[0]).toMatchObject({ claim: { id: "a" }, logs: [{ id: "log" }] });
+    expect(record.some((e) => e.kind === "log")).toBe(false);
+  });
+
+  it("finds the Claim the log belongs to when it came minutes later, after the next holder took the Task", () => {
+    const claims = [claim("a", builder.id, 0, 7), claim("b", bob.id, 8, 12), claim("c", builder.id, 13)];
+    // builder's log of Claim a, attached at 10, while bob held it; builder holds it again at 13.
+    const record = taskRecord(detail(t, { claims, evidence: [evidence("log-a", builder.id, 10), evidence("log-b", bob.id, 12)] }));
+    expect(ends(record).map((e) => e.kind === "claim-ended" && [e.claim.id, e.logs?.map((l) => l.id)])).toEqual([
+      ["a", ["log-a"]],
+      ["b", ["log-b"]],
+    ]);
+  });
+
+  it("prefers the Claim that just ended to one the same holder holds now", () => {
+    const claims = [claim("a", builder.id, 0, 7), claim("c", builder.id, 7.5)];
+    const record = taskRecord(detail(t, { claims, evidence: [evidence("log-a", builder.id, 8)] }));
+    expect(ends(record)[0]).toMatchObject({ claim: { id: "a" }, logs: [{ id: "log-a" }] });
+  });
+
+  it("puts a log on the drop that ended its Claim, and one with no Claim of its own on a row of its own", () => {
+    const dropped = { ...t, state: "dropped" as const, ended_at: iso(7) };
+    const claims = [claim("a", builder.id, 0, 7, "dropped")];
+    const trail: Activity[] = [{ seq: 1, at: iso(7), kind: "task.dropped", subject_type: "task", subject_id: t.id, actor_id: ada.id, payload: {} }];
+    const record = taskRecord(detail(dropped, { claims, evidence: [evidence("log-a", builder.id, 8), evidence("stray", bob.id, 9)] }), trail);
+    expect(record.find((e) => e.kind === "ended")).toMatchObject({ state: "dropped", logs: [{ id: "log-a" }] });
+    expect(record.at(-1)).toMatchObject({ kind: "log", evidence: { id: "stray" } });
   });
 });

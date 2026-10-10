@@ -384,6 +384,35 @@ describe("a Parent's page", () => {
   });
 });
 
+describe("a Task's record", () => {
+  it("hangs a Shift's log on the row that ended its Claim, never as the Task's Evidence", async () => {
+    const t = { ...copy, state: "done" as const, ended_at: at(30), step_id: undefined };
+    const claim = { id: "c-1", task_id: copy.id, holder_id: builder.id, session_id: "s-1", started_at: at(10), ended_at: at(20), how_ended: "released" as const };
+    const evidence = (id: string, kind: "evidence" | "log", filename: string, min: number) => ({
+      id,
+      task_id: copy.id,
+      kind,
+      filename,
+      content_type: "text/plain",
+      size: 58_163,
+      sha256: "x",
+      attached_by: builder.id,
+      created_at: at(min),
+    });
+    const d = detail(t, { claims: [claim], evidence: [evidence("e-pw", "evidence", "pw-all.log", 15), evidence("e-log", "log", "shift-WEB-1-builder-101000.log", 22)] });
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": d }));
+    renderApp("/tasks/WEB-1");
+    const record = await screen.findByRole("list", { name: "Record" });
+    const ended = within(record).getByText(/released it/).closest("li")!;
+    const log = within(ended).getByRole("link", { name: /Shift log/ });
+    expect(log).toHaveTextContent("Shift log · 57 KB");
+    expect(log).toHaveAttribute("href", "/v1/evidence/e-log/content");
+    expect(within(record).getByRole("link", { name: /pw-all\.log/ })).toBeInTheDocument();
+    expect(within(record).queryByText("shift-WEB-1-builder-101000.log")).not.toBeInTheDocument();
+    expect(within(record).getAllByText(/attached/)).toHaveLength(1);
+  });
+});
+
 describe("a Subtask's peek", () => {
   it("links its Parent and reports its Project", async () => {
     mockApi(taskRoutes());
