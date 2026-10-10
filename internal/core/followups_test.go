@@ -451,7 +451,7 @@ func TestMergePullRequest(t *testing.T) {
 		if !strings.Contains(err.Error(), "human's act") {
 			t.Errorf("refused with %q", err)
 		}
-		_, err = f.svc.RecordMerge(ctx, agent, byAgent.Key, core.Idem{})
+		_, err = f.svc.RecordMerge(ctx, agent, byAgent.ID, 7, core.Idem{})
 		wantCode(t, err, core.CodeForbidden)
 		// A human neither its Owner nor an admin.
 		_, _, err = f.svc.MayMergePullRequest(ctx, cy, byAgent.Key)
@@ -460,7 +460,7 @@ func TestMergePullRequest(t *testing.T) {
 		if _, got, err := f.svc.MayMergePullRequest(ctx, cy, byHuman.Key); err != nil || got != pr {
 			t.Fatalf("the human Owner: %+v, %v", got, err)
 		}
-		merged, err := f.svc.RecordMerge(ctx, f.admin, byAgent.Key, core.Idem{})
+		merged, err := f.svc.RecordMerge(ctx, f.admin, byAgent.ID, 7, core.Idem{})
 		if err != nil || merged.PullRequest.State != core.PullRequestMerged || merged.PullRequest.URL != pr.URL {
 			t.Fatalf("an admin's merge: %+v, %v", merged.PullRequest, err)
 		}
@@ -475,6 +475,34 @@ func TestMergePullRequest(t *testing.T) {
 		// Merged, there is nothing open to merge.
 		_, _, err = f.svc.MayMergePullRequest(ctx, f.admin, byAgent.Key)
 		wantCode(t, err, core.CodeNotFound)
+		// A second recorder of the same merge is not an error: its entry and Note are written too.
+		again, err := f.svc.RecordMerge(ctx, f.admin, byAgent.ID, 7, core.Idem{})
+		if err != nil || again.PullRequest.State != core.PullRequestMerged {
+			t.Fatalf("recording #7's merge again: %+v, %v", again.PullRequest, err)
+		}
+		if n := len(f.activity("task.pull_request_merged")); n != 2 {
+			t.Errorf("%d task.pull_request_merged entries, want 2", n)
+		}
+		if n := len(f.get(byAgent.Key).Notes); n != 2 {
+			t.Errorf("%d Notes, want 2", n)
+		}
+		// The Task's pull request is another now: the merge of #7 is refused.
+		pr8 := core.PullRequest{Number: 8, URL: "https://github.com/acme/web/pull/8", State: core.PullRequestOpen}
+		if _, err := f.svc.SetPullRequest(ctx, cy, byHuman.Key, pr8, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		_, err = f.svc.RecordMerge(ctx, cy, byHuman.ID, 7, core.Idem{})
+		wantCode(t, err, core.CodeConflict)
+		if !strings.Contains(err.Error(), "#8 is the Task's pull request now, not #7") {
+			t.Errorf("refused with %q", err)
+		}
+		if pr := f.get(byHuman.Key).Task.PullRequest; pr.Number != 8 || pr.State != core.PullRequestOpen {
+			t.Errorf("after the refusal %+v", pr)
+		}
+		// The human Owner records the merge of #8.
+		if got, err := f.svc.RecordMerge(ctx, cy, byHuman.ID, 8, core.Idem{}); err != nil || got.PullRequest.State != core.PullRequestMerged {
+			t.Fatalf("the human Owner's merge: %+v, %v", got.PullRequest, err)
+		}
 		f.checkActivity()
 	})
 }

@@ -261,7 +261,7 @@ func (s *Server) MergeTaskPullRequest(w http.ResponseWriter, r *http.Request, ta
 		writeError(w, http.StatusConflict, gen.ErrorCodeConflict, err.Error())
 		return
 	}
-	merged, err := s.core.RecordMerge(context.WithoutCancel(ctx), c, t.ID, core.Idem{})
+	merged, err := s.core.RecordMerge(context.WithoutCancel(ctx), c, t.ID, pr.Number, core.Idem{})
 	s.respond(w, r, as(http.StatusOK, func(t core.Task) any { return taskOut(t) }), merged, err)
 }
 

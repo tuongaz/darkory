@@ -856,47 +856,60 @@ func (s *Service) MayMergePullRequest(ctx context.Context, c *auth.Caller, ref s
 	if err != nil {
 		return Task{}, PullRequest{}, err
 	}
-	pr, err := mayMerge(ctx, s.store, c, task)
-	return task, pr, err
-}
-
-func mayMerge(ctx context.Context, r store.Reader, c *auth.Caller, task Task) (PullRequest, error) {
-	m, err := getMember(ctx, r, c.OrgID, c.MemberID)
-	if err != nil {
-		return PullRequest{}, err
-	}
-	if m.Kind != "human" {
-		return PullRequest{}, refuse(CodeForbidden, "merging is a human's act; an agent may not merge the pull request of %s", task.Key)
-	}
-	if task.OwnerID != c.MemberID && !c.Admin {
-		return PullRequest{}, refuse(CodeForbidden, "only the Owner of %s or an admin may merge its pull request", task.Key)
+	if err := mayMerge(ctx, s.store, c, task); err != nil {
+		return Task{}, PullRequest{}, err
 	}
 	if task.PullRequest == nil || task.PullRequest.State != PullRequestOpen {
-		return PullRequest{}, refuse(CodeNotFound, "%s carries no open pull request", task.Key)
+		return Task{}, PullRequest{}, refuse(CodeNotFound, "%s carries no open pull request", task.Key)
 	}
-	return *task.PullRequest, nil
+	return task, *task.PullRequest, nil
 }
 
-// RecordMerge records, as the caller who asked for it, that the Runner merged the Task's open
-// pull request on GitHub: in one write, its state merged, task.pull_request_merged with the
-// caller as actor, and the Note "<Workspace>: #<n> merged". The caller is held to
-// MayMergePullRequest's rules again under the counter.
-func (s *Service) RecordMerge(ctx context.Context, c *auth.Caller, ref string, idem Idem) (Task, error) {
+// mayMerge refuses a caller who may not have task's pull request merged: an agent, or a human
+// neither its Owner nor an admin.
+func mayMerge(ctx context.Context, r store.Reader, c *auth.Caller, task Task) error {
+	m, err := getMember(ctx, r, c.OrgID, c.MemberID)
+	if err != nil {
+		return err
+	}
+	if m.Kind != "human" {
+		return refuse(CodeForbidden, "merging is a human's act; an agent may not merge the pull request of %s", task.Key)
+	}
+	if task.OwnerID != c.MemberID && !c.Admin {
+		return refuse(CodeForbidden, "only the Owner of %s or an admin may merge its pull request", task.Key)
+	}
+	return nil
+}
+
+// RecordMerge records, as the caller who asked for it, that the Runner merged pull request number
+// of the Task on GitHub: in one write, its state merged, task.pull_request_merged with the caller
+// as actor, and the Note "<Workspace>: #<n> merged". The caller is held to mayMerge's rules again
+// under the counter. A Task whose pull request is now another is refused conflict; one already
+// carrying number merged is recorded again, since a second recorder of one merge is no error.
+func (s *Service) RecordMerge(ctx context.Context, c *auth.Caller, taskID string, number int64, idem Idem) (Task, error) {
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
-		task, err := taskOf(t, ref)
+		task, err := taskOf(t, taskID)
 		if err != nil {
 			return nil, err
 		}
-		pr, err := mayMerge(ctx, t, c, task)
-		if err != nil {
+		if err := mayMerge(ctx, t, c, task); err != nil {
 			return nil, err
+		}
+		pr := task.PullRequest
+		if pr == nil {
+			return nil, refuse(CodeNotFound, "%s carries no pull request", task.Key)
+		}
+		if pr.Number != number {
+			return nil, refuse(CodeConflict, "#%d is the Task's pull request now, not #%d", pr.Number, number)
 		}
 		ws, err := pullRequestWorkspace(t, task)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := t.Exec(ctx, `UPDATE tasks SET pull_request_state = $1 WHERE org_id = $2 AND id = $3`, PullRequestMerged, c.OrgID, task.ID); err != nil {
-			return nil, err
+		if pr.State != PullRequestMerged {
+			if _, err := t.Exec(ctx, `UPDATE tasks SET pull_request_state = $1 WHERE org_id = $2 AND id = $3`, PullRequestMerged, c.OrgID, task.ID); err != nil {
+				return nil, err
+			}
 		}
 		if err := t.recordByCaller("task.pull_request_merged", task.ID, map[string]any{"number": pr.Number, "url": pr.URL}); err != nil {
 			return nil, err
