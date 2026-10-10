@@ -201,7 +201,8 @@ describe("the Workflows page of a Project of several", () => {
     const { puts } = serve([]);
     renderApp("/projects/WEB/workflows");
     const bugs = await column("Bugs");
-    expect(bugs.getByRole("button", { name: /^Drag to order Bugs/ })).toBeInTheDocument();
+    // Its name says its keys: no instructions for keys it does not take.
+    expect(bugs.getByRole("button", { name: /^Drag to order Bugs/ })).not.toHaveAttribute("aria-describedby");
     expect(bugs.getByRole("link", { name: "Edit Bugs" })).toHaveAttribute("href", `/projects/WEB/workflows/${wfId.bugs}/edit`);
     let menu = await more("Triage");
     expect(menu.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Move earlier", "Move later", "Delete"]);

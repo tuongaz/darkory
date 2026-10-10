@@ -1,4 +1,4 @@
-import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type Announcements, type DragEndEvent, type UniqueIdentifier } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { GripVerticalIcon, MoreHorizontalIcon, PencilIcon } from "lucide-react";
 import { useMemo, useState, type KeyboardEvent } from "react";
@@ -71,6 +71,14 @@ export function WorkflowsList({ project, graph, acts }: { project: Project; grap
   if (!data || !columns) return <Skeleton aria-label="Loading the Workflows" className="m-6 h-[420px]" />;
 
   const ids = columns.map((c) => c.workflow.id);
+  // What a drag says to a screen reader, in the Workflows' names; the grip's own name says its keys.
+  const nameOf = (id: UniqueIdentifier | undefined) => columns.find((c) => c.workflow.id === id)?.workflow.name ?? "";
+  const announcements: Announcements = {
+    onDragStart: ({ active }) => `Picked up ${nameOf(active.id)}`,
+    onDragOver: ({ active, over }) => (over && over.id !== active.id ? `${nameOf(active.id)} over ${nameOf(over.id)}` : undefined),
+    onDragEnd: ({ active, over }) => (over && over.id !== active.id ? `Moved ${nameOf(active.id)} to ${nameOf(over.id)}'s place` : `${nameOf(active.id)} stays`),
+    onDragCancel: ({ active }) => `${nameOf(active.id)} stays`,
+  };
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!acts || !over || active.id === over.id) return;
     const from = ids.indexOf(String(active.id));
@@ -79,7 +87,7 @@ export function WorkflowsList({ project, graph, acts }: { project: Project; grap
     acts.move(columns[from].workflow, columns[to].workflow, to < from ? -1 : 1);
   };
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd} accessibility={{ screenReaderInstructions: { draggable: "" }, announcements }}>
       <SortableContext items={ids} strategy={rectSortingStrategy}>
         <ul
           aria-label="Workflows"
@@ -180,7 +188,8 @@ function WorkflowColumn({
       }}
       className={cn("@container/col min-w-0", isDragging && "relative z-20 rounded-md bg-background shadow-soft")}
     >
-      <div className="mb-2 flex h-7 min-w-0 items-center gap-2.5">
+      {/* The name is never cut: the count wraps under it when both do not fit beside the acts. */}
+      <div className="mb-2 flex min-h-7 min-w-0 items-start gap-2.5">
         {acts && (
           <Grip
             name={w.name}
@@ -193,10 +202,12 @@ function WorkflowColumn({
             }}
           />
         )}
-        <Link to={workflowsPath(project, w.id)} className="min-w-0 truncate text-[15px] font-semibold outline-none hover:underline focus-visible:underline">
-          {w.name}
-        </Link>
-        <span className="min-w-0 shrink-[100] truncate text-[13px] whitespace-nowrap text-muted-foreground tabular-nums">{openTasks(column.open)}</span>
+        <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+          <Link to={workflowsPath(project, w.id)} className="min-w-0 text-[15px] leading-7 font-semibold break-words outline-none hover:underline focus-visible:underline">
+            {w.name}
+          </Link>
+          <span className="text-[13px] leading-5 whitespace-nowrap text-muted-foreground tabular-nums">{openTasks(column.open)}</span>
+        </div>
         {acts && <HeadActs project={project} workflow={w} acts={acts} earlier={earlier} later={later} last={last} />}
       </div>
       <WorkflowLine
@@ -246,14 +257,15 @@ function Grip({
         type="button"
         ref={activator}
         {...drag}
-        // Not dnd-kit's own role or keys: ← and → move it, one write each.
+        // Not dnd-kit's own role, keys or instructions: ← and → move it, one write each, as its name says.
         role={undefined}
+        aria-describedby={undefined}
         aria-roledescription={undefined}
         aria-label={`Drag to order ${name}, or ← and →`}
         // Off while a write is on its way, it keeps the focus: a moved column's grip stays where the keys left it.
         aria-disabled={disabled || undefined}
         onKeyDown={onKeyDown}
-        className="-ml-1 flex h-6 w-4 flex-none cursor-grab touch-none items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-disabled:cursor-default aria-disabled:opacity-40"
+        className="-ml-1 flex h-7 w-4 flex-none cursor-grab touch-none items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-disabled:cursor-default aria-disabled:opacity-40"
       >
         <GripVerticalIcon aria-hidden className="size-3.5" />
       </button>
@@ -267,16 +279,13 @@ function HeadActs({ project, workflow: w, acts, earlier, later, last }: { projec
   // Why the delete is off, said on the item: the last Workflow stays; a write is on its way.
   const keep = last ? "The last Workflow stays" : acts.busy ? "Saving…" : undefined;
   return (
-    <span className="ml-auto flex flex-none items-center gap-1.5">
-      <Tip label={`Edit ${w.name}`}>
-        <Button asChild variant="outline" size="xs">
-          <Link to={workflowEditPath(project, w.id)} aria-label={`Edit ${w.name}`}>
-            <PencilIcon aria-hidden />
-            {/* A narrow column keeps its name whole: Edit is its pencil alone. */}
-            <span className="@max-[300px]/col:hidden">Edit</span>
-          </Link>
-        </Button>
-      </Tip>
+    <span className="ml-auto flex h-7 flex-none items-center gap-1.5">
+      <Button asChild variant="outline" size="xs">
+        <Link to={workflowEditPath(project, w.id)} aria-label={`Edit ${w.name}`}>
+          <PencilIcon aria-hidden />
+          Edit
+        </Link>
+      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="icon-xs" aria-label={`More for ${w.name}`}>

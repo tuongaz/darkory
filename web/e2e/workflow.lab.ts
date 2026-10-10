@@ -140,6 +140,11 @@ for (const size of [{ name: "1184", width: 1184, height: 900 }, { name: "1440", 
     const boxes = await list.locator(":scope > li").evaluateAll((lis) => lis.map((li) => li.getBoundingClientRect().toJSON() as DOMRect));
     if (size.name === "phone") expect(boxes.every((b) => b.x === boxes[0].x)).toBe(true);
     else expect(boxes.every((b) => b.y === boxes[0].y)).toBe(true);
+    // A name is never cut: "Retrospective" whole, its count under it when both do not fit.
+    for (const n of ["Implementation", "Bug triage", "Retrospective"]) {
+      const name = list.locator(`:scope > li[aria-label="${n}"]`).getByRole("link", { name: n, exact: true });
+      expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth), n).toBe(true);
+    }
     await shot(page, `list-${size.name}`);
     await list.locator(':scope > li[aria-label="Implementation"] button[data-task="WEB-5"]').click();
     await expect(page.getByRole("region", { name: "WEB-5's way" })).toHaveCount(1);
