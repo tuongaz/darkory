@@ -50,6 +50,9 @@ const PULSE_MS = 2_400;
 /** The most held Tasks a Step draws as chips; the rest are in its count. */
 const HELD_CHIPS = 3;
 
+/** The line's width below which it reads as a column (a list column, a phone): `@3xl`, where "Also starts here" follows the start Step. */
+const NARROW_PX = 768;
+
 /** The rail's x: the centre of its 22px column. */
 const RAIL = 11;
 /** How wide the lanes' column runs past its tracks, and how far apart lanes run. */
@@ -176,6 +179,7 @@ export function VerticalLine({
   stepHref?: (stepId: string) => string;
 }) {
   const steps = useMemo(() => new Map(facts.steps.map((s) => [s.id, s])), [facts.steps]);
+  const [root, narrow] = useNarrow();
   const { lead, rail, mainTracks, mainSegs, carried, quietStations, quietTracks, quietSegs, lastRow } = useMemo(() => railParts(t), [t]);
   const besides = useMemo(() => new Set([...lead, ...(t.before ? [t.before] : []), ...t.holds]), [lead, t]);
 
@@ -363,8 +367,10 @@ export function VerticalLine({
     if (!s) return null;
     const takers = s.takers ?? [];
     const paused = takers.length > 0 && takers.every((m) => m.paused);
+    if (!s.skill && s.medianMs === undefined && !paused && takers.length === 0) return null;
     return (
-      <>
+      // Narrow, a row of its own under the name (vf-10); wide, beside it.
+      <span data-facts className={narrow ? "flex basis-full flex-wrap items-center gap-x-2.5 gap-y-1" : "contents"}>
         {s.skill && (
           <span {...hover(SKILL_HINT)} className="inline-flex items-center gap-[3px] font-mono text-[11px] font-normal text-muted-foreground">
             <TagIcon aria-hidden className="size-[11px]" />
@@ -387,7 +393,7 @@ export function VerticalLine({
             </span>
           )
         )}
-      </>
+      </span>
     );
   };
 
@@ -632,7 +638,8 @@ export function VerticalLine({
               <span aria-hidden className="mr-[3px] font-semibold text-muted-foreground">
                 {back ? "↩" : "↪"}
               </span>{" "}
-              {c.name} → {name(k.target)}
+              {/* Narrow, beside the name, the track beside it says where it leads (vf-8's columns). */}
+              {narrow ? c.name : `${c.name} → ${name(k.target)}`}
             </span>
           );
         }),
@@ -645,12 +652,17 @@ export function VerticalLine({
       name: terminal ? (
         <>
           <span className="text-sm font-semibold">Done</span>
-          {!trace && doneToday !== undefined && <span className="text-xs text-muted-foreground">{doneToday} today</span>}
+          {!trace && doneToday !== undefined && (
+            <span data-today className={cn("text-xs text-muted-foreground", narrow && "basis-full")}>
+              {doneToday} today
+            </span>
+          )}
         </>
       ) : (
         <>
           <span className="text-sm font-semibold">{s?.name}</span>
           {s && isHoldStep(s) && holdPill(s.name)}
+          {narrow && returns(id, mainTracks, rail)}
           {facts1(s)}
         </>
       ),
@@ -658,7 +670,7 @@ export function VerticalLine({
       marks: (
         <>
           {i > 0 && entryChips(id)}
-          {returns(id, mainTracks, rail)}
+          {!narrow && returns(id, mainTracks, rail)}
           {!terminal && leaves(id, carried)}
           {!trace && terminal && retro && mark("exit", "retro", retro, retroHint(retro), { "data-retro": true })}
           {nextWords(id, rail)}
@@ -679,6 +691,7 @@ export function VerticalLine({
       name: (
         <>
           <span className="text-[13px] font-medium text-muted-foreground">{terminal ? "Done" : s?.name}</span>
+          {!terminal && narrow && returns(id, quietTracks, quietStations)}
           {!terminal && facts1(s, true)}
         </>
       ),
@@ -686,7 +699,7 @@ export function VerticalLine({
       marks: terminal ? null : (
         <>
           {entryChips(id)}
-          {returns(id, quietTracks, quietStations)}
+          {!narrow && returns(id, quietTracks, quietStations)}
           {chipsAt(t, id).filter((c) => c.kind !== "entry").map((c) => mark(c.kind === "exit" ? "exit" : c.connector.to === null ? "done" : rail.includes(c.connector.to) ? "return" : "chip", c.connector.id, said(c.connector, fullName(c.connector.to)), c.hint, { "data-connector": c.connector.id, "data-chip": c.kind, "data-exit": c.kind === "exit" ? c.connector.id : undefined }, true))}
           {exit && mark("done", exit.id, said(exit, "Done"), outcomeHint(exit, fullName), { "data-connector": exit.id }, true)}
           {nextWords(id, quietStations)}
@@ -715,13 +728,13 @@ export function VerticalLine({
         picked={(id) => way?.stepId === id}
         travelling={flow.tokens}
         outcomeOf={(id) => facts.connectors.find((c) => c.id === id)?.name}
-        measureKey={[tasks, t, trace, open]}
+        measureKey={[tasks, t, trace, open, narrow]}
       />
     </section>
   );
 
   return (
-    <div data-line-root className="@container relative flex min-w-0 flex-col">
+    <div ref={root} data-line-root className="@container relative flex min-w-0 flex-col">
       <RailLine
         label="Steps on the line"
         stations={rail}
@@ -742,7 +755,7 @@ export function VerticalLine({
         travelling={flow.tokens}
         besides={besides}
         outcomeOf={(id) => facts.connectors.find((c) => c.id === id)?.name}
-        measureKey={[tasks, t, trace, done, ghosts, hidden, open]}
+        measureKey={[tasks, t, trace, done, ghosts, hidden, open, narrow]}
       />
       {branch}
       {footer}
@@ -750,6 +763,27 @@ export function VerticalLine({
       <LineTip tip={tip} />
     </div>
   );
+}
+
+/**
+ * A ref for the line's root and whether it is narrower than `NARROW_PX`, measured as it resizes.
+ * Unmeasured (no layout yet, or none at all) it reads wide.
+ */
+function useNarrow(): [(el: HTMLDivElement | null) => void, boolean] {
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  const [narrow, setNarrow] = useState(false);
+  useLayoutEffect(() => {
+    if (!el) return;
+    const measure = () => {
+      const w = el.getBoundingClientRect().width;
+      setNarrow(w > 0 && w < NARROW_PX);
+    };
+    measure();
+    const ro = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [el]);
+  return [setEl, narrow];
 }
 
 /** The sentence a line's hover shows, under the pointer, inside the line root (`data-line-root`). */

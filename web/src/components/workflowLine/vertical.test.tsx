@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { wfId } from "@/test/fixtures";
 import type { Chain, Trace } from "./data";
 import { BIG, DARK, FIVE, MAIN, NEWS, SOFTWARE } from "./fixtures";
@@ -483,5 +483,42 @@ describe("the selected Task's strip (vf-7)", () => {
     const s = strip("DARK-22")!;
     expect(s).toHaveTextContent("First: nothing for you");
     expect(within(s).queryByRole("button", { name: /^Claim/ })).toBeNull();
+  });
+});
+
+describe("a narrow line (a list column, a phone: under 768px)", () => {
+  /** The line root measures `width` wide; every other box keeps jsdom's. */
+  const atWidth = (width: number) => {
+    const plain = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute("data-line-root") ? new DOMRect(0, 0, width, 600) : plain.call(this);
+    });
+  };
+  afterEach(() => vi.restoreAllMocks());
+  /** A station's name row: the first cell of its grid. */
+  const nameRow = (id: string) => rail().querySelector<HTMLElement>(`li[data-station="${id}"] > div:not([data-segment])`)!.firstElementChild as HTMLElement;
+  const kinds = (row: HTMLElement) => [...row.children].map((el) => (el.hasAttribute("data-return") ? "return" : el.hasAttribute("data-facts") ? "facts" : el.hasAttribute("data-today") ? "today" : el.textContent));
+
+  it("puts a return's label beside the Step's name and the facts on their own row under it (vf-8's columns, vf-10)", () => {
+    atWidth(390);
+    render(<WorkflowLine workflow={DARK("impl")} tasks={[]} now={0} doneToday={3} />);
+    expect(kinds(nameRow("review"))).toEqual(["Review", "return", "facts"]);
+    // The label's words as the column draws them; its hover still names where it leads.
+    const label = nameRow("review").querySelector("[data-return]")!;
+    expect(label).toHaveTextContent(/^↩ needs changes$/);
+    expect(label).toHaveAttribute("data-hint", expect.stringContaining("Review → Build"));
+    expect(nameRow("review").querySelector("[data-facts]")).toHaveTextContent("review");
+    expect(kinds(nameRow("done"))).toEqual(["Done", "today"]);
+    expect(nameRow("done").querySelector("[data-today]")).toHaveTextContent("3 today");
+  });
+
+  it("wide, keeps the facts beside the name and the label with the marks", () => {
+    atWidth(1100);
+    render(<WorkflowLine workflow={DARK("impl")} tasks={[]} now={0} doneToday={3} />);
+    expect(kinds(nameRow("review"))).toEqual(["Review", "facts"]);
+    const label = rail().querySelector('li[data-station="review"] [data-return]')!;
+    expect(nameRow("review").contains(label)).toBe(false);
+    expect(label).toHaveTextContent(/^↩ needs changes → Build$/);
+    expect(kinds(nameRow("done"))).toEqual(["Done", "today"]);
   });
 });
