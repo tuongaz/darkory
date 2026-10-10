@@ -97,6 +97,9 @@ describe("the actions by role", () => {
     expect(taskActions({ ...ctx, me: ada.id, runner: false, detail: out(done) }).primary).toBeUndefined();
     expect(taskActions({ ...ctx, me: bob.id, runner: true, detail: out(done) }).primary).toBeUndefined();
     expect(taskActions({ ...ctx, me: ada.id, runner: true, detail: out({ ...done, pull_request: { ...pr, state: "merged" } }) }).primary).toBeUndefined();
+    // A Dropped Task's pull request is its Owner's to close on GitHub, not to merge.
+    expect(taskActions({ ...ctx, me: ada.id, runner: true, detail: out({ ...done, state: "dropped" }) }).primary).toBeUndefined();
+    expect(taskActions({ ...ctx, me: ada.id, runner: true, detail: out({ ...done, state: "dropped" }) }).menu).not.toContain("merge");
 
     const takeable = taskActions({ ...ctx, me: ada.id, runner: true, takeable: new Set(["k-1"]), detail: out(task(1, { pull_request: pr })) });
     expect(takeable.primary).toEqual({ kind: "merge" });

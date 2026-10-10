@@ -113,9 +113,10 @@ export function taskActions({ me, detail, members, takeable, projects, now, runn
     out.menu.push("drop");
     if (!owner) out.dimmed.drop = "Owner only";
   }
-  // The Owner lands the Task's pull request through the Runner, open or Done alike. Holding the
-  // Task, the Owner's work comes first and Merge waits in the menu; Claim gives way to it.
-  if (owner && runner && task.pull_request?.state === "open") {
+  // The Owner lands the Task's pull request through the Runner, open or Done alike; a Dropped
+  // Task's is the Owner's to close on GitHub. Holding the Task, the Owner's work comes first and
+  // Merge waits in the menu; Claim gives way to it.
+  if (owner && runner && task.state !== "dropped" && task.pull_request?.state === "open") {
     if (out.primary?.kind === "advance" || out.primary?.kind === "complete") out.menu.unshift("merge");
     else {
       if (out.primary?.kind === "claim") out.menu.unshift("claim");
