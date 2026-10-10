@@ -59,10 +59,10 @@ export function EvidenceCount({ count }: { count: number }) {
   );
 }
 
-/** "lapses in 15 min · claude-opus-5-5": a held Task's countdown to the lapse and the model its holder named. */
+/** "● working 2m · claude-opus-5-5": how a held Task's hold stands and the model its holder named. */
 export function HeartbeatLine({ task, now }: { task: Task; now: number }) {
   const claim = liveClaim(task, now);
-  if (!claim?.expires_at) return null;
+  if (!claim) return null;
   return (
     <>
       <HeartbeatMeter claim={claim} variant="compact" />

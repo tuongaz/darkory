@@ -46,7 +46,7 @@ export function useAgentActions(agent: Member | undefined) {
       open={!!stopping}
       onOpenChange={(open) => !open && setStopping(null)}
       title={`Stop ${agent?.name ?? "the agent"}'s Shift on ${stopping}?`}
-      description="Its Claim is released with a Note, and the Shift's log is attached to the Task as Evidence."
+      description="Its Claim is released with a Note, and the Shift's log is kept with the Claim."
       submitLabel="Stop Shift"
       destructive
       pending={stop.isPending}

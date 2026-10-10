@@ -36,6 +36,9 @@ func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 		if err := json.Unmarshal([]byte(agent.String), &a); err != nil {
 			return m, fmt.Errorf("core: the agent settings of %s: %w", m.Name, err)
 		}
+		if a.Shifts < 1 {
+			a.Shifts = 1 // stored before an agent could run several Shifts at once
+		}
 		m.Agent = &a
 	}
 	return m, nil
@@ -62,14 +65,14 @@ func scanWorkspace(row interface{ Scan(...any) error }) (Workspace, error) {
 	return w, err
 }
 
-const skillCols = `sk.id, sk.name, sk.kind, sk.base_skill_id, sk.builtin, sk.current_version, sk.created_at`
+const skillCols = `sk.id, sk.name, sk.kind, sk.base_skill_id, sk.project_id, sk.builtin, sk.current_version, sk.created_at`
 
 func scanSkill(row interface{ Scan(...any) error }) (Skill, error) {
 	var s Skill
-	var base sql.NullString
+	var base, project sql.NullString
 	var created int64
-	err := row.Scan(&s.ID, &s.Name, &s.Kind, &base, &s.Builtin, &s.CurrentVersion, &created)
-	s.BaseSkillID, s.CreatedAt = nullString(base), fromMS(created)
+	err := row.Scan(&s.ID, &s.Name, &s.Kind, &base, &project, &s.Builtin, &s.CurrentVersion, &created)
+	s.BaseSkillID, s.ProjectID, s.CreatedAt = nullString(base), nullString(project), fromMS(created)
 	return s, err
 }
 
@@ -79,6 +82,7 @@ func scanSkill(row interface{ Scan(...any) error }) (Skill, error) {
 var taskCols = `t.id, t.display_key, t.project_id, t.parent_id, t.kind, t.title, t.description, t.state,
 t.step_id, t.step_since, ts.skill_id, t.last_step_id, ` + workflowOfSQL("t") + `, ts.workflow_id, t.aimed_at_id, t.owner_id, t.rank, t.breakdown, t.auto_complete, t.acceptance,
 t.from_retrospective_task_id, t.filed_by, t.waiting_since, t.created_at, t.ended_at,
+t.pull_request_number, t.pull_request_url, t.pull_request_state,
 t.claim_id, t.claim_holder_id, cs.chosen_id, t.claim_skill_id, cc.skill_version, cc.model_label,
 t.claim_timeout_ms, cc.started_at, t.claim_expires_at,
 EXISTS (SELECT 1 FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id
@@ -137,10 +141,12 @@ func scanTask(row interface{ Scan(...any) error }, now time.Time) (Task, error) 
 	var t Task
 	var parent, step, skill, lastStep, workflow, stepWorkflow, aimed, fromRetro, filedBy, claimID, holder, session, claimSkill, label sql.NullString
 	var waiting, created int64
-	var stepSince, rank, ended, version, timeout, started, expires sql.NullInt64
+	var stepSince, rank, ended, version, timeout, started, expires, prNumber sql.NullInt64
+	var prURL, prState sql.NullString
 	err := row.Scan(&t.ID, &t.Key, &t.ProjectID, &parent, &t.Kind, &t.Title, &t.Description, &t.State,
 		&step, &stepSince, &skill, &lastStep, &workflow, &stepWorkflow, &aimed, &t.OwnerID, &rank, &t.Breakdown, &t.AutoComplete, &t.Acceptance,
 		&fromRetro, &filedBy, &waiting, &created, &ended,
+		&prNumber, &prURL, &prState,
 		&claimID, &holder, &session, &claimSkill, &version, &label,
 		&timeout, &started, &expires, &t.Blocked)
 	if err != nil {
@@ -151,6 +157,9 @@ func scanTask(row interface{ Scan(...any) error }, now time.Time) (Task, error) 
 	t.AimedAtID, t.FromRetrospectiveTaskID, t.FiledBy = nullString(aimed), nullString(fromRetro), nullString(filedBy)
 	if rank.Valid {
 		t.Rank = &rank.Int64
+	}
+	if prNumber.Valid && prState.Valid {
+		t.PullRequest = &PullRequest{Number: prNumber.Int64, URL: prURL.String, State: prState.String}
 	}
 	t.WaitingSince, t.CreatedAt, t.EndedAt = fromMS(waiting), fromMS(created), nullTime(ended)
 	t.Labels = []string{}
@@ -447,12 +456,12 @@ func getSkillDetail(ctx context.Context, r store.Reader, orgID, id string) (Skil
 	return d, err
 }
 
-const evidenceCols = `e.id, e.task_id, e.filename, e.content_type, e.size, e.sha256, e.attached_by, e.created_at, e.blob_key`
+const evidenceCols = `e.id, e.task_id, e.kind, e.claim_id, e.filename, e.content_type, e.size, e.sha256, e.attached_by, e.created_at, e.blob_key`
 
 func scanEvidence(row interface{ Scan(...any) error }) (Evidence, error) {
 	var e Evidence
 	var at int64
-	err := row.Scan(&e.ID, &e.TaskID, &e.Filename, &e.ContentType, &e.Size, &e.SHA256, &e.AttachedBy, &at, &e.BlobKey)
+	err := row.Scan(&e.ID, &e.TaskID, &e.Kind, &e.ClaimID, &e.Filename, &e.ContentType, &e.Size, &e.SHA256, &e.AttachedBy, &at, &e.BlobKey)
 	e.CreatedAt = fromMS(at)
 	return e, err
 }

@@ -1,11 +1,18 @@
 package server
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/branch"
 	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/runnerapi"
 	"github.com/tuongaz/darkory/internal/server/gen"
 	"github.com/tuongaz/darkory/internal/shortid"
 )
@@ -223,8 +230,165 @@ func (s *Server) PassOwnership(w http.ResponseWriter, r *http.Request, task gen.
 	})
 }
 
+func (s *Server) SetTaskPullRequest(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.SetTaskPullRequestParams) {
+	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.SetTaskPullRequestBody, idem core.Idem) (core.Task, error) {
+		if err := s.mergedOnGitHub(r.Context(), c, task, body); err != nil {
+			return core.Task{}, err
+		}
+		return s.core.SetPullRequest(r.Context(), c, task, core.PullRequest{Number: body.Number, URL: body.URL, State: string(body.State)}, idem)
+	})
+}
+
+// mergedOnGitHub checks an agent's write of merged on GitHub, through the Runner beside this
+// server when one is attached: the pull request must be merged there, its head branch must be
+// the Task's own (branch.IsTasks, as the Runner decides it), and GitHub must give it
+// the number and the address written, since another repository may have a #7 of its own. An
+// agent writes as the Runner's discovery does, so its word that a merge happened is not taken
+// alone. A human's write, a write of open, and a write with no Runner attached are not checked;
+// nor is a write of what the Task already carries, and a bad address is refused before GitHub is
+// asked.
+func (s *Server) mergedOnGitHub(ctx context.Context, c *auth.Caller, ref string, body gen.SetTaskPullRequestBody) error {
+	run := s.theRunner()
+	if body.State != gen.PullRequestMerged || run == nil {
+		return nil
+	}
+	written := core.PullRequest{Number: body.Number, URL: body.URL, State: string(body.State)}
+	if err := written.Validate(); err != nil {
+		return err
+	}
+	m, err := s.core.GetMember(ctx, c, c.MemberID)
+	if err != nil {
+		return err
+	}
+	if m.Member.Kind != "agent" {
+		return nil
+	}
+	d, err := s.core.GetTask(ctx, c, ref)
+	if err != nil {
+		return err
+	}
+	if d.Task.PullRequest != nil && *d.Task.PullRequest == written {
+		return nil
+	}
+	key := d.Task.Key
+	rctx, cancel := context.WithTimeout(ctx, s.runnerTimeout)
+	defer cancel()
+	pr, err := run.PullRequest(rctx, shortid.Of(d.Task.ID).String(), body.Number, body.URL) // the Runner has ids as the API writes them
+	switch {
+	case err != nil && rctx.Err() == context.DeadlineExceeded:
+		return &core.Error{Code: core.CodeConflict, Message: fmt.Sprintf("the Runner did not answer in %s", inSeconds(s.runnerTimeout))}
+	case errors.Is(err, runnerapi.ErrNoPullRequest):
+		return &core.Error{Code: core.CodeConflict, Message: fmt.Sprintf("GitHub has no pull request #%d in %s's Workspaces", body.Number, key)}
+	case err != nil:
+		return &core.Error{Code: core.CodeConflict, Message: err.Error()}
+	case pr.State != core.PullRequestMerged:
+		return &core.Error{Code: core.CodeConflict, Message: fmt.Sprintf("GitHub has #%d %s, not merged", body.Number, pr.State)}
+	case !branch.IsTasks(pr.Head, key):
+		return &core.Error{Code: core.CodeInvalid, Message: fmt.Sprintf("pull request #%d's branch %s is not %s's", body.Number, pr.Head, key)}
+	case pr.Number != body.Number || !sameAddress(pr.URL, body.URL):
+		return &core.Error{Code: core.CodeInvalid, Message: fmt.Sprintf("pull request #%d on GitHub is %s, not %s", body.Number, pr.URL, body.URL)}
+	case !pr.Landing:
+		return &core.Error{Code: core.CodeConflict, Message: fmt.Sprintf("pull request #%d is not %s's landing", body.Number, key)}
+	}
+	return nil
+}
+
+// sameAddress reports whether two https addresses name the same page: the host compared without
+// regard to case, as hosts are, and everything else exactly.
+func sameAddress(a, b string) bool {
+	ua, errA := url.Parse(a)
+	ub, errB := url.Parse(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return ua.Scheme == ub.Scheme && ua.User == nil && ub.User == nil && strings.EqualFold(ua.Host, ub.Host) &&
+		ua.EscapedPath() == ub.EscapedPath() && ua.RawQuery == ub.RawQuery && ua.ForceQuery == ub.ForceQuery &&
+		ua.Fragment == ub.Fragment
+}
+
+// MergeTaskPullRequest asks the Runner beside this server to merge the Task's open pull request:
+// by a human who is the Task's Owner or an admin, never an agent. The Runner is given the number
+// the record carries and checks on GitHub that its head is the Task's branch before merging; it
+// merges only, and the server then records the merge of that number as the caller, with a Note. Like Nudge and Stop it
+// accepts an Idempotency-Key and keeps nothing under it: a repeat finds the pull request merged
+// and answers not_found.
+func (s *Server) MergeTaskPullRequest(w http.ResponseWriter, r *http.Request, task gen.TaskRef, _ gen.MergeTaskPullRequestParams) {
+	ctx, c := r.Context(), caller(r)
+	d, err := s.core.GetTask(ctx, c, task)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// One merge of a Task at a time: a second request waits, then finds the pull request merged.
+	// A request whose client goes away while it waits stops waiting.
+	unlock, err := s.lockMerge(ctx, d.Task.ID)
+	if err != nil {
+		writeError(w, http.StatusConflict, gen.ErrorCodeConflict, fmt.Sprintf("stopped waiting for another merge of %s: %v", d.Task.Key, err))
+		return
+	}
+	defer unlock()
+	t, pr, err := s.core.MayMergePullRequest(ctx, c, d.Task.ID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	run := s.theRunner()
+	if run == nil {
+		noRunner(w)
+		return
+	}
+	// The Runner has ids as the API writes them.
+	rctx, cancel := context.WithTimeout(ctx, s.runnerTimeout)
+	defer cancel()
+	if err := run.Merge(rctx, shortid.Of(t.ID).String(), pr.Number); err != nil {
+		if rctx.Err() == context.DeadlineExceeded {
+			writeError(w, http.StatusConflict, gen.ErrorCodeConflict, fmt.Sprintf("the Runner did not answer in %s; look at the pull request "+
+				"on GitHub before trying again", inSeconds(s.runnerTimeout)))
+			return
+		}
+		if errors.Is(err, runnerapi.ErrNoPullRequest) {
+			writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, fmt.Sprintf("GitHub has no open pull request #%d for %s", pr.Number, t.Key))
+			return
+		}
+		writeError(w, http.StatusConflict, gen.ErrorCodeConflict, err.Error())
+		return
+	}
+	merged, err := s.core.RecordMerge(context.WithoutCancel(ctx), c, t.ID, pr.Number, core.Idem{})
+	s.respond(w, r, as(http.StatusOK, func(t core.Task) any { return taskOut(t) }), merged, err)
+}
+
 func (s *Server) SetTaskLabels(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.SetTaskLabelsParams) {
 	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.SetTaskLabelsBody, idem core.Idem) (core.Task, error) {
 		return s.core.SetTaskLabels(r.Context(), c, task, body.Labels, idem)
 	})
+}
+
+// lockMerge holds the merge of the Task taskID until the returned func is called, so two requests
+// cannot both find its pull request open and both have the Runner merge it. It waits for another
+// merge of the Task while ctx lasts, and returns ctx's error when ctx ends first.
+func (s *Server) lockMerge(ctx context.Context, taskID string) (func(), error) {
+	m, _ := s.merging.LoadOrStore(taskID, make(chan struct{}, 1))
+	slot := m.(chan struct{})
+	select {
+	case slot <- struct{}{}:
+		return func() { <-slot }, nil
+	default:
+	}
+	if s.onMergeWait != nil {
+		s.onMergeWait(taskID)
+	}
+	select {
+	case slot <- struct{}{}:
+		return func() { <-slot }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// inSeconds says d in whole seconds, as "90 s"; a shorter d as it is.
+func inSeconds(d time.Duration) string {
+	if d < time.Second {
+		return d.String()
+	}
+	return fmt.Sprintf("%d s", int(d.Round(time.Second).Seconds()))
 }

@@ -129,7 +129,19 @@ func (s *Server) CreateSkill(w http.ResponseWriter, r *http.Request, params gen.
 	if !ok {
 		return
 	}
-	d, err := s.core.CreateSkill(r.Context(), c, core.NewSkill{Name: body.Name, Kind: string(body.Kind), BaseSkill: body.BaseSkill, Body: body.Body}, idem)
+	d, err := s.core.CreateSkill(r.Context(), c, core.NewSkill{Name: body.Name, Kind: string(body.Kind), BaseSkill: body.BaseSkill,
+		Project: body.Project, Body: body.Body}, idem)
+	s.respond(w, r, out, d, err)
+}
+
+func (s *Server) UpdateSkill(w http.ResponseWriter, r *http.Request, skill gen.SkillRef, params gen.UpdateSkillParams) {
+	var body gen.UpdateSkillBody
+	out := as(http.StatusOK, func(d core.SkillDetail) any { return skillDetailOut(d) })
+	c, idem, ok := s.begin(w, r, params.IdempotencyKey, &body, out)
+	if !ok {
+		return
+	}
+	d, err := s.core.UpdateSkill(r.Context(), c, skill, body.Project, idem)
 	s.respond(w, r, out, d, err)
 }
 

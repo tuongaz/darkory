@@ -47,6 +47,11 @@ export function useOwnedOpen(member: string) {
   return useTasks({ state: "open", filter: [`owner:is:${member}`] });
 }
 
+/** A Member's Done Tasks whose pull request is open on GitHub: their merge waits on them. */
+export function useAwaitingMerge(member: string) {
+  return useTasks({ state: "done", filter: [`owner:is:${member}`, "pull_request:is:open"] });
+}
+
 /** Every Task of a Project, or of the Organisation with none: the subjects of Activity entries. */
 export function useTaskMap(project?: string): Map<string, Task> {
   const q = useTasks(project ? { project } : {});

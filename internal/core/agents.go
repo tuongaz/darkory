@@ -35,7 +35,7 @@ var DefaultAgentArgs = []string{
 // DefaultAgentSettings are the settings an agent has before any are changed.
 func DefaultAgentSettings() AgentSettings {
 	return AgentSettings{Command: DefaultAgentCommand, Args: slices.Clone(DefaultAgentArgs), Model: DefaultAgentModel,
-		Env: map[string]string{}, Unattended: true}
+		Env: map[string]string{}, Unattended: true, Shifts: 1}
 }
 
 // AgentChange is what SetAgentSettings changes; nil fields stay as they are. Env replaces the
@@ -48,6 +48,8 @@ type AgentChange struct {
 	Unattended   *bool
 	Paused       *bool
 	ProgressFile *string
+	// Shifts is how many Shifts the Runner runs for the agent at once, 1 to MaxShifts.
+	Shifts *int
 }
 
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,127}$`)
@@ -90,6 +92,9 @@ func (a AgentSettings) validate() error {
 		if strings.ContainsRune(v, 0) || len(v) > 4096 {
 			return refuse(CodeInvalid, "the value of %s is at most 4096 bytes, without NUL", k)
 		}
+	}
+	if a.Shifts < 1 || a.Shifts > MaxShifts {
+		return refuse(CodeInvalid, "shifts is 1 to %d, the Shifts the Runner runs for the agent at once", MaxShifts)
 	}
 	return validTemplate("progress_file", a.ProgressFile, 1000, true)
 }
@@ -137,6 +142,9 @@ func (s *Service) SetAgentSettings(ctx context.Context, c *auth.Caller, ref stri
 		}
 		if ch.ProgressFile != nil {
 			next.ProgressFile = *ch.ProgressFile
+		}
+		if ch.Shifts != nil {
+			next.Shifts = *ch.Shifts
 		}
 		if next.Args == nil {
 			next.Args = []string{}
@@ -224,6 +232,9 @@ func agentChanges(was, next AgentSettings) map[string]any {
 	}
 	if next.ProgressFile != was.ProgressFile {
 		out["progress_file"] = next.ProgressFile
+	}
+	if next.Shifts != was.Shifts {
+		out["shifts"] = next.Shifts
 	}
 	return out
 }

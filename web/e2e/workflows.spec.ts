@@ -298,8 +298,8 @@ test("6 · the Workflows list: added, named and saved; moved later and back; del
   await expect(workflowsTable(page).getByRole("button", { name: "Move Triage earlier" })).toBeDisabled();
   await expect(workflowsTable(page).getByRole("button", { name: "Move Support later" })).toBeDisabled();
   await expect(workflowsTable(page).getByRole("link", { name: "Edit Bugs" })).toBeVisible();
-  // From `sm` up the acts sit in the row; the ⋯ is the phone's.
-  await expect(workflowsTable(page).getByRole("button", { name: "More for Bugs" })).toBeHidden();
+  // From `sm` up the acts sit in the row, and the ⋯ after them, as on a phone.
+  await expect(workflowsTable(page).getByRole("button", { name: "More for Bugs" })).toBeVisible();
   await shot(page, "list-acts");
 
   // + Workflow, the bar's primary: written at once, and its editor opens in the app with its name to type.
@@ -559,7 +559,7 @@ test("11 · Workflows opens on a list of the five with their figures", async ({ 
 
   const { page, errors, ctx } = await open(browser, "/projects/ACC/workflows");
   // The figures' heads, then an admin's act columns, named for a screen reader.
-  await expect(workflowsTable(page).getByRole("columnheader")).toHaveText(["Workflow", "Steps", "Waiting", "Working", "Done today", "Order", "Edit or delete"]);
+  await expect(workflowsTable(page).getByRole("columnheader")).toHaveText(["Workflow", "Steps", "Waiting", "Working", "Done today", "Order", "Edit or delete", "More"]);
   // Waiting = a Workflow's open Tasks at its Steps less those worked; Working = those held; Done
   // today = the Tasks ended today listed in it.
   await expect
@@ -575,6 +575,38 @@ test("11 · Workflows opens on a list of the five with their figures", async ({ 
   await expect(chip(page)).toHaveCount(0);
   expect((await workflowsTable(page).getByRole("row", { name: "Bugs" }).boundingBox())!.height).toBe(36);
   await shot(page, "list");
+  expect(errors).toEqual([]);
+  await ctx.close();
+});
+
+test("11b · a row's acts are muted at rest and full contrast while the row is hovered or focused; nothing moves", async ({ browser }) => {
+  const { page, errors, ctx } = await open(browser, "/projects/ACC/workflows");
+  const row = workflowsTable(page).getByRole("row", { name: "Bugs" });
+  const acts = [
+    row.getByRole("button", { name: "Move Bugs later" }),
+    row.getByRole("link", { name: "Edit Bugs" }),
+    row.getByRole("button", { name: "Delete Bugs" }),
+    row.getByRole("button", { name: "More for Bugs" }),
+  ];
+  await expect(acts[2]).toBeVisible();
+  const look = () => Promise.all(acts.map((a) => a.evaluate((el) => ({ color: getComputedStyle(el).color, box: el.getBoundingClientRect().toJSON() as DOMRect }))));
+  await page.mouse.move(0, 0);
+  const rest = await look();
+  // Over the row, left of its acts: its link covers it.
+  await row.hover({ position: { x: 300, y: 18 } });
+  await expect.poll(async () => (await look())[0].color).not.toBe(rest[0].color);
+  const hovered = await look();
+  for (let i = 0; i < acts.length; i++) {
+    expect(hovered[i].color, `act ${i}`).not.toBe(rest[i].color);
+    expect(hovered[i].box, `act ${i}`).toEqual(rest[i].box);
+  }
+  await shot(page, "list-row-hovered");
+  // Focus in the row draws them the same.
+  await page.mouse.move(0, 0);
+  await row.getByRole("link", { name: "Bugs", exact: true }).focus();
+  await expect.poll(async () => (await look())[2].color).toBe(hovered[2].color);
+  // The ⋯ stands after them.
+  expect(rest[3].box.x).toBeGreaterThan(rest[2].box.x);
   expect(errors).toEqual([]);
   await ctx.close();
 });

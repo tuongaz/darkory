@@ -1,5 +1,9 @@
 import { expect, test, type Browser, type BrowserContextOptions, type Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // The Tasks screens' journeys on model v2 (docs/build/model-v2-plan.md, Scenarios 3, 4, 7, 8),
@@ -241,5 +245,99 @@ test("the Claim's Session id reads on one line in the rail at 1440, its 22 chara
   });
   expect(fit).toEqual({ lines: 1, cut: false });
   await shot(page, "session-id-one-line");
+  expect(errors).toEqual([]);
+});
+
+test("a Done Task's pull request reads on its facts line and in its rail, a link to GitHub; with no Runner there is no Merge", async ({ browser }) => {
+  // TSK lands its branches through pull requests from here on: its default Workspace is in pull_request mode.
+  await v1(as.ada, "POST", "/v1/workspaces", { name: "tsk-repo", path: "/srv/tsk", mode: "pull_request", default_branch: "main" });
+  await v1(as.ada, "PATCH", "/v1/projects/TSK", { default_workspace: "tsk-repo" });
+  const filed = await v1<Detail>(as.ada, "POST", "/v1/tasks", { project: "TSK", title: "A sidebar trigger on desktop" });
+  await v1(as.builder, "POST", `/v1/tasks/${filed.task.id}/claim`, {});
+  await v1(as.builder, "POST", `/v1/tasks/${filed.task.id}/advance`, { outcome: "pass" });
+  await v1(as.ada, "POST", `/v1/tasks/${filed.task.id}/claim`, {});
+  await v1(as.ada, "POST", `/v1/tasks/${filed.task.id}/advance`, { outcome: "pass" });
+  const url = "https://github.com/o/r/pull/7";
+  await v1(as.ada, "PUT", `/v1/tasks/${filed.task.id}/pull-request`, { number: 7, url, state: "open" });
+
+  const { page, errors } = await open(browser);
+  await page.goto(`${base()}/tasks/${filed.task.key}`);
+  const head = page.getByRole("heading", { level: 1 }).locator("xpath=ancestor::header[1]");
+  await expect(head).toContainText("Done");
+  await expect(head.getByRole("link", { name: "#7 open" })).toHaveAttribute("href", url);
+  const workspace = page.getByRole("complementary", { name: "Properties" }).getByRole("region", { name: "Workspace" });
+  await expect(workspace).toContainText("Pull request");
+  await expect(workspace.getByRole("link", { name: "#7 open" })).toHaveAttribute("href", url);
+  await expect(page.getByRole("button", { name: "Merge" })).toHaveCount(0);
+  await shot(page, "pull-request-open");
+
+  await v1(as.ada, "PUT", `/v1/tasks/${filed.task.id}/pull-request`, { number: 7, url, state: "merged" });
+  await page.reload();
+  await expect(head.getByRole("link", { name: "#7 merged" })).toHaveAttribute("href", url);
+  await shot(page, "pull-request-merged");
+  expect(errors).toEqual([]);
+});
+
+/** Runs the `darkory` CLI e2e/server.ts built, as a Member's token in their Session. */
+function darkory(who: Who, ...args: string[]): string {
+  return execFileSync(process.env.DARKORY_E2E_BIN!, args, {
+    env: { ...process.env, DARKORY_URL: base(), DARKORY_TOKEN: who.token, DARKORY_SESSION: who.session, DARKORY_NO_UPDATE_CHECK: "1" },
+    stdio: "pipe",
+  }).toString();
+}
+
+test("Evidence shows itself: the holder's screenshots fold into one row of thumbnails; the Shift's log is a chip on the release, not Evidence", async ({ browser }) => {
+  const filed = await v1<Detail>(as.ada, "POST", "/v1/tasks", { project: "TSK", title: "Evidence shows itself" });
+  const key = filed.task.key;
+  await v1(as.builder, "POST", `/v1/tasks/${filed.task.id}/claim`, { heartbeat_timeout_seconds: 900 });
+  const dir = mkdtempSync(join(tmpdir(), "darkory-e2e-evidence-"));
+  try {
+    // Two real screenshots of a page, and the Shift's terminal log.
+    const { page: shooter } = await open(browser);
+    await shooter.setContent("<h1 style='font:40px sans-serif'>Delete Workflow 3</h1><p>The Steps of Workflow 3 go with it.</p>");
+    for (const name of ["03-workflow-page.png", "07-delete-dialog.png"]) await shooter.screenshot({ path: join(dir, name) });
+    await shooter.context().close();
+    darkory(as.builder, "attach", key, join(dir, "03-workflow-page.png"));
+    darkory(as.builder, "attach", key, join(dir, "07-delete-dialog.png"));
+    writeFileSync(join(dir, "triage-log.md"), "# Triage log, the delete\n\n| Where | Width | Delete |\n");
+    darkory(as.builder, "attach", key, join(dir, "triage-log.md"));
+    await v1(as.builder, "POST", `/v1/tasks/${filed.task.id}/release`, {});
+    // The Runner attaches the Shift's log once the Session has exited, naming the Claim it ran under.
+    const claimId = (await v1<{ claims: { id: string }[] }>(as.ada, "GET", `/v1/tasks/${key}`)).claims.at(-1)!.id;
+    const filename = `shift-${key}-tsk-builder-101600.log`;
+    const res = await fetch(`${base()}/v1/tasks/${key}/evidence?${new URLSearchParams({ filename, kind: "log", claim: claimId })}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${as.builder.token}`, "Darkory-Session": `${as.builder.session}-runner`, "Idempotency-Key": randomUUID(), "Content-Type": "text/plain" },
+      body: "$ make web-check\n".repeat(400),
+    });
+    expect(res.status, await res.clone().text()).toBeLessThan(300);
+    expect(((await res.json()) as { claim_id?: string }).claim_id).toBe(claimId);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  const { page, errors } = await open(browser);
+  await page.goto(`${base()}/tasks/${key}`);
+  const record = page.getByRole("list", { name: "Record" });
+  const attached = record.getByRole("listitem").filter({ hasText: "tsk-builder attached 3 Evidence" });
+  await expect(attached).toBeVisible();
+  // A small text file's first lines, read through the page's own fetch (its cookie, the CSP).
+  const box = attached.getByRole("figure", { name: "triage-log.md" });
+  await expect(box.locator("pre")).toContainText("# Triage log, the delete");
+  await expect(box.getByRole("link", { name: "open ↗" })).toHaveAttribute("href", /\/v1\/evidence\/.+\/content$/);
+  // Each image a thumbnail that loads, though its download is an attachment.
+  for (const name of ["03-workflow-page.png", "07-delete-dialog.png"]) {
+    const img = attached.getByRole("img", { name });
+    await img.scrollIntoViewIfNeeded();
+    await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth)).toBeGreaterThan(0);
+    expect(await img.evaluate((el) => [el.getBoundingClientRect().width, el.getBoundingClientRect().height])).toEqual([148, 92]);
+    await expect(attached.getByRole("link", { name: new RegExp(name.replace(".", "\\.")) })).toHaveAttribute("href", /\/v1\/evidence\/.+\/content$/);
+  }
+  // The log rides on the release as a chip; no row says it was attached.
+  const released = record.getByRole("listitem").filter({ hasText: "tsk-builder released it" });
+  await expect(released.getByRole("link", { name: /^Shift log · / })).toBeVisible();
+  await expect(record.getByText(`shift-${key}-tsk-builder-101600.log`)).toHaveCount(0);
+  await expect(record.getByRole("listitem").filter({ hasText: /attached/ })).toHaveCount(1);
+  await shot(page, "evidence-thumbnails");
   expect(errors).toEqual([]);
 });

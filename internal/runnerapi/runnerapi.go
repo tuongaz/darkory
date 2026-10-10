@@ -54,6 +54,24 @@ type Session struct {
 // the server answers it not_found.
 var ErrNoSession = errors.New("runnerapi: no Shift on this Task")
 
+// PullRequest is a pull request as the Runner read it on GitHub.
+type PullRequest struct {
+	Number int64
+	URL    string
+	// State is open, merged or closed.
+	State string
+	// Head and Base are its branches: the one it merges, and the one it merges into.
+	Head, Base string
+	// Landing says it is how the Task's branch lands: its head is the Task's branch, its base is
+	// that branch's own base (the Parent's branch for a Subtask, else the Workspace's default
+	// branch), and it is not from a fork.
+	Landing bool
+}
+
+// ErrNoPullRequest is what Merge returns when GitHub has no such pull request open, and what
+// PullRequest returns when no Workspace of the Task has it; the server answers it not_found.
+var ErrNoPullRequest = errors.New("runnerapi: no open pull request for this Task")
+
 // ErrNotJoinable is what Attach returns for a session that runs without tmux; the server answers
 // it conflict when it can still say so.
 var ErrNotJoinable = errors.New("runnerapi: the Shift runs without tmux and cannot be joined")
@@ -68,6 +86,21 @@ type Runner interface {
 	Nudge(taskID string) error
 	// Stop ends the Task's session and releases its Claim with a Note.
 	Stop(taskID string) error
+	// Merge merges the Task's pull request number on GitHub, as the identity the Runner's gh
+	// signs in as, once it has checked there that its head branch starts with the Task's branch
+	// prefix (branch.Prefix of its key: the Runner names a branch from the title when it makes
+	// it, and a renamed Task's branch still starts with its key) and that its base is that
+	// branch's own base: the Parent's branch for a Subtask, else the Workspace's default branch.
+	// It merges on GitHub only: the server records the merge on the Task, as the Member who
+	// asked. It returns ErrNoPullRequest when GitHub has no such pull request open; any other
+	// error is a refusal, a mismatch or GitHub's own, its message as the Runner read it, which the
+	// server shows as it is. ctx bounds the act; the Runner's gh runs under it.
+	Merge(ctx context.Context, taskID string, number int64) error
+	// PullRequest reads the Task's pull request number on GitHub, in the Task's Workspaces in
+	// pull_request mode, as the Runner's gh sees it: the one whose address is url when url is
+	// given and a Workspace has it. It returns ErrNoPullRequest when none of them has it. ctx
+	// bounds the act; the Runner's gh runs under it.
+	PullRequest(ctx context.Context, taskID string, number int64, url string) (PullRequest, error)
 	// Attach bridges conn to the Task's terminal until either side ends or ctx is done, and
 	// closes conn. Binary messages carry the terminal's bytes both ways; a text message
 	// {"cols": n, "rows": n} resizes the view. With readonly, what the client sends is ignored.

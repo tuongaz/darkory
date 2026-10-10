@@ -41,6 +41,7 @@ const (
 	ActivityKindProjectMemberAdded    ActivityKind = "project.member_added"
 	ActivityKindProjectMemberRemoved  ActivityKind = "project.member_removed"
 	ActivityKindSessionClosed         ActivityKind = "session.closed"
+	ActivityKindSkillChanged          ActivityKind = "skill.changed"
 	ActivityKindSkillCreated          ActivityKind = "skill.created"
 	ActivityKindSkillVersionPublished ActivityKind = "skill.version_published"
 	ActivityKindTaskAdvanced          ActivityKind = "task.advanced"
@@ -60,6 +61,8 @@ const (
 	ActivityKindTaskNudged            ActivityKind = "task.nudged"
 	ActivityKindTaskObserved          ActivityKind = "task.observed"
 	ActivityKindTaskOwnerPassed       ActivityKind = "task.owner_passed"
+	ActivityKindTaskPullRequestMerged ActivityKind = "task.pull_request_merged"
+	ActivityKindTaskPullRequestOpened ActivityKind = "task.pull_request_opened"
 	ActivityKindTaskRanked            ActivityKind = "task.ranked"
 	ActivityKindTaskReleased          ActivityKind = "task.released"
 	ActivityKindTaskSkillProposed     ActivityKind = "task.skill_proposed"
@@ -118,6 +121,8 @@ func (e ActivityKind) Valid() bool {
 		return true
 	case ActivityKindSessionClosed:
 		return true
+	case ActivityKindSkillChanged:
+		return true
 	case ActivityKindSkillCreated:
 		return true
 	case ActivityKindSkillVersionPublished:
@@ -155,6 +160,10 @@ func (e ActivityKind) Valid() bool {
 	case ActivityKindTaskObserved:
 		return true
 	case ActivityKindTaskOwnerPassed:
+		return true
+	case ActivityKindTaskPullRequestMerged:
+		return true
+	case ActivityKindTaskPullRequestOpened:
 		return true
 	case ActivityKindTaskRanked:
 		return true
@@ -315,6 +324,24 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for EvidenceKind.
+const (
+	EvidenceKindEvidence EvidenceKind = "evidence"
+	EvidenceKindLog      EvidenceKind = "log"
+)
+
+// Valid indicates whether the value is a known member of the EvidenceKind enum.
+func (e EvidenceKind) Valid() bool {
+	switch e {
+	case EvidenceKindEvidence:
+		return true
+	case EvidenceKindLog:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FilePurpose.
 const (
 	FilePurposeAvatar  FilePurpose = "avatar"
@@ -444,6 +471,24 @@ func (e ProposalState) Valid() bool {
 	case Published:
 		return true
 	case Superseded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PullRequestState.
+const (
+	PullRequestMerged PullRequestState = "merged"
+	PullRequestOpen   PullRequestState = "open"
+)
+
+// Valid indicates whether the value is a known member of the PullRequestState enum.
+func (e PullRequestState) Valid() bool {
+	switch e {
+	case PullRequestMerged:
+		return true
+	case PullRequestOpen:
 		return true
 	default:
 		return false
@@ -703,7 +748,11 @@ type Activity struct {
 	// milliseconds since the Unix epoch. The Subtasks Darkory files itself (a Breakdown, an
 	// Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
 	// Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
-	// `holder_id` and `nudge`, 1 or 2.
+	// `holder_id` and `nudge`, 1 or 2. `task.evidence_attached` carries `evidence_id`,
+	// `filename`, `size`, `kind` and `claim_id`, null when the Evidence belongs to no Claim. `task.pull_request_opened` and `task.pull_request_merged` carry the
+	// pull request's `number` and `url`. `skill.created` carries `name`, `kind`, `builtin` and
+	// `project_id`, null for a Skill of the whole Organisation; `skill.changed` carries
+	// `project_id`, null when the Skill became the Organisation's.
 	//
 	// `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
 	// (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
@@ -736,7 +785,11 @@ type Activity struct {
 // milliseconds since the Unix epoch. The Subtasks Darkory files itself (a Breakdown, an
 // Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
 // Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
-// `holder_id` and `nudge`, 1 or 2.
+// `holder_id` and `nudge`, 1 or 2. `task.evidence_attached` carries `evidence_id`,
+// `filename`, `size`, `kind` and `claim_id`, null when the Evidence belongs to no Claim. `task.pull_request_opened` and `task.pull_request_merged` carry the
+// pull request's `number` and `url`. `skill.created` carries `name`, `kind`, `builtin` and
+// `project_id`, null for a Skill of the whole Organisation; `skill.changed` carries
+// `project_id`, null when the Skill became the Organisation's.
 //
 // `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
 // (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
@@ -801,6 +854,9 @@ type AgentSettings struct {
 	// than Claude Code (whose transcript the Runner finds itself); it may use the same
 	// placeholders. The Runner sends Heartbeats only while it changes.
 	ProgressFile *string `json:"progress_file,omitempty"`
+
+	// Shifts How many Shifts the Runner runs for the agent at once, one Session and one Claim each; 1 unless set.
+	Shifts int `json:"shifts"`
 
 	// Unattended The Shift runs with the agent's permission checks skipped; the worktree and the exit rules are the fence.
 	Unattended bool `json:"unattended"`
@@ -958,6 +1014,9 @@ type CreateSkillBody struct {
 	Body string    `json:"body"`
 	Kind SkillKind `json:"kind"`
 	Name string    `json:"name"`
+
+	// Project Id or key of the Project the Skill belongs to; only for a company Skill.
+	Project *string `json:"project,omitempty"`
 }
 
 // CreateViewBody defines model for CreateViewBody.
@@ -1061,15 +1120,31 @@ type ErrorCode string
 // Evidence A report, screenshot or log attached to a Task, recording who attached it; Evidence
 // about a Parent as a whole is attached to the Parent.
 type Evidence struct {
-	AttachedBy  string    `json:"attached_by"`
+	AttachedBy string `json:"attached_by"`
+
+	// ClaimID The Claim the Evidence was attached under: the attacher's Claim when the attacher held
+	// the Task, or the Claim a Shift's log belongs to, named by the Runner. Absent for
+	// Evidence attached by a Member who did not hold the Task, and for Evidence from before
+	// this field.
+	ClaimID     *string   `json:"claim_id,omitempty"`
 	ContentType string    `json:"content_type"`
 	CreatedAt   time.Time `json:"created_at"`
 	Filename    string    `json:"filename"`
 	ID          string    `json:"id"`
-	Sha256      string    `json:"sha256"`
-	Size        int64     `json:"size"`
-	TaskID      string    `json:"task_id"`
+
+	// Kind `evidence`: attached by the Task's holder or a Member about the work. `log`: a Shift's
+	// terminal log, attached by the Runner when the Shift ends; it belongs to the Claim the Shift
+	// worked under and is not counted or listed as the Task's Evidence.
+	Kind   EvidenceKind `json:"kind"`
+	Sha256 string       `json:"sha256"`
+	Size   int64        `json:"size"`
+	TaskID string       `json:"task_id"`
 }
+
+// EvidenceKind `evidence`: attached by the Task's holder or a Member about the work. `log`: a Shift's
+// terminal log, attached by the Runner when the Shift ends; it belongs to the Claim the Shift
+// worked under and is not counted or listed as the Task's Evidence.
+type EvidenceKind string
 
 // File Bytes the Organisation keeps, referenced by id, such as a Member's avatar. Its bytes are
 // at `/v1/files/{id}/content`.
@@ -1462,6 +1537,18 @@ type ProposeSkillVersionBody struct {
 	Skill string `json:"skill"`
 }
 
+// PullRequest The pull request a Task's branch lands through, in a Workspace in `pull_request` mode, as the
+// Runner read it on GitHub: written when it finds one open for the branch and again when it is
+// merged. Absent until the Runner has seen one.
+type PullRequest struct {
+	Number int64            `json:"number"`
+	State  PullRequestState `json:"state"`
+	URL    string           `json:"url"`
+}
+
+// PullRequestState defines model for PullRequestState.
+type PullRequestState string
+
 // RankTaskBody defines model for RankTaskBody.
 type RankTaskBody struct {
 	Position int64 `json:"position"`
@@ -1584,6 +1671,7 @@ type SetAgentSettingsBody struct {
 	Model        *string            `json:"model,omitempty"`
 	Paused       *bool              `json:"paused,omitempty"`
 	ProgressFile *string            `json:"progress_file,omitempty"`
+	Shifts       *int               `json:"shifts,omitempty"`
 	Unattended   *bool              `json:"unattended,omitempty"`
 }
 
@@ -1604,6 +1692,16 @@ type SetProjectSeenBody struct {
 type SetTaskLabelsBody struct {
 	// Labels Label ids or names, each the Task's Project's own or the Organisation's; the whole set it carries.
 	Labels []string `json:"labels"`
+}
+
+// SetTaskPullRequestBody defines model for SetTaskPullRequestBody.
+type SetTaskPullRequestBody struct {
+	Number int64            `json:"number"`
+	State  PullRequestState `json:"state"`
+
+	// URL The pull request's own `https` address, `https://<host>/<owner>/<repo>/pull/<number>`,
+	// on `github.com` or on the host `GH_HOST` names.
+	URL string `json:"url"`
 }
 
 // SetWorkflowBody defines model for SetWorkflowBody.
@@ -1655,6 +1753,10 @@ type Skill struct {
 	ID             string    `json:"id"`
 	Kind           SkillKind `json:"kind"`
 	Name           string    `json:"name"`
+
+	// ProjectID The Project a company Skill belongs to; absent for a generic Skill and for a company
+	// Skill of the whole Organisation.
+	ProjectID *string `json:"project_id,omitempty"`
 }
 
 // SkillDetail defines model for SkillDetail.
@@ -1878,6 +1980,11 @@ type Task struct {
 	ParentID  *string `json:"parent_id,omitempty"`
 	ProjectID string  `json:"project_id"`
 
+	// PullRequest The pull request a Task's branch lands through, in a Workspace in `pull_request` mode, as the
+	// Runner read it on GitHub: written when it finds one open for the branch and again when it is
+	// merged. Absent until the Runner has seen one.
+	PullRequest *PullRequest `json:"pull_request,omitempty"`
+
 	// Rank Position in the Project's Rank, 1 first; an ended Task keeps its place. Absent on a
 	// Subtask, which sorts by its Parent's.
 	Rank *int64 `json:"rank,omitempty"`
@@ -2041,6 +2148,12 @@ type UpdateProjectBody struct {
 	// DefaultWorkspace Workspace id or name; `""` clears the Project's default.
 	DefaultWorkspace *string `json:"default_workspace,omitempty"`
 	Name             *string `json:"name,omitempty"`
+}
+
+// UpdateSkillBody defines model for UpdateSkillBody.
+type UpdateSkillBody struct {
+	// Project Id or key of the Project the company Skill belongs to; `""` makes it the Organisation's.
+	Project string `json:"project"`
 }
 
 // UpdateViewBody defines model for UpdateViewBody.
@@ -2228,6 +2341,9 @@ type BlockerRef = string
 
 // Cursor defines model for Cursor.
 type Cursor = string
+
+// EvidenceClaim defines model for EvidenceClaim.
+type EvidenceClaim = string
 
 // EvidenceFilename defines model for EvidenceFilename.
 type EvidenceFilename = string
@@ -2580,6 +2696,13 @@ type CreateSkillParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// UpdateSkillParams defines parameters for UpdateSkill.
+type UpdateSkillParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListTasksParams defines parameters for ListTasks.
 type ListTasksParams struct {
 	// Project Only Tasks of this Project, by id or key.
@@ -2645,7 +2768,7 @@ type ListTasksParams struct {
 	// (Workspace id the Task names) · `model` (the live Claim's model label) · `filed_at` (when
 	// it was filed) · `completed_at` (when it ended done; a dropped Task has none) · `ended_at`
 	// (when it ended, done or dropped) · `q` (`contains`, ignoring case, over the key and the
-	// title).
+	// title) · `pull_request` (`open`, `merged`, or `none`: no pull request recorded).
 	//
 	// Example: `filter=step:in:<id>,<id>&filter=holder:is:none&filter=filed_at:last:7d`. An
 	// unknown field, an operator the field does not take, the wrong number of values or a value
@@ -2727,6 +2850,13 @@ type AttachTaskEvidenceParams struct {
 	// Filename The file's name, as it should be shown and downloaded.
 	Filename EvidenceFilename `form:"filename" json:"filename"`
 
+	// Kind What the file is; `evidence` unless given.
+	Kind *EvidenceKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Claim The Claim the Evidence belongs to: one on this Task whose holder is the caller, ended or
+	// not. Without it, the caller's Claim when the caller holds the Task, else none.
+	Claim *EvidenceClaim `form:"claim,omitempty" json:"claim,omitempty"`
+
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -2776,6 +2906,20 @@ type ObserveParams struct {
 
 // PassOwnershipParams defines parameters for PassOwnership.
 type PassOwnershipParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// SetTaskPullRequestParams defines parameters for SetTaskPullRequest.
+type SetTaskPullRequestParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// MergeTaskPullRequestParams defines parameters for MergeTaskPullRequest.
+type MergeTaskPullRequestParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -2916,6 +3060,9 @@ type RequestEmailSignInJSONRequestBody = EmailSignInBody
 // CreateSkillJSONRequestBody defines body for CreateSkill for application/json ContentType.
 type CreateSkillJSONRequestBody = CreateSkillBody
 
+// UpdateSkillJSONRequestBody defines body for UpdateSkill for application/json ContentType.
+type UpdateSkillJSONRequestBody = UpdateSkillBody
+
 // FileTaskJSONRequestBody defines body for FileTask for application/json ContentType.
 type FileTaskJSONRequestBody = FileTaskBody
 
@@ -2948,6 +3095,9 @@ type ObserveJSONRequestBody = ObserveBody
 
 // PassOwnershipJSONRequestBody defines body for PassOwnership for application/json ContentType.
 type PassOwnershipJSONRequestBody = PassOwnershipBody
+
+// SetTaskPullRequestJSONRequestBody defines body for SetTaskPullRequest for application/json ContentType.
+type SetTaskPullRequestJSONRequestBody = SetTaskPullRequestBody
 
 // RankTaskJSONRequestBody defines body for RankTask for application/json ContentType.
 type RankTaskJSONRequestBody = RankTaskBody
@@ -3313,7 +3463,7 @@ type ClientInterface interface {
 	//
 	// Changes the fields given and keeps the others. An agent with no settings yet starts from
 	// the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
-	// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+	// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false, `shifts` 1. The Runner starts
 	// Shifts only for agents that have settings and are not paused. Records
 	// `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
 	// `invalid` (a human Member, or a value out of bounds).
@@ -3327,7 +3477,7 @@ type ClientInterface interface {
 	//
 	// Changes the fields given and keeps the others. An agent with no settings yet starts from
 	// the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
-	// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+	// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false, `shifts` 1. The Runner starts
 	// Shifts only for agents that have settings and are not paused. Records
 	// `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
 	// `invalid` (a human Member, or a value out of bounds).
@@ -3789,7 +3939,8 @@ type ClientInterface interface {
 	// CreateSkillWithBody Create a generic or company Skill (admin)
 	//
 	// Publishes version 1 with the given body. A company Skill names the generic Skill it builds
-	// on. Errors: `forbidden`, `conflict` (name taken).
+	// on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
+	// `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3799,7 +3950,8 @@ type ClientInterface interface {
 	// CreateSkill Create a generic or company Skill (admin)
 	//
 	// Publishes version 1 with the given body. A company Skill names the generic Skill it builds
-	// on. Errors: `forbidden`, `conflict` (name taken).
+	// on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
+	// `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3810,6 +3962,32 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/skills/{skill} (the `GetSkill` operationId).
 	GetSkill(ctx context.Context, skill SkillRef, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateSkillWithBody Set the Project a company Skill belongs to (admin)
+	//
+	// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
+	// Project cannot carry another Project's company Skill. Setting the Project it already has
+	// changes nothing. Records `skill.changed` with `project_id`, null when it became the
+	// Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
+	// `invalid` (a generic Skill, or a Step of another Project carries it).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1/skills/{skill} (the `UpdateSkill` operationId).
+	UpdateSkillWithBody(ctx context.Context, skill SkillRef, params *UpdateSkillParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateSkill Set the Project a company Skill belongs to (admin)
+	//
+	// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
+	// Project cannot carry another Project's company Skill. Setting the Project it already has
+	// changes nothing. Records `skill.changed` with `project_id`, null when it became the
+	// Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
+	// `invalid` (a generic Skill, or a Step of another Project carries it).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1/skills/{skill} (the `UpdateSkill` operationId).
+	UpdateSkill(ctx context.Context, skill SkillRef, params *UpdateSkillParams, body UpdateSkillJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListSkillVersions List a Skill's published versions
 	//
@@ -4200,8 +4378,15 @@ type ClientInterface interface {
 	// The request body is the file itself, sent with its own `Content-Type` and a
 	// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
 	// Claim while it is held, else its ownership or membership of its Project. Evidence about a
-	// Parent as a whole is attached to the Parent. Records `task.evidence_attached`. Errors:
-	// `not_holder`, `forbidden`, `too_large`.
+	// Parent as a whole is attached to the Parent. `kind=log` is a Shift's terminal log, which
+	// the Runner attaches when the Shift ends. `claim` names the Claim the Evidence belongs to:
+	// a Claim on this Task whose holder is the caller, ended or not; the Runner names the Claim a
+	// Shift's log belongs to. A `log` naming the caller's own ended Claim is that Claim's, not
+	// the current holder's work, so it is taken whoever holds the Task now; anything else needs
+	// the Task's Claim while it is held. Without `claim` the Evidence belongs to the caller's
+	// Claim when the caller holds the Task, else to none. Records `task.evidence_attached` with `kind` and
+	// `claim_id`. Errors: `not_holder`, `forbidden` (also: the Claim named is not the caller's
+	// on this Task), `too_large`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -4350,6 +4535,102 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/tasks/{task}/owner (the `PassOwnership` operationId).
 	PassOwnership(ctx context.Context, task TaskRef, params *PassOwnershipParams, body PassOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetTaskPullRequestWithBody Record the pull request a Task's branch lands through
+	//
+	// The Runner is its normal writer: it records a pull request it finds open for the Task's
+	// branch on GitHub, and again one it finds merged. Any Member of the Task's Project may
+	// write it, and its Owner, whoever holds the Task, open or ended: the next holder may
+	// already have the Task when the pull request is read. `url` is kept as given once valid:
+	// the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
+	// with no query, fragment or trailing slash, on `github.com` or on the host the server's
+	// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+	// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+	// checked on GitHub through the Runner beside this server, when one is attached: the pull
+	// request must be merged there, its head branch must start with the Task's key and a dash,
+	// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+	// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+	// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+	// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+	// Workspace whose pull request has that address. A bad address is refused before GitHub is
+	// asked. A
+	// human's write, a write of `open`, a write of what the Task already carries, and any write
+	// with no Runner attached are not checked.
+	// Writing the values the Task already carries changes nothing and records nothing. Records
+	// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
+	// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
+	// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
+	// own Workspaces or else its Project's default; the pull request's branch is not the
+	// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+	// a pull request already merged; GitHub has the pull request open, not merged; it is not
+	// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+	// not be asked).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/tasks/{task}/pull-request (the `SetTaskPullRequest` operationId).
+	SetTaskPullRequestWithBody(ctx context.Context, task TaskRef, params *SetTaskPullRequestParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetTaskPullRequest Record the pull request a Task's branch lands through
+	//
+	// The Runner is its normal writer: it records a pull request it finds open for the Task's
+	// branch on GitHub, and again one it finds merged. Any Member of the Task's Project may
+	// write it, and its Owner, whoever holds the Task, open or ended: the next holder may
+	// already have the Task when the pull request is read. `url` is kept as given once valid:
+	// the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
+	// with no query, fragment or trailing slash, on `github.com` or on the host the server's
+	// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+	// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+	// checked on GitHub through the Runner beside this server, when one is attached: the pull
+	// request must be merged there, its head branch must start with the Task's key and a dash,
+	// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+	// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+	// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+	// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+	// Workspace whose pull request has that address. A bad address is refused before GitHub is
+	// asked. A
+	// human's write, a write of `open`, a write of what the Task already carries, and any write
+	// with no Runner attached are not checked.
+	// Writing the values the Task already carries changes nothing and records nothing. Records
+	// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
+	// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
+	// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
+	// own Workspaces or else its Project's default; the pull request's branch is not the
+	// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+	// a pull request already merged; GitHub has the pull request open, not merged; it is not
+	// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+	// not be asked).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/tasks/{task}/pull-request (the `SetTaskPullRequest` operationId).
+	SetTaskPullRequest(ctx context.Context, task TaskRef, params *SetTaskPullRequestParams, body SetTaskPullRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// MergeTaskPullRequest Merge a Task's open pull request
+	//
+	// The Runner beside this server merges the Task's open pull request on GitHub, as the
+	// identity its `gh` signs in as, once it has checked there that the pull request numbered
+	// as the record says, in the Task's Workspace whose pull request has the record's address,
+	// has a head branch starting with the Task's key (the Runner names a branch from the Task's
+	// title when it makes it, so a renamed Task's branch still starts with its key), is not from
+	// a fork (a fork's pull request is never the Task's, whatever its branch is called), and has
+	// as its base that branch's own base: the Parent's branch for a Subtask, else the
+	// Workspace's default branch. It merges the commit it checked: GitHub refuses when the head
+	// moved meanwhile. One merge of a Task runs at a time; a second request waits and then
+	// finds the pull request merged. The server then records it merged as the caller, with the
+	// Note "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who
+	// is the Task's Owner or an admin; an agent is refused, its Owner too. A Dropped Task is not
+	// merged: its Owner closes its pull request on GitHub. Errors: `forbidden`, `no_runner` (no
+	// Runner is attached to this server), `not_found` (the Task carries no open pull request,
+	// or GitHub has none so numbered open in the Workspace its address names), `conflict` (the
+	// Task is Dropped; the pull request's head or base is not the Task's; GitHub refused the
+	// merge, the message GitHub's own words; the Runner did not answer in 90 s; or the request
+	// stopped waiting for another merge of the Task).
+	//
+	// Corresponds with POST /v1/tasks/{task}/pull-request/merge (the `MergeTaskPullRequest` operationId).
+	MergeTaskPullRequest(ctx context.Context, task TaskRef, params *MergeTaskPullRequestParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RankTaskWithBody Move a Task to a position in its Project's Rank
 	//
@@ -5136,7 +5417,7 @@ func (c *Client) ClearAgentSettings(ctx context.Context, member MemberRef, param
 //
 // Changes the fields given and keeps the others. An agent with no settings yet starts from
 // the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
-// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false, `shifts` 1. The Runner starts
 // Shifts only for agents that have settings and are not paused. Records
 // `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
 // `invalid` (a human Member, or a value out of bounds).
@@ -5160,7 +5441,7 @@ func (c *Client) SetAgentSettingsWithBody(ctx context.Context, member MemberRef,
 //
 // Changes the fields given and keeps the others. An agent with no settings yet starts from
 // the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
-// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false, `shifts` 1. The Runner starts
 // Shifts only for agents that have settings and are not paused. Records
 // `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
 // `invalid` (a human Member, or a value out of bounds).
@@ -6012,7 +6293,8 @@ func (c *Client) ListSkills(ctx context.Context, params *ListSkillsParams, reqEd
 // CreateSkillWithBody Create a generic or company Skill (admin)
 //
 // Publishes version 1 with the given body. A company Skill names the generic Skill it builds
-// on. Errors: `forbidden`, `conflict` (name taken).
+// on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
+// `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 //
 // Takes any type of body and a specified content type.
 //
@@ -6032,7 +6314,8 @@ func (c *Client) CreateSkillWithBody(ctx context.Context, params *CreateSkillPar
 // CreateSkill Create a generic or company Skill (admin)
 //
 // Publishes version 1 with the given body. A company Skill names the generic Skill it builds
-// on. Errors: `forbidden`, `conflict` (name taken).
+// on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
+// `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -6054,6 +6337,52 @@ func (c *Client) CreateSkill(ctx context.Context, params *CreateSkillParams, bod
 // Corresponds with GET /v1/skills/{skill} (the `GetSkill` operationId).
 func (c *Client) GetSkill(ctx context.Context, skill SkillRef, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetSkillRequest(c.Server, skill)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateSkillWithBody Set the Project a company Skill belongs to (admin)
+//
+// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
+// Project cannot carry another Project's company Skill. Setting the Project it already has
+// changes nothing. Records `skill.changed` with `project_id`, null when it became the
+// Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
+// `invalid` (a generic Skill, or a Step of another Project carries it).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1/skills/{skill} (the `UpdateSkill` operationId).
+func (c *Client) UpdateSkillWithBody(ctx context.Context, skill SkillRef, params *UpdateSkillParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateSkillRequestWithBody(c.Server, skill, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateSkill Set the Project a company Skill belongs to (admin)
+//
+// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
+// Project cannot carry another Project's company Skill. Setting the Project it already has
+// changes nothing. Records `skill.changed` with `project_id`, null when it became the
+// Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
+// `invalid` (a generic Skill, or a Step of another Project carries it).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1/skills/{skill} (the `UpdateSkill` operationId).
+func (c *Client) UpdateSkill(ctx context.Context, skill SkillRef, params *UpdateSkillParams, body UpdateSkillJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateSkillRequest(c.Server, skill, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6633,8 +6962,15 @@ func (c *Client) DropTask(ctx context.Context, task TaskRef, params *DropTaskPar
 // The request body is the file itself, sent with its own `Content-Type` and a
 // `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
 // Claim while it is held, else its ownership or membership of its Project. Evidence about a
-// Parent as a whole is attached to the Parent. Records `task.evidence_attached`. Errors:
-// `not_holder`, `forbidden`, `too_large`.
+// Parent as a whole is attached to the Parent. `kind=log` is a Shift's terminal log, which
+// the Runner attaches when the Shift ends. `claim` names the Claim the Evidence belongs to:
+// a Claim on this Task whose holder is the caller, ended or not; the Runner names the Claim a
+// Shift's log belongs to. A `log` naming the caller's own ended Claim is that Claim's, not
+// the current holder's work, so it is taken whoever holds the Task now; anything else needs
+// the Task's Claim while it is held. Without `claim` the Evidence belongs to the caller's
+// Claim when the caller holds the Task, else to none. Records `task.evidence_attached` with `kind` and
+// `claim_id`. Errors: `not_holder`, `forbidden` (also: the Claim named is not the caller's
+// on this Task), `too_large`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -6904,6 +7240,132 @@ func (c *Client) PassOwnershipWithBody(ctx context.Context, task TaskRef, params
 // Corresponds with POST /v1/tasks/{task}/owner (the `PassOwnership` operationId).
 func (c *Client) PassOwnership(ctx context.Context, task TaskRef, params *PassOwnershipParams, body PassOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPassOwnershipRequest(c.Server, task, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetTaskPullRequestWithBody Record the pull request a Task's branch lands through
+//
+// The Runner is its normal writer: it records a pull request it finds open for the Task's
+// branch on GitHub, and again one it finds merged. Any Member of the Task's Project may
+// write it, and its Owner, whoever holds the Task, open or ended: the next holder may
+// already have the Task when the pull request is read. `url` is kept as given once valid:
+// the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
+// with no query, fragment or trailing slash, on `github.com` or on the host the server's
+// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+// checked on GitHub through the Runner beside this server, when one is attached: the pull
+// request must be merged there, its head branch must start with the Task's key and a dash,
+// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+// Workspace whose pull request has that address. A bad address is refused before GitHub is
+// asked. A
+// human's write, a write of `open`, a write of what the Task already carries, and any write
+// with no Runner attached are not checked.
+// Writing the values the Task already carries changes nothing and records nothing. Records
+// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
+// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
+// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
+// own Workspaces or else its Project's default; the pull request's branch is not the
+// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+// a pull request already merged; GitHub has the pull request open, not merged; it is not
+// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+// not be asked).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/tasks/{task}/pull-request (the `SetTaskPullRequest` operationId).
+func (c *Client) SetTaskPullRequestWithBody(ctx context.Context, task TaskRef, params *SetTaskPullRequestParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTaskPullRequestRequestWithBody(c.Server, task, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetTaskPullRequest Record the pull request a Task's branch lands through
+//
+// The Runner is its normal writer: it records a pull request it finds open for the Task's
+// branch on GitHub, and again one it finds merged. Any Member of the Task's Project may
+// write it, and its Owner, whoever holds the Task, open or ended: the next holder may
+// already have the Task when the pull request is read. `url` is kept as given once valid:
+// the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
+// with no query, fragment or trailing slash, on `github.com` or on the host the server's
+// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+// checked on GitHub through the Runner beside this server, when one is attached: the pull
+// request must be merged there, its head branch must start with the Task's key and a dash,
+// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+// Workspace whose pull request has that address. A bad address is refused before GitHub is
+// asked. A
+// human's write, a write of `open`, a write of what the Task already carries, and any write
+// with no Runner attached are not checked.
+// Writing the values the Task already carries changes nothing and records nothing. Records
+// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
+// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
+// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
+// own Workspaces or else its Project's default; the pull request's branch is not the
+// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+// a pull request already merged; GitHub has the pull request open, not merged; it is not
+// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+// not be asked).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/tasks/{task}/pull-request (the `SetTaskPullRequest` operationId).
+func (c *Client) SetTaskPullRequest(ctx context.Context, task TaskRef, params *SetTaskPullRequestParams, body SetTaskPullRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTaskPullRequestRequest(c.Server, task, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// MergeTaskPullRequest Merge a Task's open pull request
+//
+// The Runner beside this server merges the Task's open pull request on GitHub, as the
+// identity its `gh` signs in as, once it has checked there that the pull request numbered
+// as the record says, in the Task's Workspace whose pull request has the record's address,
+// has a head branch starting with the Task's key (the Runner names a branch from the Task's
+// title when it makes it, so a renamed Task's branch still starts with its key), is not from
+// a fork (a fork's pull request is never the Task's, whatever its branch is called), and has
+// as its base that branch's own base: the Parent's branch for a Subtask, else the
+// Workspace's default branch. It merges the commit it checked: GitHub refuses when the head
+// moved meanwhile. One merge of a Task runs at a time; a second request waits and then
+// finds the pull request merged. The server then records it merged as the caller, with the
+// Note "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who
+// is the Task's Owner or an admin; an agent is refused, its Owner too. A Dropped Task is not
+// merged: its Owner closes its pull request on GitHub. Errors: `forbidden`, `no_runner` (no
+// Runner is attached to this server), `not_found` (the Task carries no open pull request,
+// or GitHub has none so numbered open in the Workspace its address names), `conflict` (the
+// Task is Dropped; the pull request's head or base is not the Task's; GitHub refused the
+// merge, the message GitHub's own words; the Runner did not answer in 90 s; or the request
+// stopped waiting for another merge of the Task).
+//
+// Corresponds with POST /v1/tasks/{task}/pull-request/merge (the `MergeTaskPullRequest` operationId).
+func (c *Client) MergeTaskPullRequest(ctx context.Context, task TaskRef, params *MergeTaskPullRequestParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMergeTaskPullRequestRequest(c.Server, task, params)
 	if err != nil {
 		return nil, err
 	}
@@ -10202,6 +10664,68 @@ func NewGetSkillRequest(server string, skill SkillRef) (*http.Request, error) {
 	return req, nil
 }
 
+// NewUpdateSkillRequest calls the generic UpdateSkill builder with application/json body
+func NewUpdateSkillRequest(server string, skill SkillRef, params *UpdateSkillParams, body UpdateSkillJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateSkillRequestWithBody(server, skill, params, "application/json", bodyReader)
+}
+
+// NewUpdateSkillRequestWithBody constructs an http.Request for the UpdateSkill method, with any body, and a specified content type
+func NewUpdateSkillRequestWithBody(server string, skill SkillRef, params *UpdateSkillParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "skill", skill, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/skills/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListSkillVersionsRequest constructs an http.Request for the ListSkillVersions method
 func NewListSkillVersionsRequest(server string, skill SkillRef) (*http.Request, error) {
 	var err error
@@ -10999,6 +11523,30 @@ func NewAttachTaskEvidenceRequestWithBody(server string, task TaskRef, params *A
 			}
 		}
 
+		if params.Kind != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kind", *params.Kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Claim != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "claim", *params.Claim, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "id"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -11431,6 +11979,117 @@ func NewPassOwnershipRequestWithBody(server string, task TaskRef, params *PassOw
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewSetTaskPullRequestRequest calls the generic SetTaskPullRequest builder with application/json body
+func NewSetTaskPullRequestRequest(server string, task TaskRef, params *SetTaskPullRequestParams, body SetTaskPullRequestJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetTaskPullRequestRequestWithBody(server, task, params, "application/json", bodyReader)
+}
+
+// NewSetTaskPullRequestRequestWithBody constructs an http.Request for the SetTaskPullRequest method, with any body, and a specified content type
+func NewSetTaskPullRequestRequestWithBody(server string, task TaskRef, params *SetTaskPullRequestParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tasks/%s/pull-request", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewMergeTaskPullRequestRequest constructs an http.Request for the MergeTaskPullRequest method
+func NewMergeTaskPullRequestRequest(server string, task TaskRef, params *MergeTaskPullRequestParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tasks/%s/pull-request/merge", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	if params != nil {
 
@@ -12575,7 +13234,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Changes the fields given and keeps the others. An agent with no settings yet starts from
 	// the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
-	// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+	// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false, `shifts` 1. The Runner starts
 	// Shifts only for agents that have settings and are not paused. Records
 	// `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
 	// `invalid` (a human Member, or a value out of bounds).
@@ -12589,7 +13248,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// Changes the fields given and keeps the others. An agent with no settings yet starts from
 	// the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
-	// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+	// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false, `shifts` 1. The Runner starts
 	// Shifts only for agents that have settings and are not paused. Records
 	// `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
 	// `invalid` (a human Member, or a value out of bounds).
@@ -13095,7 +13754,8 @@ type ClientWithResponsesInterface interface {
 	// CreateSkillWithBodyWithResponse Create a generic or company Skill (admin)
 	//
 	// Publishes version 1 with the given body. A company Skill names the generic Skill it builds
-	// on. Errors: `forbidden`, `conflict` (name taken).
+	// on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
+	// `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -13105,7 +13765,8 @@ type ClientWithResponsesInterface interface {
 	// CreateSkillWithResponse Create a generic or company Skill (admin)
 	//
 	// Publishes version 1 with the given body. A company Skill names the generic Skill it builds
-	// on. Errors: `forbidden`, `conflict` (name taken).
+	// on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
+	// `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -13118,6 +13779,32 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/skills/{skill} (the `GetSkill` operationId).
 	GetSkillWithResponse(ctx context.Context, skill SkillRef, reqEditors ...RequestEditorFn) (*GetSkillResponse, error)
+
+	// UpdateSkillWithBodyWithResponse Set the Project a company Skill belongs to (admin)
+	//
+	// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
+	// Project cannot carry another Project's company Skill. Setting the Project it already has
+	// changes nothing. Records `skill.changed` with `project_id`, null when it became the
+	// Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
+	// `invalid` (a generic Skill, or a Step of another Project carries it).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/skills/{skill} (the `UpdateSkill` operationId).
+	UpdateSkillWithBodyWithResponse(ctx context.Context, skill SkillRef, params *UpdateSkillParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSkillResponse, error)
+
+	// UpdateSkillWithResponse Set the Project a company Skill belongs to (admin)
+	//
+	// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
+	// Project cannot carry another Project's company Skill. Setting the Project it already has
+	// changes nothing. Records `skill.changed` with `project_id`, null when it became the
+	// Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
+	// `invalid` (a generic Skill, or a Step of another Project carries it).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/skills/{skill} (the `UpdateSkill` operationId).
+	UpdateSkillWithResponse(ctx context.Context, skill SkillRef, params *UpdateSkillParams, body UpdateSkillJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSkillResponse, error)
 
 	// ListSkillVersionsWithResponse List a Skill's published versions
 	//
@@ -13520,8 +14207,15 @@ type ClientWithResponsesInterface interface {
 	// The request body is the file itself, sent with its own `Content-Type` and a
 	// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
 	// Claim while it is held, else its ownership or membership of its Project. Evidence about a
-	// Parent as a whole is attached to the Parent. Records `task.evidence_attached`. Errors:
-	// `not_holder`, `forbidden`, `too_large`.
+	// Parent as a whole is attached to the Parent. `kind=log` is a Shift's terminal log, which
+	// the Runner attaches when the Shift ends. `claim` names the Claim the Evidence belongs to:
+	// a Claim on this Task whose holder is the caller, ended or not; the Runner names the Claim a
+	// Shift's log belongs to. A `log` naming the caller's own ended Claim is that Claim's, not
+	// the current holder's work, so it is taken whoever holds the Task now; anything else needs
+	// the Task's Claim while it is held. Without `claim` the Evidence belongs to the caller's
+	// Claim when the caller holds the Task, else to none. Records `task.evidence_attached` with `kind` and
+	// `claim_id`. Errors: `not_holder`, `forbidden` (also: the Claim named is not the caller's
+	// on this Task), `too_large`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -13674,6 +14368,104 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/tasks/{task}/owner (the `PassOwnership` operationId).
 	PassOwnershipWithResponse(ctx context.Context, task TaskRef, params *PassOwnershipParams, body PassOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*PassOwnershipResponse, error)
+
+	// SetTaskPullRequestWithBodyWithResponse Record the pull request a Task's branch lands through
+	//
+	// The Runner is its normal writer: it records a pull request it finds open for the Task's
+	// branch on GitHub, and again one it finds merged. Any Member of the Task's Project may
+	// write it, and its Owner, whoever holds the Task, open or ended: the next holder may
+	// already have the Task when the pull request is read. `url` is kept as given once valid:
+	// the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
+	// with no query, fragment or trailing slash, on `github.com` or on the host the server's
+	// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+	// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+	// checked on GitHub through the Runner beside this server, when one is attached: the pull
+	// request must be merged there, its head branch must start with the Task's key and a dash,
+	// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+	// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+	// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+	// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+	// Workspace whose pull request has that address. A bad address is refused before GitHub is
+	// asked. A
+	// human's write, a write of `open`, a write of what the Task already carries, and any write
+	// with no Runner attached are not checked.
+	// Writing the values the Task already carries changes nothing and records nothing. Records
+	// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
+	// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
+	// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
+	// own Workspaces or else its Project's default; the pull request's branch is not the
+	// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+	// a pull request already merged; GitHub has the pull request open, not merged; it is not
+	// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+	// not be asked).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tasks/{task}/pull-request (the `SetTaskPullRequest` operationId).
+	SetTaskPullRequestWithBodyWithResponse(ctx context.Context, task TaskRef, params *SetTaskPullRequestParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTaskPullRequestResponse, error)
+
+	// SetTaskPullRequestWithResponse Record the pull request a Task's branch lands through
+	//
+	// The Runner is its normal writer: it records a pull request it finds open for the Task's
+	// branch on GitHub, and again one it finds merged. Any Member of the Task's Project may
+	// write it, and its Owner, whoever holds the Task, open or ended: the next holder may
+	// already have the Task when the pull request is read. `url` is kept as given once valid:
+	// the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
+	// with no query, fragment or trailing slash, on `github.com` or on the host the server's
+	// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+	// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+	// checked on GitHub through the Runner beside this server, when one is attached: the pull
+	// request must be merged there, its head branch must start with the Task's key and a dash,
+	// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+	// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+	// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+	// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+	// Workspace whose pull request has that address. A bad address is refused before GitHub is
+	// asked. A
+	// human's write, a write of `open`, a write of what the Task already carries, and any write
+	// with no Runner attached are not checked.
+	// Writing the values the Task already carries changes nothing and records nothing. Records
+	// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
+	// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
+	// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
+	// own Workspaces or else its Project's default; the pull request's branch is not the
+	// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+	// a pull request already merged; GitHub has the pull request open, not merged; it is not
+	// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+	// not be asked).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tasks/{task}/pull-request (the `SetTaskPullRequest` operationId).
+	SetTaskPullRequestWithResponse(ctx context.Context, task TaskRef, params *SetTaskPullRequestParams, body SetTaskPullRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTaskPullRequestResponse, error)
+
+	// MergeTaskPullRequestWithResponse Merge a Task's open pull request
+	//
+	// The Runner beside this server merges the Task's open pull request on GitHub, as the
+	// identity its `gh` signs in as, once it has checked there that the pull request numbered
+	// as the record says, in the Task's Workspace whose pull request has the record's address,
+	// has a head branch starting with the Task's key (the Runner names a branch from the Task's
+	// title when it makes it, so a renamed Task's branch still starts with its key), is not from
+	// a fork (a fork's pull request is never the Task's, whatever its branch is called), and has
+	// as its base that branch's own base: the Parent's branch for a Subtask, else the
+	// Workspace's default branch. It merges the commit it checked: GitHub refuses when the head
+	// moved meanwhile. One merge of a Task runs at a time; a second request waits and then
+	// finds the pull request merged. The server then records it merged as the caller, with the
+	// Note "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who
+	// is the Task's Owner or an admin; an agent is refused, its Owner too. A Dropped Task is not
+	// merged: its Owner closes its pull request on GitHub. Errors: `forbidden`, `no_runner` (no
+	// Runner is attached to this server), `not_found` (the Task carries no open pull request,
+	// or GitHub has none so numbered open in the Workspace its address names), `conflict` (the
+	// Task is Dropped; the pull request's head or base is not the Task's; GitHub refused the
+	// merge, the message GitHub's own words; the Runner did not answer in 90 s; or the request
+	// stopped waiting for another merge of the Task).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/pull-request/merge (the `MergeTaskPullRequest` operationId).
+	MergeTaskPullRequestWithResponse(ctx context.Context, task TaskRef, params *MergeTaskPullRequestParams, reqEditors ...RequestEditorFn) (*MergeTaskPullRequestResponse, error)
 
 	// RankTaskWithBodyWithResponse Move a Task to a position in its Project's Rank
 	//
@@ -16493,6 +17285,54 @@ func (r GetSkillResponse) ContentType() string {
 	return ""
 }
 
+type UpdateSkillResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SkillDetail
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateSkillResponse) GetJSON200() *SkillDetail {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r UpdateSkillResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateSkillResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateSkillResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateSkillResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateSkillResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListSkillVersionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17426,6 +18266,102 @@ func (r PassOwnershipResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PassOwnershipResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetTaskPullRequestResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Task
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetTaskPullRequestResponse) GetJSON200() *Task {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r SetTaskPullRequestResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SetTaskPullRequestResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetTaskPullRequestResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetTaskPullRequestResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetTaskPullRequestResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type MergeTaskPullRequestResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Task
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r MergeTaskPullRequestResponse) GetJSON200() *Task {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r MergeTaskPullRequestResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r MergeTaskPullRequestResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r MergeTaskPullRequestResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r MergeTaskPullRequestResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r MergeTaskPullRequestResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -18543,7 +19479,7 @@ func (c *ClientWithResponses) ClearAgentSettingsWithResponse(ctx context.Context
 //
 // Changes the fields given and keeps the others. An agent with no settings yet starts from
 // the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
-// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false, `shifts` 1. The Runner starts
 // Shifts only for agents that have settings and are not paused. Records
 // `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
 // `invalid` (a human Member, or a value out of bounds).
@@ -18563,7 +19499,7 @@ func (c *ClientWithResponses) SetAgentSettingsWithBodyWithResponse(ctx context.C
 //
 // Changes the fields given and keeps the others. An agent with no settings yet starts from
 // the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
-// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false, `shifts` 1. The Runner starts
 // Shifts only for agents that have settings and are not paused. Records
 // `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
 // `invalid` (a human Member, or a value out of bounds).
@@ -19303,7 +20239,8 @@ func (c *ClientWithResponses) ListSkillsWithResponse(ctx context.Context, params
 // CreateSkillWithBodyWithResponse Create a generic or company Skill (admin)
 //
 // Publishes version 1 with the given body. A company Skill names the generic Skill it builds
-// on. Errors: `forbidden`, `conflict` (name taken).
+// on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
+// `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19319,7 +20256,8 @@ func (c *ClientWithResponses) CreateSkillWithBodyWithResponse(ctx context.Contex
 // CreateSkillWithResponse Create a generic or company Skill (admin)
 //
 // Publishes version 1 with the given body. A company Skill names the generic Skill it builds
-// on. Errors: `forbidden`, `conflict` (name taken).
+// on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
+// `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19343,6 +20281,44 @@ func (c *ClientWithResponses) GetSkillWithResponse(ctx context.Context, skill Sk
 		return nil, err
 	}
 	return ParseGetSkillResponse(rsp)
+}
+
+// UpdateSkillWithBodyWithResponse Set the Project a company Skill belongs to (admin)
+//
+// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
+// Project cannot carry another Project's company Skill. Setting the Project it already has
+// changes nothing. Records `skill.changed` with `project_id`, null when it became the
+// Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
+// `invalid` (a generic Skill, or a Step of another Project carries it).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/skills/{skill} (the `UpdateSkill` operationId).
+func (c *ClientWithResponses) UpdateSkillWithBodyWithResponse(ctx context.Context, skill SkillRef, params *UpdateSkillParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSkillResponse, error) {
+	rsp, err := c.UpdateSkillWithBody(ctx, skill, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateSkillResponse(rsp)
+}
+
+// UpdateSkillWithResponse Set the Project a company Skill belongs to (admin)
+//
+// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
+// Project cannot carry another Project's company Skill. Setting the Project it already has
+// changes nothing. Records `skill.changed` with `project_id`, null when it became the
+// Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
+// `invalid` (a generic Skill, or a Step of another Project carries it).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/skills/{skill} (the `UpdateSkill` operationId).
+func (c *ClientWithResponses) UpdateSkillWithResponse(ctx context.Context, skill SkillRef, params *UpdateSkillParams, body UpdateSkillJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSkillResponse, error) {
+	rsp, err := c.UpdateSkill(ctx, skill, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateSkillResponse(rsp)
 }
 
 // ListSkillVersionsWithResponse List a Skill's published versions
@@ -19854,8 +20830,15 @@ func (c *ClientWithResponses) DropTaskWithResponse(ctx context.Context, task Tas
 // The request body is the file itself, sent with its own `Content-Type` and a
 // `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
 // Claim while it is held, else its ownership or membership of its Project. Evidence about a
-// Parent as a whole is attached to the Parent. Records `task.evidence_attached`. Errors:
-// `not_holder`, `forbidden`, `too_large`.
+// Parent as a whole is attached to the Parent. `kind=log` is a Shift's terminal log, which
+// the Runner attaches when the Shift ends. `claim` names the Claim the Evidence belongs to:
+// a Claim on this Task whose holder is the caller, ended or not; the Runner names the Claim a
+// Shift's log belongs to. A `log` naming the caller's own ended Claim is that Claim's, not
+// the current holder's work, so it is taken whoever holds the Task now; anything else needs
+// the Task's Claim while it is held. Without `claim` the Evidence belongs to the caller's
+// Claim when the caller holds the Task, else to none. Records `task.evidence_attached` with `kind` and
+// `claim_id`. Errors: `not_holder`, `forbidden` (also: the Claim named is not the caller's
+// on this Task), `too_large`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20085,6 +21068,122 @@ func (c *ClientWithResponses) PassOwnershipWithResponse(ctx context.Context, tas
 		return nil, err
 	}
 	return ParsePassOwnershipResponse(rsp)
+}
+
+// SetTaskPullRequestWithBodyWithResponse Record the pull request a Task's branch lands through
+//
+// The Runner is its normal writer: it records a pull request it finds open for the Task's
+// branch on GitHub, and again one it finds merged. Any Member of the Task's Project may
+// write it, and its Owner, whoever holds the Task, open or ended: the next holder may
+// already have the Task when the pull request is read. `url` is kept as given once valid:
+// the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
+// with no query, fragment or trailing slash, on `github.com` or on the host the server's
+// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+// checked on GitHub through the Runner beside this server, when one is attached: the pull
+// request must be merged there, its head branch must start with the Task's key and a dash,
+// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+// Workspace whose pull request has that address. A bad address is refused before GitHub is
+// asked. A
+// human's write, a write of `open`, a write of what the Task already carries, and any write
+// with no Runner attached are not checked.
+// Writing the values the Task already carries changes nothing and records nothing. Records
+// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
+// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
+// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
+// own Workspaces or else its Project's default; the pull request's branch is not the
+// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+// a pull request already merged; GitHub has the pull request open, not merged; it is not
+// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+// not be asked).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tasks/{task}/pull-request (the `SetTaskPullRequest` operationId).
+func (c *ClientWithResponses) SetTaskPullRequestWithBodyWithResponse(ctx context.Context, task TaskRef, params *SetTaskPullRequestParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTaskPullRequestResponse, error) {
+	rsp, err := c.SetTaskPullRequestWithBody(ctx, task, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTaskPullRequestResponse(rsp)
+}
+
+// SetTaskPullRequestWithResponse Record the pull request a Task's branch lands through
+//
+// The Runner is its normal writer: it records a pull request it finds open for the Task's
+// branch on GitHub, and again one it finds merged. Any Member of the Task's Project may
+// write it, and its Owner, whoever holds the Task, open or ended: the next holder may
+// already have the Task when the pull request is read. `url` is kept as given once valid:
+// the `https` address of pull request `number` itself, `https://<host>/<owner>/<repo>/pull/<number>`
+// with no query, fragment or trailing slash, on `github.com` or on the host the server's
+// `GH_HOST` names when it is set, with no port GitHub's own address does not carry. An owner
+// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
+// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
+// checked on GitHub through the Runner beside this server, when one is attached: the pull
+// request must be merged there, its head branch must start with the Task's key and a dash,
+// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+// Workspace whose pull request has that address. A bad address is refused before GitHub is
+// asked. A
+// human's write, a write of `open`, a write of what the Task already carries, and any write
+// with no Runner attached are not checked.
+// Writing the values the Task already carries changes nothing and records nothing. Records
+// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
+// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
+// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
+// own Workspaces or else its Project's default; the pull request's branch is not the
+// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
+// a pull request already merged; GitHub has the pull request open, not merged; it is not
+// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+// not be asked).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tasks/{task}/pull-request (the `SetTaskPullRequest` operationId).
+func (c *ClientWithResponses) SetTaskPullRequestWithResponse(ctx context.Context, task TaskRef, params *SetTaskPullRequestParams, body SetTaskPullRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTaskPullRequestResponse, error) {
+	rsp, err := c.SetTaskPullRequest(ctx, task, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTaskPullRequestResponse(rsp)
+}
+
+// MergeTaskPullRequestWithResponse Merge a Task's open pull request
+//
+// The Runner beside this server merges the Task's open pull request on GitHub, as the
+// identity its `gh` signs in as, once it has checked there that the pull request numbered
+// as the record says, in the Task's Workspace whose pull request has the record's address,
+// has a head branch starting with the Task's key (the Runner names a branch from the Task's
+// title when it makes it, so a renamed Task's branch still starts with its key), is not from
+// a fork (a fork's pull request is never the Task's, whatever its branch is called), and has
+// as its base that branch's own base: the Parent's branch for a Subtask, else the
+// Workspace's default branch. It merges the commit it checked: GitHub refuses when the head
+// moved meanwhile. One merge of a Task runs at a time; a second request waits and then
+// finds the pull request merged. The server then records it merged as the caller, with the
+// Note "<Workspace>: #<n> merged". Merging is a human's act: allowed to a human Member who
+// is the Task's Owner or an admin; an agent is refused, its Owner too. A Dropped Task is not
+// merged: its Owner closes its pull request on GitHub. Errors: `forbidden`, `no_runner` (no
+// Runner is attached to this server), `not_found` (the Task carries no open pull request,
+// or GitHub has none so numbered open in the Workspace its address names), `conflict` (the
+// Task is Dropped; the pull request's head or base is not the Task's; GitHub refused the
+// merge, the message GitHub's own words; the Runner did not answer in 90 s; or the request
+// stopped waiting for another merge of the Task).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/pull-request/merge (the `MergeTaskPullRequest` operationId).
+func (c *ClientWithResponses) MergeTaskPullRequestWithResponse(ctx context.Context, task TaskRef, params *MergeTaskPullRequestParams, reqEditors ...RequestEditorFn) (*MergeTaskPullRequestResponse, error) {
+	rsp, err := c.MergeTaskPullRequest(ctx, task, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMergeTaskPullRequestResponse(rsp)
 }
 
 // RankTaskWithBodyWithResponse Move a Task to a position in its Project's Rank
@@ -22310,6 +23409,39 @@ func ParseGetSkillResponse(rsp *http.Response) (*GetSkillResponse, error) {
 	return response, nil
 }
 
+// ParseUpdateSkillResponse parses an HTTP response from a UpdateSkillWithResponse call
+func ParseUpdateSkillResponse(rsp *http.Response) (*UpdateSkillResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateSkillResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SkillDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListSkillVersionsResponse parses an HTTP response from a ListSkillVersionsWithResponse call
 func ParseListSkillVersionsResponse(rsp *http.Response) (*ListSkillVersionsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -22937,6 +24069,72 @@ func ParsePassOwnershipResponse(rsp *http.Response) (*PassOwnershipResponse, err
 	}
 
 	response := &PassOwnershipResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Task
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetTaskPullRequestResponse parses an HTTP response from a SetTaskPullRequestWithResponse call
+func ParseSetTaskPullRequestResponse(rsp *http.Response) (*SetTaskPullRequestResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetTaskPullRequestResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Task
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseMergeTaskPullRequestResponse parses an HTTP response from a MergeTaskPullRequestWithResponse call
+func ParseMergeTaskPullRequestResponse(rsp *http.Response) (*MergeTaskPullRequestResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &MergeTaskPullRequestResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

@@ -315,6 +315,9 @@ VALUES ('sub', 'o', 'p', 't', 'WEB-2', 'acceptance', 'A', 'open', 'st', 'm', 0, 
 				`INSERT INTO views (id, org_id, member_id, entity, name, created_at, updated_at) VALUES ('v4', 'o', 'm', 'tasks', 'x', 0, 0)`,
 				`UPDATE projects SET color = 12 WHERE id = 'p'`,
 				`UPDATE projects SET color = -1 WHERE id = 'p'`,
+				`UPDATE tasks SET pull_request_state = 'closed' WHERE id = 't'`,
+				`UPDATE skills SET project_id = 'nope' WHERE id = 'sk'`,
+				`INSERT INTO evidence (id, org_id, task_id, kind, filename, content_type, size, sha256, blob_key, attached_by, created_at) VALUES ('e', 'o', 't', 'report', 'a.txt', 'text/plain', 1, 'x', 'k', 'm', 0)`,
 			} {
 				if err := exec(q); err == nil {
 					t.Errorf("accepted: %s", q)
@@ -570,6 +573,79 @@ func TestMigration0007KeysSubtasksByOrganisation(t *testing.T) {
 			}
 			if !strings.Contains(plan, "tasks_org_parent (org_id=? AND parent_id=? AND state=?)") {
 				t.Errorf("a Parent's open Subtasks are read by %q", plan)
+			}
+		})
+	}
+}
+
+// Migration 0008 gives Tasks a pull request, company Skills a Project and Evidence a kind; the
+// Shift logs the Runner attached before it are kinds of log, by the name it gave them.
+func TestMigration0008MarksTheShiftLogs(t *testing.T) {
+	before := fstest.MapFS{}
+	for _, name := range []string{"0001_init.sql", "0002_project_seen.sql", "0003_files.sql", "0004_sessions_by_member.sql",
+		"0005_project_color.sql", "0006_workflows.sqlite.sql", "0006_workflows.postgres.sql", "0007_tasks_by_parent.sql"} {
+		data, err := os.ReadFile("migrations/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before[name] = &fstest.MapFile{Data: data}
+	}
+	for _, e := range storetest.Engines() {
+		t.Run(string(e), func(t *testing.T) {
+			ctx := t.Context()
+			s := storetest.OpenUnmigrated(t, e)
+			if _, err := s.MigrateFS(ctx, before, now); err != nil {
+				t.Fatal(err)
+			}
+			err := s.WriteNoSeq(ctx, func(tx store.Tx) error {
+				for _, q := range []string{
+					`INSERT INTO organisations (id, name, created_at) VALUES ('o', 'Acme', 0)`,
+					`INSERT INTO members (id, org_id, name, kind, created_at, updated_at) VALUES ('m', 'o', 'ada', 'human', 0, 0)`,
+					`INSERT INTO projects (id, org_id, key_prefix, name, created_at) VALUES ('p', 'o', 'X', 'X', 0)`,
+					`INSERT INTO tasks (id, org_id, project_id, display_key, kind, title, state, owner_id, rank, waiting_since, created_at)
+VALUES ('t', 'o', 'p', 'X-1', 'work', 'T', 'open', 'm', 1, 0, 0)`,
+				} {
+					if _, err := tx.Exec(ctx, q); err != nil {
+						return fmt.Errorf("%s: %w", q, err)
+					}
+				}
+				for id, name := range map[string]string{"e1": "shift-X-1-a-000000.log", "e2": "report.log", "e3": "shift.png", "e4": "shift-X-2-b-120000.log"} {
+					if _, err := tx.Exec(ctx, `INSERT INTO evidence (id, org_id, task_id, filename, content_type, size, sha256, blob_key, attached_by, created_at)
+VALUES ($1, 'o', 't', $2, 'text/plain', 1, 'x', $1, 'm', 0)`, id, name); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.Migrate(ctx); err != nil {
+				t.Fatal(err)
+			}
+			rows, err := s.Query(ctx, `SELECT id, kind FROM evidence ORDER BY id`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer rows.Close()
+			var got []string
+			for rows.Next() {
+				var id, kind string
+				if err := rows.Scan(&id, &kind); err != nil {
+					t.Fatal(err)
+				}
+				got = append(got, id+":"+kind)
+			}
+			if want := "[e1:log e2:evidence e3:evidence e4:log]"; fmt.Sprint(got) != want {
+				t.Fatalf("kinds %v, want %s", got, want)
+			}
+			var prs int
+			if err := s.QueryRow(ctx, `SELECT COUNT(*) FROM tasks WHERE pull_request_number IS NULL AND pull_request_url IS NULL AND pull_request_state IS NULL`).Scan(&prs); err != nil || prs != 1 {
+				t.Fatalf("Tasks with no pull request: %d, %v", prs, err)
+			}
+			var noClaim int
+			if err := s.QueryRow(ctx, `SELECT COUNT(*) FROM evidence WHERE claim_id IS NULL`).Scan(&noClaim); err != nil || noClaim != 4 {
+				t.Fatalf("Evidence under no Claim: %d, %v", noClaim, err)
 			}
 		})
 	}

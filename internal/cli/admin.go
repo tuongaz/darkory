@@ -20,7 +20,8 @@ var adminCommands = []command{
 	{path: "member update", args: "<member> [--name n] [--email e] [--admin=true|false] [--avatar file-id | --no-avatar]", short: "change a Member (admin), or your own avatar", run: cmdMemberUpdate},
 	{path: "member deactivate", args: "<member>", short: "revoke a Member's tokens, close their Sessions, end their Claims, refuse them from now on (admin)", run: cmdMemberDeactivate},
 	{path: "member reactivate", args: "<member>", short: "let a deactivated Member sign in and be issued tokens again (admin)", run: cmdMemberReactivate},
-	{path: "skill create", args: "<name> --kind generic|company [--base skill] (--file path|- | --body text)", short: "create a Skill, publishing version 1 (admin)", run: cmdSkillCreate},
+	{path: "skill create", args: "<name> --kind generic|company [--base skill] [--project p] (--file path|- | --body text)", short: "create a Skill, publishing version 1 (admin)", run: cmdSkillCreate},
+	{path: "skill set", args: `<skill> --project p|""`, short: "set the Project a company Skill belongs to; \"\" makes it the Organisation's (admin)", run: cmdSkillSet},
 	{path: "skill list", args: "[--kind k]", short: "list Skills", run: cmdSkillList},
 	{path: "skill show", args: "<skill>", short: "show a Skill and its current version's text", run: cmdSkillShow},
 	{path: "skill versions", args: "<skill>", short: "list a Skill's published versions", run: cmdSkillVersions},
@@ -136,7 +137,12 @@ func cmdMemberShow(c *call) error {
 		d := res.JSON200
 		c.printMemberLine(w, d.Member)
 		fmt.Fprintf(w, "  Projects %s\n", names(d.Projects, func(p client.Project) string { return p.Key }))
-		fmt.Fprintf(w, "  Skills   %s\n", names(d.Skills, func(s client.Skill) string { return s.Name }))
+		fmt.Fprintf(w, "  Skills   %s\n", names(d.Skills, func(s client.Skill) string {
+			if s.ProjectID != nil {
+				return s.Name + " (" + c.project(*s.ProjectID) + ")"
+			}
+			return s.Name
+		}))
 		fmt.Fprintf(w, "  Reports  %s\n", names(d.Reports, func(m client.Member) string { return m.Name }))
 	})
 }
@@ -209,6 +215,7 @@ func cmdMemberReactivate(c *call) error {
 func cmdSkillCreate(c *call) error {
 	kind := c.fs.String("kind", "", "generic or company")
 	base := c.fs.String("base", "", "the generic Skill a company Skill builds on")
+	project := c.fs.String("project", "", "the Project a company Skill belongs to (default: the whole Organisation)")
 	file := c.fs.String("file", "", "the Skill's text; - reads standard input")
 	text := c.fs.String("body", "", "the Skill's text")
 	args, err := c.args(1, 1)
@@ -237,11 +244,32 @@ func cmdSkillCreate(c *call) error {
 		return err
 	}
 	res, err := conn.CreateSkillWithResponse(c.ctx, &client.CreateSkillParams{}, client.CreateSkillBody{
-		Name: args[0], Kind: client.SkillKind(*kind), BaseSkill: opt(*base), Body: body})
+		Name: args[0], Kind: client.SkillKind(*kind), BaseSkill: opt(*base), Project: opt(*project), Body: body})
 	if err := check(res, err, http.StatusCreated); err != nil {
 		return err
 	}
 	return c.show(res.Body, func(w io.Writer) { c.printSkillLine(w, res.JSON201.Skill) })
+}
+
+func cmdSkillSet(c *call) error {
+	var project optString
+	c.fs.Var(&project, "project", `the Project the company Skill belongs to; "" makes it the whole Organisation's`)
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	if project.v == nil {
+		return usagef(`nothing to change: give --project, or --project "" for the whole Organisation`)
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.UpdateSkillWithResponse(c.ctx, args[0], &client.UpdateSkillParams{}, client.UpdateSkillBody{Project: *project.v})
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) { c.printSkillLine(w, res.JSON200.Skill) })
 }
 
 func cmdSkillList(c *call) error {

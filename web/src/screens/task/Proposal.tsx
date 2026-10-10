@@ -11,6 +11,7 @@ import { useMemberName, useSkillName } from "./format";
 import { Avatar, TaskLink } from "./parts";
 import { useObservations, useSkillVersions } from "./queries";
 import { OutcomePill } from "./TaskRecord";
+import { Markdown } from "@/components/Markdown";
 
 const states: Record<SkillProposal["state"], { label: string; tone: "waiting" | "done" | "dropped" }> = {
   pending: { label: "Pending review", tone: "waiting" },
@@ -111,7 +112,7 @@ export function RetrospectiveObservations({ detail }: { detail: TaskDetail }) {
               {skill(o.skill_id) && <span>under {skill(o.skill_id)}</span>}
               <ClockTime at={o.created_at} />
             </header>
-            <p className="whitespace-pre-wrap">{o.body}</p>
+            <Markdown text={o.body} />
           </article>
         ))
       )}

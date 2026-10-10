@@ -1,6 +1,8 @@
 import type { Activity, ActivityKind, Label, Member, Project, Skill } from "@/api/client";
 import { untilText } from "@/lib/time";
+import { sizeText } from "@/screens/task/format";
 import { count } from "./derive";
+import { isShiftLog, type ActivityRow } from "./fold";
 
 // What an Activity entry says, in CONTEXT.md's words: the actor, the verb (or, for a lapse or a
 // take-back, a mark), the record it is about, the Steps it went between, and the one detail worth
@@ -39,7 +41,14 @@ export type Sentence = {
   details: string[];
   outcome?: "worked" | "didnt_work";
   evidence?: { id: string; filename: string; size?: number };
+  /** A Shift's log on a row of its own: "builder · Shift log · 56.8 kB on DARK-2". */
+  log?: { id: string; size?: number };
+  /** What a Claim's end carries after its details: the Evidence attached inside it, the Shift's log last. */
+  files?: FileChip[];
 };
+
+/** A file a row links: Evidence by its name and size, a Shift's log as "Shift log · 56.8 kB". */
+export type FileChip = { id: string; filename: string; size?: number; log?: boolean };
 
 type KindWords = { group: string; label: string; verb: string };
 
@@ -67,6 +76,8 @@ const kinds: Record<ActivityKind, KindWords> = {
   "task.ranked": { group: "Task", label: "Ranked", verb: "ranked" },
   "task.owner_passed": { group: "Task", label: "Ownership passed", verb: "passed the ownership of" },
   "task.labels_set": { group: "Task", label: "Labels set", verb: "set the Labels of" },
+  "task.pull_request_opened": { group: "Task", label: "Pull request opened", verb: "opened a pull request on" },
+  "task.pull_request_merged": { group: "Task", label: "Pull request merged", verb: "merged a pull request on" },
   "workflow.changed": { group: "Workflow", label: "Changed", verb: "changed" },
   "label.created": { group: "Label", label: "Created", verb: "created the Label" },
   "label.changed": { group: "Label", label: "Changed", verb: "changed the Label" },
@@ -77,6 +88,7 @@ const kinds: Record<ActivityKind, KindWords> = {
   "project.member_removed": { group: "Project", label: "Member removed", verb: "removed" },
   "skill.created": { group: "Skill", label: "Created", verb: "created the Skill" },
   "skill.version_published": { group: "Skill", label: "Version published", verb: "published" },
+  "skill.changed": { group: "Skill", label: "Moved", verb: "moved" },
   "member.created": { group: "Member", label: "Created", verb: "created the Member" },
   "member.updated": { group: "Member", label: "Updated", verb: "updated the Member" },
   "member.manager_set": { group: "Member", label: "Reporting line set", verb: "set the Reporting line of" },
@@ -282,11 +294,20 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
       else if (task(text(p, "blocker_id"))) s.details.push(`blocked by ${task(text(p, "blocker_id"))}`);
       break;
     case "task.evidence_attached":
-      if (text(p, "filename")) s.evidence = { id: text(p, "evidence_id") ?? "", filename: text(p, "filename")!, size: number(p, "size") };
+      if (isShiftLog(e)) {
+        s.verb = undefined;
+        s.log = { id: text(p, "evidence_id") ?? "", size: number(p, "size") };
+      } else if (text(p, "filename")) s.evidence = { id: text(p, "evidence_id") ?? "", filename: text(p, "filename")!, size: number(p, "size") };
       break;
     case "task.skill_proposed":
       s.verb = `proposed ${skill(text(p, "skill_id")) ?? "a Skill"} v${(number(p, "based_on_version") ?? 0) + 1} on`;
       break;
+    case "task.pull_request_opened":
+    case "task.pull_request_merged": {
+      const n = number(p, "number");
+      if (n !== undefined) s.verb = `${e.kind === "task.pull_request_opened" ? "opened" : "merged"} #${n} on`;
+      break;
+    }
     case "task.ranked":
       s.details.push(`Rank #${text(p, "from")} → #${text(p, "to")}`);
       break;
@@ -335,6 +356,11 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
       s.after.push(`${e.kind === "project.member_added" ? "to" : "from"} ${project}`);
       break;
     }
+    case "skill.changed": {
+      const id = text(p, "project_id");
+      s.after.push(`to ${id ? (l.projects.get(id)?.key ?? "a Project") : "the Organisation"}`);
+      break;
+    }
     case "skill.version_published":
       s.subject = { type: "text", text: `${l.skills.get(e.subject_id)?.name ?? "a Skill"} v${text(p, "version")}` };
       break;
@@ -370,6 +396,41 @@ function named(p: Record<string, unknown>): { key: string; title: string } | und
   return key ? { key, title: text(p, "title") ?? "" } : undefined;
 }
 
+const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+function fileChip(e: Activity): FileChip {
+  const p = e.payload;
+  return { id: text(p, "evidence_id") ?? "", filename: text(p, "filename") ?? "a file", size: number(p, "size"), log: isShiftLog(e) || undefined };
+}
+
+/**
+ * The sentence a row says: its entry's, then what the Claim it ends carried ("asked DARK-4 · 2
+ * Notes", the Evidence and the Shift's log as chips), or for a Shift's log on a row of its own,
+ * the end of the Shift it belongs to.
+ */
+export function rowSentence(row: ActivityRow, l: Lookup): Sentence | null {
+  const s = describe(row.entry, l);
+  if (!s) return null;
+  if (row.shiftEnded) s.details.push(`the Shift that ended ${clock.format(new Date(row.shiftEnded))}`);
+  if (row.folded.length === 0) return s;
+  const asked = row.folded.filter((e) => e.kind === "task.filed").map((e) => l.tasks.get(e.subject_id)?.key ?? text(e.payload, "key") ?? "a Task");
+  const notes = row.folded.filter((e) => e.kind === "task.note_added").length;
+  const observations = row.folded.filter((e) => e.kind === "task.observed").length;
+  const attached = row.folded.filter((e) => e.kind === "task.evidence_attached");
+  for (const key of asked) s.details.push(`asked ${key}`);
+  if (notes) s.details.push(notes === 1 ? "a Note" : `${notes} Notes`);
+  if (observations) s.details.push(observations === 1 ? "an Observation" : `${observations} Observations`);
+  s.files = [...attached.filter((e) => !isShiftLog(e)), ...attached.filter(isShiftLog)].map(fileChip);
+  return s;
+}
+
+/** A chip's words: "wc.log 753 B", "Shift log · 56.8 kB". */
+export function chipText(c: FileChip): string {
+  const size = c.size !== undefined ? sizeText(c.size) : undefined;
+  if (c.log) return size ? `Shift log · ${size}` : "Shift log";
+  return size ? `${c.filename} ${size}` : c.filename;
+}
+
 export const markWords: Record<Mark, string> = { lapsed: "Lapsed", taken_back: "Taken back" };
 
 function partText(part: Part): string {
@@ -384,11 +445,12 @@ function partText(part: Part): string {
  */
 export function sentenceText(s: Sentence, workflowName = "the Workflows"): string {
   const words: string[] = [s.actorName];
+  if (s.log) words.push("·", chipText({ id: s.log.id, filename: "", size: s.log.size, log: true }), "on");
   if (s.mark) words.push(markWords[s.mark]);
   if (s.verb) words.push(s.verb);
   if (s.subject) words.push(s.subject.type === "text" ? s.subject.text : s.subject.type === "workflow" ? workflowName : `${s.subject.key} ${s.subject.title}`.trim());
   words.push(...s.after.map(partText));
   if (s.outcome) words.push(s.outcome === "worked" ? "Worked" : "Didn't work");
   if (s.evidence) words.push(s.evidence.filename);
-  return [words.filter(Boolean).join(" "), ...s.details].join(" · ");
+  return [words.filter(Boolean).join(" "), ...s.details, ...(s.files ?? []).map(chipText)].join(" · ");
 }

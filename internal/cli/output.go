@@ -178,6 +178,7 @@ func (c *call) printTaskDetail(w io.Writer, d client.TaskDetail) {
 		}
 		fmt.Fprintf(w, "  %-10s %s (%s, %s) %s\n", label, one(ws.Name), one(string(ws.Kind)), one(ws.DefaultBranch), one(ws.Path))
 	}
+	printPullRequest(w, t.PullRequest)
 	if cl := t.Claim; cl != nil {
 		fmt.Fprintf(w, "  Claim      %s, Session %s", c.member(cl.HolderID), one(cl.SessionID))
 		if cl.SkillID != nil {
@@ -284,7 +285,11 @@ func (c *call) printObservation(w io.Writer, o client.Observation) {
 }
 
 func (c *call) printEvidence(w io.Writer, e client.Evidence) {
-	fmt.Fprintf(w, "  %s  %s  %s  %d bytes  by %s at %s\n", one(e.ID), one(e.Filename), one(e.ContentType), e.Size, c.member(e.AttachedBy), stamp(e.CreatedAt))
+	kind := ""
+	if e.Kind == client.EvidenceKindLog {
+		kind = "  Shift log"
+	}
+	fmt.Fprintf(w, "  %s  %s  %s  %d bytes%s  by %s at %s\n", one(e.ID), one(e.Filename), one(e.ContentType), e.Size, kind, c.member(e.AttachedBy), stamp(e.CreatedAt))
 }
 
 func sortedKeys(m map[string]string) []string {
@@ -340,6 +345,9 @@ func (c *call) printSkillLine(w io.Writer, s client.Skill) {
 	extra := ""
 	if s.BaseSkillID != nil {
 		extra = " on " + c.skill(*s.BaseSkillID)
+	}
+	if s.ProjectID != nil {
+		extra += ", Project " + c.project(*s.ProjectID)
 	}
 	if s.Builtin {
 		extra += " (built in)"

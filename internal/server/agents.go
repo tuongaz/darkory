@@ -73,7 +73,7 @@ func (s *Server) SetAgentSettings(w http.ResponseWriter, r *http.Request, member
 		return
 	}
 	m, err := s.core.SetAgentSettings(r.Context(), c, member, core.AgentChange{Command: body.Command, Args: body.Args, Model: body.Model,
-		Env: body.Env, Unattended: body.Unattended, Paused: body.Paused, ProgressFile: body.ProgressFile}, idem)
+		Env: body.Env, Unattended: body.Unattended, Paused: body.Paused, ProgressFile: body.ProgressFile, Shifts: body.Shifts}, idem)
 	s.respond(w, r, out, m, err)
 }
 

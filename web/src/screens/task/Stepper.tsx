@@ -10,6 +10,7 @@ import { WorkGlyph } from "@/components/WorkGlyph";
 import { cn } from "@/lib/utils";
 import { taskPath, type Stay } from "./path";
 import { useTaskWorkflow } from "./queries";
+import { useWaitsFor } from "./useWaitsFor";
 import { spanText } from "@/lib/time";
 
 const leftWords = (left: Stay["left"]) => {
@@ -28,6 +29,7 @@ export function Stepper({ detail, path, steps }: { detail: TaskDetail; path: rea
   const now = useNow();
   const { workflows } = useTaskWorkflow(detail.task.project_id);
   const { stays, end } = taskPath(detail.task, path);
+  const waits = useWaitsFor(detail, steps);
   // A path with no Step on it (a Parent from its filing, history out of reach) says nothing.
   if (stays.length === 0) return null;
   const name = (id: string) => steps.find((s) => s.id === id)?.name ?? "A Step since removed";
@@ -69,6 +71,7 @@ export function Stepper({ detail, path, steps }: { detail: TaskDetail; path: rea
               </span>
             </li>
             {out && <li className="inline-flex text-2xs text-muted-foreground">{out}</li>}
+            {current && waits && <li className="inline-flex text-2xs text-muted-foreground">{waits}</li>}
           </Fragment>
         );
       })}

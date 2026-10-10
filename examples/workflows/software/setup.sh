@@ -14,11 +14,23 @@
 # the Runner reads <DATA>/agents/<agent>.token). Optional: PROJECT (key, default SW),
 # PROJECT_NAME (default Software), REPO (a git repository to work in), WORKSPACE (its name,
 # default the folder's), MODE (plain or pull_request, default plain), DARKORY (the binary).
+#
+# The Project's company Skills, one on each role, are named <prefix>-<base> (sw-qa, sw-engineer),
+# the prefix the Project's key in lower case unless --skill-prefix <p> says otherwise: a Skill's
+# name is the Organisation's, so two Projects set up from the preset each have their own.
 set -euo pipefail
 : "${DARKORY_URL:?}" "${DARKORY_TOKEN:?}" "${DATA:?}"
 dk=${DARKORY:-darkory}
 here=$(cd "$(dirname "$0")" && pwd)
+prefix=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --skill-prefix) prefix=${2:?setup.sh: --skill-prefix needs a value}; shift 2 ;;
+    *) echo "setup.sh: no argument $1 (setup.sh [--skill-prefix p])" >&2; exit 2 ;;
+  esac
+done
 project=${PROJECT:-SW}
+prefix=${prefix:-$(printf %s "$project" | tr '[:upper:]' '[:lower:]')}
 project_name=${PROJECT_NAME:-Software}
 mode=${MODE:-plain}
 export DARKORY_NO_UPDATE_CHECK=1
@@ -110,25 +122,33 @@ refuse_clashes() {
 }
 if $dk project show "$project" >/dev/null 2>&1; then planned; refuse_clashes; fi
 
-# The generic Skills each Step carries, then this Project's company Skill on each, whose text the
-# Runner puts first in a session's prompt and a Retrospective may propose changes to.
-skill() { # name kind [base]
-  if $dk skill show "$1" >/dev/null 2>&1; then echo "skill $1: there"; return; fi
-  if [ "$2" = company ]; then $dk skill create "$1" --kind company --base "$3" --file "$here/$1.md" >/dev/null
-  else $dk skill create "$1" --kind generic --file "$here/$1.md" >/dev/null; fi
-  echo "skill $1: created"
-}
-for s in triage architecture security qa devops; do skill "$s" generic; done
-for s in triage architecture security qa devops engineer review breakdown acceptance retro; do
-  skill "software-$s" company "$s"
-done
-
 if $dk project show "$project" >/dev/null 2>&1; then
   echo "project $project: there"
 else
   $dk project create "$project" "$project_name" --workflow empty >/dev/null
   echo "project $project: created"
 fi
+
+# The generic Skills each Step carries, then the Project's company Skill on each (ADR 0020), whose
+# text (software-<base>.md) the Runner puts first in a Shift's prompt of this Project's Tasks and
+# a Retrospective may propose changes to. One already there is made the Project's.
+generic() { # name
+  if $dk skill show "$1" >/dev/null 2>&1; then echo "skill $1: there"; return; fi
+  $dk skill create "$1" --kind generic --file "$here/$1.md" >/dev/null
+  echo "skill $1: created"
+}
+company() { # base
+  local name=$prefix-$1
+  if $dk skill show "$name" >/dev/null 2>&1; then
+    $dk skill set "$name" --project "$project" >/dev/null
+    echo "skill $name: there, $project's"
+    return
+  fi
+  $dk skill create "$name" --kind company --base "$1" --project "$project" --file "$here/software-$1.md" >/dev/null
+  echo "skill $name: created"
+}
+for s in triage architecture security qa devops; do generic "$s"; done
+for s in triage architecture security qa devops engineer review breakdown acceptance retro; do company "$s"; done
 $dk project set "$project" --acceptance=true --auto-complete=true >/dev/null
 
 if [ -n "${REPO:-}" ]; then
@@ -164,7 +184,11 @@ while IFS=$'\t' read -r name model manager skills; do
   if $dk member show "$name" >/dev/null 2>&1; then echo "agent $name: there"
   else $dk member create "$name" --kind agent >/dev/null; echo "agent $name: created"; fi
   $dk project add "$project" "$name" >/dev/null 2>&1 || true
-  for s in $(echo "$skills" | tr ',' ' '); do $dk grant "$name" "$s" >/dev/null 2>&1 || true; done
+  # agents.json names the preset's company Skills software-<base>; here they are <prefix>-<base>.
+  for s in $(echo "$skills" | tr ',' ' '); do
+    case $s in software-*) s=$prefix-${s#software-} ;; esac
+    $dk grant "$name" "$s" >/dev/null 2>&1 || true
+  done
   [ "$manager" = "@owner" ] && manager=$owner
   $dk report-to "$name" "$manager" >/dev/null
   $dk agent set "$name" --model "$model" --unattended >/dev/null

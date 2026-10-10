@@ -34,7 +34,9 @@ var workCommands = []command{
 	{path: "note", args: "<task> <text|->", short: "add a Note to a Task's running log", run: cmdNote},
 	{path: "observe", args: "<task> --worked <text|-> | --didnt-work <text|->", short: "record an Observation", run: cmdObserve},
 	{path: "observations", args: "<task> [--all]", short: "list the Observations on a Task and its Subtasks not yet reviewed", run: cmdObservations},
-	{path: "attach", args: "<task> <file> [--type mime] [--name filename]", short: "attach Evidence", run: cmdAttach},
+	{path: "attach", args: "<task> <file> [--type mime] [--name filename] [--kind evidence|log]", short: "attach Evidence", run: cmdAttach},
+	{path: "pr set", args: "<task> --number n --link u --state open|merged", short: "record the pull request a Task's branch lands through", run: cmdPRSet},
+	{path: "pr merge", args: "<task>", short: "merge a Task's open pull request through the Runner beside the server (a human: its Owner or an admin)", run: cmdPRMerge},
 	{path: "evidence get", args: "<id> [-o file|-]", short: "show an Evidence record, or download its file", run: cmdEvidenceGet},
 	{path: "file", args: "--title t (--project p | --parent task | --blocks task --aim member) [--step s] [--breakdown] [--blocked-by task,…] [--label l]… [--owner m] [--workspace ws]… [--body text|-]", short: "file a Task; with --parent, a Subtask; with --blocks, a question that blocks a Task", run: cmdFile},
 	{path: "block", args: "<task> --by <task>", short: "let a Task block another", run: cmdBlock},
@@ -447,9 +449,13 @@ func cmdObserve(c *call) error {
 func cmdAttach(c *call) error {
 	typ := c.fs.String("type", "", "the file's content type (default: from its extension, else its content)")
 	name := c.fs.String("name", "", "the name to show and download it as (default: the file's own)")
+	kind := c.fs.String("kind", "evidence", "evidence about the work, or log: a Shift's terminal log, kept with the Claim it worked under")
 	args, err := c.args(2, 2)
 	if err != nil {
 		return err
+	}
+	if k := client.EvidenceKind(*kind); !k.Valid() {
+		return usagef("--kind is evidence or log")
 	}
 	content, err := os.ReadFile(args[1])
 	if err != nil {
@@ -476,7 +482,7 @@ func cmdAttach(c *call) error {
 		shown += " -> " + real
 	}
 	fmt.Fprintf(c.errOut(), "Attaching %s (%d bytes, %s) as %s.\n", shown, len(content), ct, filename)
-	ev, body, err := conn.Attach(c.ctx, args[0], filename, ct, content)
+	ev, body, err := conn.Attach(c.ctx, args[0], filename, ct, client.EvidenceKind(*kind), content)
 	if err != nil {
 		return err
 	}
@@ -484,6 +490,59 @@ func cmdAttach(c *call) error {
 		fmt.Fprintf(w, "Attached %s to %s.\n", filename, args[0])
 		c.printEvidence(w, ev)
 	})
+}
+
+func cmdPRSet(c *call) error {
+	number := c.fs.Int64("number", 0, "the pull request's number on GitHub")
+	addr := c.fs.String("link", "", "the pull request's address, https://github.com/…/pull/n")
+	state := c.fs.String("state", "", "open or merged")
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	st := client.PullRequestState(*state)
+	if *number < 1 || *addr == "" || !st.Valid() {
+		return usagef("needs --number, --link and --state open or merged")
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.SetTaskPullRequestWithResponse(c.ctx, args[0], &client.SetTaskPullRequestParams{},
+		client.SetTaskPullRequestBody{Number: *number, URL: *addr, State: st})
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		c.done(w, "Recorded the pull request of", *res.JSON200)
+		printPullRequest(w, res.JSON200.PullRequest)
+	})
+}
+
+func cmdPRMerge(c *call) error {
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.MergeTaskPullRequestWithResponse(c.ctx, args[0], &client.MergeTaskPullRequestParams{})
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		c.done(w, "Merged the pull request of", *res.JSON200)
+		printPullRequest(w, res.JSON200.PullRequest)
+	})
+}
+
+// printPullRequest prints a Task's pull request line, or nothing when it has none.
+func printPullRequest(w io.Writer, pr *client.PullRequest) {
+	if pr != nil {
+		fmt.Fprintf(w, "  Pull request #%d %s %s\n", pr.Number, one(string(pr.State)), one(pr.URL))
+	}
 }
 
 func cmdEvidenceGet(c *call) error {

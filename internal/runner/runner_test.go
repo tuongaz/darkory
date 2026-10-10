@@ -24,6 +24,7 @@ import (
 
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/blob"
+	"github.com/tuongaz/darkory/internal/branch"
 	"github.com/tuongaz/darkory/internal/cli"
 	"github.com/tuongaz/darkory/internal/server"
 	"github.com/tuongaz/darkory/internal/shortid"
@@ -93,6 +94,7 @@ type fixture struct {
 	ts       *httptest.Server
 	timings  Timings
 	tokens   map[string]string
+	tokenIDs map[string]string
 	ids      map[string]string
 	repo     string
 	data     string
@@ -115,7 +117,7 @@ func newFixture(t *testing.T, st *store.Store) *fixture {
 	}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	f := &fixture{t: t, srv: srv, ts: ts, timings: testTimings, tokens: map[string]string{"ada": init.Token.Secret}, ids: map[string]string{"ada": shortid.Short(init.Member.ID)},
+	f := &fixture{t: t, srv: srv, ts: ts, timings: testTimings, tokens: map[string]string{"ada": init.Token.Secret}, tokenIDs: map[string]string{}, ids: map[string]string{"ada": shortid.Short(init.Member.ID)},
 		repo: gitRepo(t), data: t.TempDir(), progress: t.TempDir(), log: &lockedBuffer{}, gh: &fakeGitHub{}}
 	f.ok("ada", "project", "create", "WEB", "Web", "--member", "ada")
 	f.ok("ada", "workspace", "add", "web", "--path", f.repo)
@@ -136,7 +138,7 @@ func (f *fixture) agent(name, scenario string, skills ...string) {
 	}
 	var tok client.IssuedToken
 	f.json(&tok, "ada", "token", "issue", name, "--name", "runner")
-	f.tokens[name], f.ids[name] = tok.Secret, m.ID
+	f.tokens[name], f.tokenIDs[name], f.ids[name] = tok.Secret, tok.Token.ID, m.ID
 	var env []string
 	if slices.Contains(skills, "review") {
 		env = append(env, "FAKEAGENT_OUTCOME=pass")
@@ -219,7 +221,16 @@ type fakeGitHub struct{}
 func (*fakeGitHub) CreatePR(context.Context, string, string, string, string, string) (string, error) {
 	return "", fmt.Errorf("no GitHub here")
 }
-func (*fakeGitHub) MergedPRs(context.Context, string) ([]PullRequest, error) { return nil, nil }
+func (*fakeGitHub) PullRequests(context.Context, string) ([]PullRequest, error) { return nil, nil }
+func (*fakeGitHub) PullRequestsForBranch(context.Context, string, string) ([]PullRequest, error) {
+	return nil, nil
+}
+func (*fakeGitHub) PullRequest(_ context.Context, _ string, n int64) (PullRequest, error) {
+	return PullRequest{}, fmt.Errorf("no pull request #%d here", n)
+}
+func (*fakeGitHub) MergePR(context.Context, string, int64, string) error {
+	return fmt.Errorf("no GitHub here")
+}
 
 // ok runs a CLI command as member, in-process.
 func (f *fixture) ok(member string, args ...string) string {
@@ -578,6 +589,45 @@ func TestRunnerStartsNoSessionForAnAgentPausedWhileWaiting(t *testing.T) {
 	}
 }
 
+// A Shift's log is attached as a log, the Claim's and not the Task's Evidence; what the agent
+// attached itself stays Evidence.
+func TestRunnerAttachesTheShiftsLogAsALog(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(buildOnly)
+	f.agent("builder", "advance", "engineer")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Fix the typo")
+	f.run("builder")
+
+	eventually(t, 30*time.Second, "the Shift's log on WEB-1", func() bool {
+		return sessionLogs(evidenceNames(f.task("WEB-1").Evidence), "WEB-1", "builder") == 1
+	})
+	logs, other := 0, 0
+	for _, e := range f.task("WEB-1").Evidence {
+		switch {
+		case sessionLogs([]string{e.Filename}, "WEB-1", "builder") == 1:
+			if e.Kind != client.EvidenceKindLog {
+				t.Fatalf("the Shift's log %s is of kind %q", e.Filename, e.Kind)
+			}
+			// It names the builder's Claim, though that Claim had ended when it was attached.
+			d := f.task("WEB-1")
+			if e.ClaimID == nil || len(d.Claims) == 0 || *e.ClaimID != d.Claims[0].ID {
+				t.Fatalf("the Shift's log names the Claim %v; the Claims are %+v", e.ClaimID, d.Claims)
+			}
+			logs++
+		case e.Kind != client.EvidenceKindEvidence:
+			t.Fatalf("the agent's own %s is of kind %q", e.Filename, e.Kind)
+		default:
+			other++
+		}
+	}
+	if logs != 1 || other == 0 {
+		t.Fatalf("%d logs and %d Evidence on WEB-1", logs, other)
+	}
+	if !strings.Contains(f.log.String(), `msg="attached the Shift's log"`) {
+		t.Fatalf("the log does not say it attached the Shift's log:\n%s", f.log)
+	}
+}
+
 // A Task with no Parent works on a branch from main, and its advance into Done merges it into
 // main; no Parent's branch is made.
 func TestRunnerMergesATaskStandingAlone(t *testing.T) {
@@ -640,9 +690,10 @@ func TestRunnerStartsTheNextSessionOnceTheEarlierEnds(t *testing.T) {
 	if gap := started.Sub(ended); gap < 0 || gap > 2*time.Second {
 		t.Fatalf("the reviewer's session started %s after the builder's ended", gap)
 	}
-	// The builder's log waited for the reviewer's Claim to end, and is on the Task.
-	if !strings.Contains(log, `msg="the Task is held by its next holder; the Shift's log is attached once it is free" component=runner agent=builder task=WEB-1`) {
-		t.Fatalf("the builder's log was not kept for later:\n%s", log)
+	// The builder's log names its own ended Claim, so the record took it while the reviewer held
+	// WEB-1: nothing was kept for later.
+	if !strings.Contains(log, `msg="attached the Shift's log" component=runner agent=builder task=WEB-1`) || strings.Contains(log, "is attached once it is free") {
+		t.Fatalf("the builder's log was not attached at once:\n%s", log)
 	}
 	eventually(t, 10*time.Second, "the builder's log on WEB-1", func() bool {
 		return sessionLogs(evidenceNames(f.task("WEB-1").Evidence), "WEB-1", "builder") == 1
@@ -665,7 +716,8 @@ func TestRunnerAttachesALogKeptBeforeItStarted(t *testing.T) {
 
 	eventually(t, 10*time.Second, "the kept log on WEB-1", func() bool {
 		d := f.task("WEB-1")
-		return len(d.Evidence) == 1 && d.Evidence[0].Filename == name && d.Evidence[0].AttachedBy == f.ids["builder"]
+		return len(d.Evidence) == 1 && d.Evidence[0].Filename == name && d.Evidence[0].AttachedBy == f.ids["builder"] &&
+			d.Evidence[0].Kind == client.EvidenceKindLog
 	})
 	eventually(t, 5*time.Second, "the kept log's files gone", func() bool {
 		_, err := os.Stat(dir)
@@ -1053,7 +1105,7 @@ func TestRunnerMergeConflict(t *testing.T) {
 				return false
 			})
 			conflicted := strings.Fields(resolve.Title)[len(strings.Fields(resolve.Title))-3] // … the merge of <branch> into web-1
-			key := KeyOf(conflicted)
+			key := branch.KeyOf(conflicted)
 			r := f.task(resolve.Key)
 			if len(r.Workspaces) != 1 || r.Workspaces[0].Name != "web" {
 				t.Fatalf("the resolving Task names the Workspaces %+v, not the one the merge did not go into", r.Workspaces)

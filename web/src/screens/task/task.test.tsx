@@ -1,11 +1,12 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Activity, Member, Task, TaskDetail } from "@/api/client";
+import { mergeBase } from "./pullRequest";
 import { mockApi, refuse, type Call, type Handler } from "@/test/api";
 import { ada, bob, builder, bug, clientX, detail, step, wfId, wfStep, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
-import { basket, cart, checkout, copy, liveClaimOf, payment, receipt, routes } from "../board/testData";
+import { basket, cart, checkout, copy, liveClaimOf, payment, projectTasks, receipt, routes } from "../board/testData";
 
 beforeEach(() => localStorage.clear());
 
@@ -273,6 +274,20 @@ describe("a Parent's page", () => {
     expect(await screen.findByRole("region", { name: "Subtasks" })).toHaveTextContent("1/3 done");
   });
 
+  it("renders its description and its Notes as Markdown, links to the web only", async () => {
+    const note = { id: "n-1", task_id: copy.id, author_id: builder.id, body: "Ran `make check`.\n- [the PR](https://github.com/o/r/pull/7)\n- [x](javascript:alert(1))", created_at: at(20) };
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": () => detail({ ...copy, description: "## Goal\nShip **the copy**" }, { notes: [note] }) }));
+    renderApp("/tasks/WEB-1");
+    const head = (await screen.findByRole("heading", { level: 1, name: "Draft the launch copy" })).closest("header")!;
+    expect(within(head).getByText("the copy").tagName).toBe("STRONG");
+    expect(within(head).getByText("Goal").tagName).toBe("P");
+    const body = await screen.findByRole("article", { name: "Note by builder" });
+    expect(within(body).getByText("make check").tagName).toBe("CODE");
+    expect(within(body).getByRole("link", { name: "the PR" })).toHaveAttribute("target", "_blank");
+    expect(within(body).getAllByRole("link")).toHaveLength(1);
+    expect(within(body).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["the PR", "x"]);
+  });
+
   it("says why nobody holds a Parent or an ended Task, so its Properties are never empty", async () => {
     mockApi(taskRoutes());
     const parent = renderApp("/tasks/WEB-3");
@@ -367,6 +382,287 @@ describe("a Parent's page", () => {
     const dialog = await screen.findByRole("dialog", { name: "File a Task" });
     await waitFor(() => expect(within(dialog).getByRole("combobox", { name: "Parent" })).toHaveTextContent("WEB-3"));
     expect(within(dialog).getByRole("combobox", { name: "Project" })).toHaveTextContent("Web");
+  });
+});
+
+describe("a Task's pull request", () => {
+  const url = "https://github.com/o/r/pull/7";
+  const repo = { id: "w-1", name: "darkory", kind: "git" as const, path: "/src/darkory", mode: "pull_request" as const, default_branch: "trunk", created_at: at(0) };
+  const landed = (state: "open" | "merged", extra: Partial<Task> = {}) => {
+    const t: Task = { ...copy, state: "done", ended_at: at(30), step_id: undefined, workspace_ids: [repo.id], pull_request: { number: 7, url, state }, ...extra };
+    return detail(t, { workspaces: [repo] });
+  };
+  const runner = (on: boolean) => ({ "GET /v1/runner/sessions": { items: [], runner: on } });
+
+  it("says it on the facts line after the branch and in the rail's Workspace group, a link to GitHub", async () => {
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": landed("open"), ...runner(false) }));
+    renderApp("/tasks/WEB-1");
+    const head = (await screen.findByRole("heading", { level: 1 })).closest("header")!;
+    const chip = within(head).getByRole("link", { name: "#7 open" });
+    expect(chip).toHaveAttribute("href", url);
+    expect(chip).toHaveAttribute("target", "_blank");
+    expect(chip).toHaveAttribute("rel", "noreferrer noopener");
+    const workspace = screen.getByRole("region", { name: "Workspace" });
+    expect(workspace).toHaveTextContent("Pull request");
+    expect(within(workspace).getByRole("link", { name: "#7 open" })).toHaveAttribute("href", url);
+    // No Runner beside the server: no Merge; the chip is the way to GitHub.
+    expect((await bar()).queryByRole("button", { name: "Merge" })).not.toBeInTheDocument();
+  });
+
+  it("gives its Owner Merge while it is open and a Runner is attached; the dialog says the pull request lands on its base", async () => {
+    const api = mockApi(
+      taskRoutes({
+        // Renamed since its branch was made: the dialog names no branch from the title.
+        "GET /v1/tasks/:task": landed("open", { title: "Renamed since" }),
+        ...runner(true),
+        "POST /v1/tasks/:task/pull-request/merge": refuse(409, "conflict", "Pull request #7 is not mergeable: checks failing"),
+      }),
+    );
+    renderApp("/tasks/WEB-1");
+    await userEvent.click(await (await bar()).findByRole("button", { name: "Merge" }));
+    const dialog = await screen.findByRole("dialog", { name: "Merge #7 into trunk" });
+    expect(dialog).toHaveTextContent("#7 lands on trunk");
+    expect(dialog).not.toHaveTextContent("web-1-renamed-since");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Merge" }));
+    await waitFor(() => expect(posted(api, "/pull-request/merge")).toBeDefined());
+    expect(posted(api, "/pull-request/merge")?.path).toBe(`/v1/tasks/${copy.id}/pull-request/merge`);
+    // GitHub's refusal stays in the dialog, in its words.
+    expect(await within(dialog).findByText(/checks failing/)).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Merge #7 into trunk" })).toBeInTheDocument();
+  });
+
+  it("gives Merge to no one else, and none once merged", async () => {
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": landed("open"), ...runner(true) }, bob));
+    const page = renderApp("/tasks/WEB-1");
+    await screen.findByRole("heading", { level: 1 });
+    expect((await bar()).queryByRole("button", { name: "Merge" })).not.toBeInTheDocument();
+    page.unmount();
+
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": landed("merged"), ...runner(true) }));
+    renderApp("/tasks/WEB-1");
+    const head = (await screen.findByRole("heading", { level: 1 })).closest("header")!;
+    expect(within(head).getByRole("link", { name: "#7 merged" })).toHaveAttribute("href", url);
+    expect((await bar()).queryByRole("button", { name: "Merge" })).not.toBeInTheDocument();
+  });
+
+  it("names the Workspace's default branch, main when the Task names none, or its Parent's branch for a Subtask", () => {
+    expect(mergeBase(landed("open"), [])).toBe("trunk");
+    const plain = { ...landed("open"), workspaces: [] };
+    expect(mergeBase(plain, [])).toBe("main");
+    expect(mergeBase(plain, [repo], repo.id)).toBe("trunk");
+    // A Subtask lands on its Parent's branch, the Parent's key alone, as the Runner names it.
+    expect(mergeBase({ ...landed("open"), parent: { id: "k-9", key: "WEB-9", title: "Checkout" } }, [])).toBe("web-9");
+  });
+
+  it("names a Subtask's Merges into and a Parent's own branch by the Parent's key alone", async () => {
+    const sub = landed("open", { parent_id: "k-9" });
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": { ...sub, parent: { id: "k-9", key: "WEB-9", title: "Checkout" } }, ...runner(false) }));
+    renderApp("/tasks/WEB-1");
+    const rail = await screen.findByRole("complementary", { name: "Properties" });
+    const merges = await within(rail).findByText("Merges into");
+    expect(merges.closest("div")!.parentElement).toHaveTextContent("web-9");
+    expect(rail).not.toHaveTextContent("web-9-checkout");
+  });
+
+  it("names a Parent's own branch by its key alone", async () => {
+    const parent = { ...copy, state: "open" as const, ended_at: undefined, step_id: undefined, workspace_ids: [repo.id], subtask_counts: { open: 1, working: 0, done: 0, dropped: 0 } };
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": detail(parent, { workspaces: [repo] }), ...runner(false) }));
+    renderApp("/tasks/WEB-1");
+    const rail = await screen.findByRole("complementary", { name: "Properties" });
+    const branch = await within(rail).findByText("Branch");
+    expect(branch.closest("div")!.parentElement).toHaveTextContent(/web-1(?!-)/);
+  });
+});
+
+describe("a Task waiting behind a busy taker", () => {
+  it("says at its Step whom it waits for when every taker holds as many Tasks as it runs Shifts", async () => {
+    // builder, Build's one taker, holds WEB-2; WEB-7 waits at Build.
+    const waiting = { ...copy, id: "k-7", key: "WEB-7", title: "Fix the totals", step_id: step.build, step_since: at(50), claim: undefined };
+    const filed: Activity = { seq: 1, at: at(50), kind: "task.filed", subject_type: "task", subject_id: waiting.id, payload: { step_id: step.build } };
+    mockApi(taskRoutes({ "GET /v1/tasks": { items: [...projectTasks, waiting] }, "GET /v1/tasks/:task": detail(waiting), "GET /v1/activity": { items: [filed], last_seq: 1 } }));
+    renderApp("/tasks/WEB-7");
+    await screen.findByRole("heading", { level: 1, name: "Fix the totals" });
+    // The strip says it for a screen reader; the line draws it under the token at Build.
+    const stepper = await screen.findByRole("list", { name: "Path through the Steps" });
+    await waitFor(() => expect(stepper).toHaveTextContent("waits for builder"));
+    await waitFor(() => expect(screen.getAllByText("waits for builder")).toHaveLength(2));
+  });
+
+  it("says nothing while a taker is free", async () => {
+    const waiting = { ...copy, id: "k-7", key: "WEB-7", title: "Fix the totals", step_id: step.build, step_since: at(50), claim: undefined };
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": detail(waiting), "GET /v1/tasks": { items: [copy, waiting] } }));
+    renderApp("/tasks/WEB-7");
+    await screen.findByRole("list", { name: "Path through the Steps" });
+    expect(screen.queryByText("waits for builder")).not.toBeInTheDocument();
+  });
+});
+
+describe("a held Task's rail", () => {
+  it("shows no Heartbeat and no Session for a human's own Claim with no expiry, on the page and in the peek", async () => {
+    const held = { ...copy, claim: { id: "c-ada", task_id: copy.id, holder_id: ada.id, session_id: "s-ada", started_at: at(58) } };
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": detail(held, { claims: [held.claim] }) }));
+    renderApp("/tasks/WEB-1?task=WEB-1");
+    await screen.findAllByText("Held by");
+    // The page's rail and the peek's properties: each a list of terms.
+    const terms = () => screen.getAllByRole("term").map((t) => t.textContent);
+    await waitFor(() => expect(terms().filter((t) => t === "Held by")).toHaveLength(2));
+    expect(terms()).not.toContain("Heartbeat");
+    expect(terms()).not.toContain("Session");
+    // The record's claimed row says no Session either.
+    const record = screen.getAllByRole("list", { name: "Record" })[0];
+    const claimed = within(record).getByText(/claimed/).closest("li")!;
+    expect(claimed).toHaveTextContent("ada claimed");
+    expect(claimed).not.toHaveTextContent("Session");
+  });
+
+  it("keeps an agent's Heartbeat, as the bar with working and the hold's age, and its Session", async () => {
+    const held = { ...copy, claim: liveClaimOf(builder, copy.id, { session_id: "s-builder" }) };
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": detail(held, { claims: [held.claim] }) }));
+    renderApp("/tasks/WEB-1?task=WEB-1");
+    await waitFor(() => expect(screen.getAllByRole("term").filter((t) => t.textContent === "Heartbeat")).toHaveLength(2));
+    expect(screen.getAllByRole("term").filter((t) => t.textContent === "Session")).toHaveLength(2);
+    expect(screen.getAllByRole("meter").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^working \d+m$/).length).toBeGreaterThan(0);
+    const record = screen.getAllByRole("list", { name: "Record" })[0];
+    expect(within(record).getByText(/claimed/).closest("li")).toHaveTextContent("Session");
+  });
+});
+
+describe("a Task's record", () => {
+  it("hangs a Shift's log on the row that ended its Claim, never as the Task's Evidence", async () => {
+    const t = { ...copy, state: "done" as const, ended_at: at(30), step_id: undefined };
+    const claim = { id: "c-1", task_id: copy.id, holder_id: builder.id, session_id: "s-1", started_at: at(10), ended_at: at(20), how_ended: "released" as const };
+    const evidence = (id: string, kind: "evidence" | "log", filename: string, min: number) => ({
+      id,
+      task_id: copy.id,
+      kind,
+      filename,
+      content_type: "text/plain",
+      size: 58_163,
+      sha256: "x",
+      attached_by: builder.id,
+      created_at: at(min),
+    });
+    const d = detail(t, { claims: [claim], evidence: [evidence("e-pw", "evidence", "pw-all.log", 15), evidence("e-log", "log", "shift-WEB-1-builder-101000.log", 22)] });
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": d }));
+    renderApp("/tasks/WEB-1");
+    const record = await screen.findByRole("list", { name: "Record" });
+    const ended = within(record).getByText(/released it/).closest("li")!;
+    const log = within(ended).getByRole("link", { name: /Shift log/ });
+    expect(log).toHaveTextContent("Shift log · 58.2 kB");
+    expect(log).toHaveAttribute("href", "/v1/evidence/e-log/content");
+    expect(within(record).getByRole("link", { name: /pw-all\.log/ })).toBeInTheDocument();
+    expect(within(record).queryByText("shift-WEB-1-builder-101000.log")).not.toBeInTheDocument();
+    expect(within(record).getAllByText(/attached/)).toHaveLength(1);
+  });
+});
+
+describe("Evidence in a Task's record", () => {
+  const evidence = (id: string, filename: string, content_type: string, size: number, min: number) => ({
+    id,
+    task_id: copy.id,
+    kind: "evidence" as const,
+    filename,
+    content_type,
+    size,
+    sha256: "x",
+    attached_by: builder.id,
+    created_at: at(min),
+  });
+  const claim = { id: "c-1", task_id: copy.id, holder_id: builder.id, session_id: "s-1", started_at: at(10), ended_at: at(20), how_ended: "released" as const };
+
+  it("folds a holder's Evidence into one row that shows each: a thumbnail, the first lines of a text file, a plain row for the rest", async () => {
+    const d = detail(copy, {
+      claims: [claim],
+      evidence: [
+        evidence("e-log", "triage-log.md", "text/markdown; charset=utf-8", 3_700, 12),
+        evidence("e-png", "03-workflow-page.png", "image/png", 39_800, 12),
+        evidence("e-zip", "trace.zip", "application/zip", 900_000, 12),
+      ],
+    });
+    mockApi(
+      taskRoutes({
+        "GET /v1/tasks/:task": d,
+        "GET /v1/evidence/:id/content": () => new Response("# Triage log, WEB-1\n\n| Where | Width |", { headers: { "Content-Type": "text/markdown" } }),
+      }),
+    );
+    renderApp("/tasks/WEB-1");
+    const record = await screen.findByRole("list", { name: "Record" });
+    const row = within(record).getByText(/attached 3 Evidence/).closest("li")!;
+    expect(row).toHaveTextContent("builder attached 3 Evidence");
+
+    // An image: a lazy thumbnail, cover from the top, its name and size under it, the whole a link to the file.
+    const img = within(row).getByRole("img", { name: "03-workflow-page.png" });
+    expect(img).toHaveAttribute("src", "/v1/evidence/e-png/content");
+    expect(img).toHaveAttribute("loading", "lazy");
+    expect(img).toHaveClass("object-cover", "object-top", "h-[92px]", "w-[148px]");
+    const thumb = img.closest("a")!;
+    expect(thumb).toHaveAttribute("href", "/v1/evidence/e-png/content");
+    expect(thumb).toHaveTextContent("03-workflow-page.png39.8 kB");
+
+    // A small text file: its first lines in a box, open at the right.
+    const box = within(row).getByRole("figure", { name: "triage-log.md" });
+    expect(await within(box).findByText(/# Triage log, WEB-1/)).toBeInTheDocument();
+    expect(box).toHaveTextContent("3.7 kB");
+    expect(within(box).getByRole("link", { name: "open ↗" })).toHaveAttribute("href", "/v1/evidence/e-log/content");
+
+    // Anything else: name · size · open, as one Evidence reads today.
+    const zip = within(row).getByRole("link", { name: /trace\.zip/ });
+    expect(zip).toHaveAttribute("href", "/v1/evidence/e-zip/content");
+    expect(row.contains(zip)).toBe(true);
+    const plain = zip.closest("li")!;
+    expect(within(plain).getByRole("link", { name: "open ↗" })).toHaveAttribute("href", "/v1/evidence/e-zip/content");
+    expect(within(row).queryByRole("img", { name: "trace.zip" })).toBeNull();
+  });
+
+  it("shows a text file it cannot read as a plain row, and asks once", async () => {
+    const d = detail(copy, { claims: [claim], evidence: [evidence("e-log", "triage-log.md", "text/markdown", 3_700, 12), evidence("e-zip", "trace.zip", "application/zip", 9_000, 12)] });
+    const api = mockApi(taskRoutes({ "GET /v1/tasks/:task": d, "GET /v1/evidence/:id/content": () => refuse(404, "not_found", "No Evidence") }));
+    renderApp("/tasks/WEB-1");
+    const record = await screen.findByRole("list", { name: "Record" });
+    const row = within(record).getByText(/attached/).closest("li")!;
+    await waitFor(() => expect(within(row).queryByRole("figure")).toBeNull());
+    expect(within(row).getByRole("link", { name: /triage-log\.md/ })).toHaveAttribute("href", "/v1/evidence/e-log/content");
+    expect(api.calls.filter((c) => c.path === "/v1/evidence/e-log/content")).toHaveLength(1);
+  });
+
+  it("fades a text box out only when its lines run past the box", async () => {
+    for (const [height, faded] of [
+      [300, true],
+      [40, false],
+    ] as const) {
+      const spy = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(height);
+      const d = detail(copy, { claims: [claim], evidence: [evidence("e-log", "triage-log.md", "text/markdown", 3_700, 12)] });
+      mockApi(taskRoutes({ "GET /v1/tasks/:task": d, "GET /v1/evidence/:id/content": () => new Response("# Triage log") }));
+      const { unmount } = renderApp("/tasks/WEB-1");
+      const box = await screen.findByRole("figure", { name: "triage-log.md" });
+      await within(box).findByText("# Triage log");
+      await waitFor(() => expect(!!box.querySelector("[data-fade]")).toBe(faded));
+      unmount();
+      spy.mockRestore();
+    }
+  });
+
+  it("keeps a text box empty and short while its file loads", async () => {
+    const d = detail(copy, { claims: [claim], evidence: [evidence("e-log", "triage-log.md", "text/markdown", 3_700, 12)] });
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": d, "GET /v1/evidence/:id/content": () => new Promise<Response>(() => {}) }));
+    renderApp("/tasks/WEB-1");
+    const box = await screen.findByRole("figure", { name: "triage-log.md" });
+    const body = box.querySelector("[aria-busy]")!;
+    expect(body).toHaveAttribute("aria-busy", "true");
+    expect(body).toHaveTextContent("");
+    expect(body).toHaveClass("h-7");
+  });
+
+  it("keeps one Evidence's row with its name, and fetches no text file of 20 kB or more", async () => {
+    const d = detail(copy, { claims: [claim], evidence: [evidence("e-big", "pw-all.log", "text/plain", 58_163, 12)] });
+    const api = mockApi(taskRoutes({ "GET /v1/tasks/:task": d }));
+    renderApp("/tasks/WEB-1");
+    const record = await screen.findByRole("list", { name: "Record" });
+    const row = within(record).getByRole("link", { name: /pw-all\.log/ }).closest("li")!;
+    expect(row).toHaveTextContent("builder attachedpw-all.log58.2 kB");
+    expect(within(row).queryByRole("figure")).toBeNull();
+    expect(api.calls.some((c) => c.path.startsWith("/v1/evidence/"))).toBe(false);
   });
 });
 

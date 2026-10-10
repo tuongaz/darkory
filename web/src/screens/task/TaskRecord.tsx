@@ -1,6 +1,7 @@
 import { ArrowRightIcon, BanIcon, CheckIcon, ClockIcon, PaperclipIcon, SplitIcon } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
-import { evidenceURL, type Activity, type Claim, type TaskDetail, type WorkflowStep } from "@/api/client";
+import { evidenceURL, type Activity, type Claim, type Evidence, type TaskDetail, type WorkflowStep } from "@/api/client";
+import { useDirectory } from "@/api/queries";
 import { useNow } from "@/clock";
 import { SessionId } from "@/components/CopyValue";
 import { Key } from "@/components/Key";
@@ -11,6 +12,9 @@ import { dayText, sizeText, useMemberName, useSkillName } from "./format";
 import { durationText } from "@/lib/time";
 import { Avatar, TaskLink } from "./parts";
 import { taskRecord, type RecordEntry } from "./record";
+import { Markdown } from "@/components/Markdown";
+import { showsHeartbeat } from "@/work";
+import { EvidenceFiles, FileLink } from "./EvidenceFiles";
 
 /** A Task's record, oldest first, grouped by day when it spans more than today. */
 export function TaskRecord({ detail, path, steps }: { detail: TaskDetail; path: readonly Activity[]; steps: readonly WorkflowStep[] }) {
@@ -42,6 +46,7 @@ const kinds = { breakdown: "Breakdown", acceptance: "Acceptance", retrospective:
 function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDetail; stepName: (id: string | undefined) => string }) {
   const name = useMemberName();
   const skill = useSkillName();
+  const { members } = useDirectory();
   const when = <ClockTime at={entry.at} />;
   const row = (who: string | undefined, children: ReactNode, sub?: ReactNode) => (
     <TimelineRow who={who ? <Avatar id={who} /> : <SystemMark />} when={when}>
@@ -82,10 +87,14 @@ function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDe
           <b>{name(c.holder_id)}</b> claimed{s && ` under ${s}`}
           {s && c.skill_version !== undefined && ` version ${c.skill_version}`}
         </>,
-        <span className="inline-flex max-w-full min-w-0 items-center gap-1">
-          Session <SessionId id={c.session_id} />
-          {c.model_label && <span className="truncate font-mono">· {c.model_label}</span>}
-        </span>,
+        showsHeartbeat(c, members.get(c.holder_id)?.kind) ? (
+          <span className="inline-flex max-w-full min-w-0 items-center gap-1">
+            Session <SessionId id={c.session_id} />
+            {c.model_label && <span className="truncate font-mono">· {c.model_label}</span>}
+          </span>
+        ) : (
+          c.model_label && <span className="truncate font-mono">{c.model_label}</span>
+        ),
       );
     }
     case "claim-ended":
@@ -118,7 +127,7 @@ function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDe
               <b className="text-foreground">{name(entry.note.author_id)}</b> Note
               {skill(entry.note.skill_id) && <span>under {skill(entry.note.skill_id)}</span>}
             </header>
-            <p className="whitespace-pre-wrap">{entry.note.body}</p>
+            <Markdown text={entry.note.body} />
           </article>
         </TimelineRow>
       );
@@ -132,25 +141,33 @@ function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDe
               <b className="text-foreground">{name(o.author_id)}</b>
               {skill(o.skill_id) && <span>under {skill(o.skill_id)}</span>}
             </header>
-            <p className="whitespace-pre-wrap">{o.body}</p>
+            <Markdown text={o.body} />
           </article>
         </TimelineRow>
       );
     }
     case "evidence": {
-      const e = entry.evidence;
+      const files = entry.evidence;
+      const by = files[0].attached_by;
       return row(
-        e.attached_by,
-        <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5">
-          <b>{name(e.attached_by)}</b> attached
-          <a href={evidenceURL(e.id)} download={e.filename} className="inline-flex min-w-0 items-center gap-1 hover:underline">
-            <PaperclipIcon className="size-3 flex-none text-muted-foreground" aria-hidden />
-            <span className="truncate">{e.filename}</span>
-          </a>
-          <span className="text-muted-foreground">{sizeText(e.size)}</span>
-        </span>,
+        by,
+        <>
+          {files.length === 1 ? (
+            <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5">
+              <b>{name(by)}</b> attached
+              <FileLink file={files[0]} />
+            </span>
+          ) : (
+            <>
+              <b>{name(by)}</b> attached {files.length} Evidence
+            </>
+          )}
+          <EvidenceFiles files={files} plain={files.length > 1} />
+        </>,
       );
     }
+    case "log":
+      return row(entry.evidence.attached_by, <ShiftLog log={entry.evidence} />);
     case "question": {
       const q = entry.question;
       return row(
@@ -194,6 +211,7 @@ function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDe
           ) : (
             "Dropped"
           )}
+          <ShiftLogs logs={entry.logs} />
         </TimelineRow>
       );
   }
@@ -220,6 +238,7 @@ function ClaimEnded({ entry, when, stepName }: { entry: Extract<RecordEntry, { k
         when={when}
       >
         Claim lapsed{claim.heartbeat_timeout_seconds ? `: no Heartbeat in ${durationText(claim.heartbeat_timeout_seconds * 1000)}` : ""}
+        <ShiftLogs logs={entry.logs} />
         <div className="text-xs text-muted-foreground">Recorded by Darkory</div>
       </TimelineRow>
     );
@@ -259,7 +278,41 @@ function ClaimEnded({ entry, when, stepName }: { entry: Extract<RecordEntry, { k
   return (
     <TimelineRow who={<Avatar id={claim.holder_id} />} when={when}>
       {what}
+      <ShiftLogs logs={entry.logs} />
     </TimelineRow>
+  );
+}
+
+/** " · 📎 Shift log 56.8 kB" after the words that end a Claim: its Shift's log, opened in a new tab. */
+function ShiftLogs({ logs }: { logs?: Evidence[] }) {
+  if (!logs?.length) return null;
+  return (
+    <>
+      {logs.map((l) => (
+        <span key={l.id} className="inline-flex items-center">
+          <span className="mx-1.5 text-muted-foreground" aria-hidden>
+            ·
+          </span>
+          <ShiftLog log={l} />
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** A Shift's log as a chip: "Shift log · 56.8 kB", a link to the file. */
+function ShiftLog({ log }: { log: Evidence }) {
+  return (
+    <a
+      href={evidenceURL(log.id)}
+      target="_blank"
+      rel="noreferrer noopener"
+      title={log.filename}
+      className="inline-flex h-5 items-center gap-1 rounded-md border px-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+    >
+      <PaperclipIcon className="size-3 flex-none" aria-hidden />
+      Shift log · {sizeText(log.size)}
+    </a>
   );
 }
 

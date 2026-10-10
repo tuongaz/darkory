@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { Activity, RunnerSession } from "@/api/client";
+import type { Activity, Claim, Evidence, RunnerSession } from "@/api/client";
 import { ada, bob, builder, detail, parentTask, review, skills, step, subtask, task, workflow } from "@/test/fixtures";
 import { liveClaimOf } from "../board/testData";
 import { taskActions } from "./actions";
 import { taskRecord } from "./record";
 import { graphSteps, graphSubtasks } from "./graph";
-import { takersOf } from "./takers";
+import { takersOf, waitsFor } from "./takers";
+import { sizeText } from "./format";
 
 const members = new Map([ada, bob, builder].map((m) => [m.id, m]));
 const now = Date.now();
@@ -89,6 +90,26 @@ describe("the actions by role", () => {
     expect(a.dimmed.drop).toBe("Owner only");
   });
 
+  it("gives the Owner Merge while the pull request is open and a Runner is attached; holding the Task, Merge waits in the menu", () => {
+    const pr = { number: 7, url: "https://github.com/o/r/pull/7", state: "open" as const };
+    const done = task(1, { state: "done", step_id: undefined, pull_request: pr });
+    expect(taskActions({ ...ctx, me: ada.id, runner: true, detail: out(done) }).primary).toEqual({ kind: "merge" });
+    expect(taskActions({ ...ctx, me: ada.id, runner: false, detail: out(done) }).primary).toBeUndefined();
+    expect(taskActions({ ...ctx, me: bob.id, runner: true, detail: out(done) }).primary).toBeUndefined();
+    expect(taskActions({ ...ctx, me: ada.id, runner: true, detail: out({ ...done, pull_request: { ...pr, state: "merged" } }) }).primary).toBeUndefined();
+    // A Dropped Task's pull request is its Owner's to close on GitHub, not to merge.
+    expect(taskActions({ ...ctx, me: ada.id, runner: true, detail: out({ ...done, state: "dropped" }) }).primary).toBeUndefined();
+    expect(taskActions({ ...ctx, me: ada.id, runner: true, detail: out({ ...done, state: "dropped" }) }).menu).not.toContain("merge");
+
+    const takeable = taskActions({ ...ctx, me: ada.id, runner: true, takeable: new Set(["k-1"]), detail: out(task(1, { pull_request: pr })) });
+    expect(takeable.primary).toEqual({ kind: "merge" });
+    expect(takeable.menu[0]).toBe("claim");
+
+    const holding = taskActions({ ...ctx, me: ada.id, runner: true, detail: out(task(1, { step_id: step.review, pull_request: pr, claim: liveClaimOf(ada, "k-1") })) });
+    expect(holding.primary).toMatchObject({ kind: "advance" });
+    expect(holding.menu[0]).toBe("merge");
+  });
+
   it("completes a Task aimed at its holder, which has no outcomes", () => {
     const aimed = task(1, { step_id: undefined, aimed_at_id: bob.id, claim: liveClaimOf(bob, "k-1") });
     expect(taskActions({ ...ctx, me: bob.id, projects: new Set(), detail: out(aimed) }).primary).toEqual({ kind: "complete" });
@@ -147,5 +168,172 @@ describe("the record's end", () => {
     const end = taskRecord(detail(p, { subtasks: [breakdown, acceptance] }), trail).at(-1);
     expect(end).toMatchObject({ kind: "ended", auto: true, after: acceptance.key });
     expect(end).not.toHaveProperty("by");
+  });
+});
+
+describe("a Shift's log in the record", () => {
+  const t0 = Date.parse("2026-10-10T10:00:00Z");
+  const iso = (min: number) => new Date(t0 + min * 60_000).toISOString();
+  const claim = (id: string, holder: string, from: number, to?: number, how: Claim["how_ended"] = "advanced"): Claim => ({
+    id,
+    task_id: "k-1",
+    holder_id: holder,
+    session_id: `s-${id}`,
+    started_at: iso(from),
+    ...(to !== undefined ? { ended_at: iso(to), how_ended: how } : {}),
+  });
+  const evidence = (id: string, by: string, min: number, kind: Evidence["kind"] = "log"): Evidence => ({
+    id,
+    task_id: "k-1",
+    kind,
+    filename: kind === "log" ? `shift-WEB-1-${by}-100000.log` : "pw-all.log",
+    content_type: "text/plain",
+    size: 56_800,
+    sha256: "x",
+    attached_by: by,
+    created_at: iso(min),
+  });
+  const t = task(1, { created_at: iso(-1) });
+  const ends = (r: ReturnType<typeof taskRecord>) => r.filter((e) => e.kind === "claim-ended");
+
+  it("hangs the log on its Claim's end row and lists only the holder's Evidence as Evidence", () => {
+    const claims = [claim("a", builder.id, 0, 7)];
+    const record = taskRecord(detail(t, { claims, evidence: [evidence("pw", builder.id, 6, "evidence"), evidence("log", builder.id, 7)] }));
+    expect(record.filter((e) => e.kind === "evidence").map((e) => e.kind === "evidence" && e.evidence.map((x) => x.id))).toEqual([["pw"]]);
+    expect(ends(record)[0]).toMatchObject({ claim: { id: "a" }, logs: [{ id: "log" }] });
+    expect(record.some((e) => e.kind === "log")).toBe(false);
+  });
+
+  it("finds the Claim the log belongs to when it came minutes later, after the next holder took the Task", () => {
+    const claims = [claim("a", builder.id, 0, 7), claim("b", bob.id, 8, 12), claim("c", builder.id, 13)];
+    // builder's log of Claim a, attached at 10, while bob held it; builder holds it again at 13.
+    const record = taskRecord(detail(t, { claims, evidence: [evidence("log-a", builder.id, 10), evidence("log-b", bob.id, 12)] }));
+    expect(ends(record).map((e) => e.kind === "claim-ended" && [e.claim.id, e.logs?.map((l) => l.id)])).toEqual([
+      ["a", ["log-a"]],
+      ["b", ["log-b"]],
+    ]);
+  });
+
+  it("puts a log on the Claim it names, however late it came", () => {
+    const claims = [claim("a", builder.id, 0, 7), claim("b", builder.id, 10, 20)];
+    // Two hours after Claim a ended, naming it: it is a's, not b's (just ended) nor a row of its own.
+    const named = { ...evidence("log-a", builder.id, 127), claim_id: "a" };
+    const record = taskRecord(detail(t, { claims, evidence: [named] }));
+    expect(ends(record).map((e) => e.kind === "claim-ended" && [e.claim.id, e.logs?.map((l) => l.id)])).toEqual([
+      ["a", ["log-a"]],
+      ["b", undefined],
+    ]);
+    expect(record.some((e) => e.kind === "log")).toBe(false);
+    // Naming the first of two Claims of one holder, though it came within b's grace.
+    const early = { ...evidence("log-a2", builder.id, 21), claim_id: "a" };
+    expect(ends(taskRecord(detail(t, { claims, evidence: [early] })))[0]).toMatchObject({ claim: { id: "a" }, logs: [{ id: "log-a2" }] });
+  });
+
+  it("gives a log naming no Claim, two hours late, a row of its own as before", () => {
+    const record = taskRecord(detail(t, { claims: [claim("a", builder.id, 0, 7)], evidence: [evidence("log-a", builder.id, 127)] }));
+    expect(record.at(-1)).toMatchObject({ kind: "log", evidence: { id: "log-a" } });
+  });
+
+  it("prefers the Claim that just ended to one the same holder holds now", () => {
+    const claims = [claim("a", builder.id, 0, 7), claim("c", builder.id, 7.5)];
+    const record = taskRecord(detail(t, { claims, evidence: [evidence("log-a", builder.id, 8)] }));
+    expect(ends(record)[0]).toMatchObject({ claim: { id: "a" }, logs: [{ id: "log-a" }] });
+  });
+
+  it("puts a log on the drop that ended its Claim, and one with no Claim of its own on a row of its own", () => {
+    const dropped = { ...t, state: "dropped" as const, ended_at: iso(7) };
+    const claims = [claim("a", builder.id, 0, 7, "dropped")];
+    const trail: Activity[] = [{ seq: 1, at: iso(7), kind: "task.dropped", subject_type: "task", subject_id: t.id, actor_id: ada.id, payload: {} }];
+    const record = taskRecord(detail(dropped, { claims, evidence: [evidence("log-a", builder.id, 8), evidence("stray", bob.id, 9)] }), trail);
+    expect(record.find((e) => e.kind === "ended")).toMatchObject({ state: "dropped", logs: [{ id: "log-a" }] });
+    expect(record.at(-1)).toMatchObject({ kind: "log", evidence: { id: "stray" } });
+  });
+});
+
+describe("Evidence in the record", () => {
+  const t0 = Date.parse("2026-10-10T10:00:00Z");
+  const iso = (min: number) => new Date(t0 + min * 60_000).toISOString();
+  const claim = (id: string, holder: string, from: number, to?: number): Claim => ({
+    id,
+    task_id: "k-1",
+    holder_id: holder,
+    session_id: `s-${id}`,
+    started_at: iso(from),
+    ...(to !== undefined ? { ended_at: iso(to), how_ended: "released" as const } : {}),
+  });
+  const file = (id: string, by: string, min: number): Evidence => ({
+    id,
+    task_id: "k-1",
+    kind: "evidence",
+    filename: `${id}.png`,
+    content_type: "image/png",
+    size: 40_000,
+    sha256: "x",
+    attached_by: by,
+    created_at: iso(min),
+  });
+  const t = task(1, { created_at: iso(-1) });
+  const rows = (r: ReturnType<typeof taskRecord>) => r.flatMap((e) => (e.kind === "evidence" ? [e.evidence.map((x) => x.id)] : []));
+
+  it("folds Evidence one holder attached in a row inside one Claim into one row", () => {
+    const record = taskRecord(detail(t, { claims: [claim("a", builder.id, 0, 9)], evidence: [file("e1", builder.id, 5), file("e2", builder.id, 5), file("e3", builder.id, 6)] }));
+    expect(rows(record)).toEqual([["e1", "e2", "e3"]]);
+    expect(record.find((e) => e.kind === "evidence")!.at).toBe(iso(5));
+  });
+
+  it("folds nothing attached outside any Claim of the attacher's", () => {
+    const record = taskRecord(detail(t, { claims: [], evidence: [file("e1", ada.id, 5), file("e2", ada.id, 5)] }));
+    expect(rows(record)).toEqual([["e1"], ["e2"]]);
+  });
+
+  it("folds Evidence by the Claim it names", () => {
+    // Attached after Claim a's span, but naming it: it folds with what a held.
+    const claims = [claim("a", builder.id, 0, 4)];
+    const evidence = [{ ...file("e1", builder.id, 3), claim_id: "a" }, { ...file("e2", builder.id, 3.5), claim_id: "a" }, { ...file("e3", builder.id, 3.6), claim_id: "b" }];
+    expect(rows(taskRecord(detail(t, { claims, evidence })))).toEqual([["e1", "e2"], ["e3"]]);
+  });
+
+  it("never folds across two Claims, another attacher or a row between", () => {
+    const claims = [claim("a", builder.id, 0, 4), claim("b", builder.id, 4, 9)];
+    const notes = [{ id: "n-1", task_id: "k-1", author_id: builder.id, body: "x", created_at: iso(6.5) }];
+    const evidence = [file("e1", builder.id, 3), file("e2", builder.id, 5), file("e3", ada.id, 5.5), file("e4", builder.id, 6), file("e5", builder.id, 7)];
+    expect(rows(taskRecord(detail(t, { claims, notes, evidence })))).toEqual([["e1"], ["e2"], ["e3"], ["e4"], ["e5"]]);
+  });
+});
+
+describe("whom a Task waits for at its Step", () => {
+  const now = Date.now();
+  const at = (min: number) => new Date(now + min * 60_000).toISOString();
+  const wf = workflow();
+  const build = wf.steps.find((s) => s.id === step.build)!;
+  const qa = { ...builder, id: "m-qa", name: "qa" };
+  const both = { ...build, takers: [builder, qa].map((m) => ({ id: m.id, name: m.name, kind: m.kind })) };
+  const waiting = task(7, { step_id: step.build });
+  const holds = (n: number, who: string, extra: Parameters<typeof liveClaimOf>[2] = {}) => task(n, { claim: liveClaimOf({ ...builder, id: who }, `k-${n}`, extra) });
+  const members = new Map([builder, qa].map((m) => [m.id, m]));
+
+  it("names the busy taker whose Shift ends soonest, else the one holding longest", () => {
+    const open = [holds(1, builder.id, { expires_at: at(9) }), holds(2, qa.id, { expires_at: at(3) })];
+    expect(waitsFor({ task: waiting, claims: [] }, both, open, members, now)).toBe(qa.id);
+    const untimed = [holds(1, builder.id, { expires_at: undefined, started_at: at(-30) }), holds(2, qa.id, { expires_at: undefined, started_at: at(-5) })];
+    expect(waitsFor({ task: waiting, claims: [] }, both, untimed, members, now)).toBe(builder.id);
+  });
+
+  it("names no one while a taker is free, when the Step has no taker, or the Task is blocked or held", () => {
+    const open = [holds(1, builder.id, { expires_at: at(9) })];
+    expect(waitsFor({ task: waiting, claims: [] }, both, open, members, now)).toBeUndefined();
+    expect(waitsFor({ task: waiting, claims: [] }, { ...build, takers: [] }, open, members, now)).toBeUndefined();
+    expect(waitsFor({ task: { ...waiting, blocked: true }, claims: [] }, build, open, members, now)).toBeUndefined();
+    expect(waitsFor({ task: waiting, claims: [] }, build, open, members, now)).toBe(builder.id);
+  });
+});
+
+describe("a file's size", () => {
+  it("reads in decimal units, one decimal below 100", () => {
+    expect(sizeText(753)).toBe("753 B");
+    expect(sizeText(56_800)).toBe("56.8 kB");
+    expect(sizeText(228_900)).toBe("229 kB");
+    expect(sizeText(1_200_000)).toBe("1.2 MB");
+    expect(sizeText(340_000_000)).toBe("340 MB");
   });
 });

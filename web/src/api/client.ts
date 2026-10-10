@@ -33,6 +33,7 @@ export type OrganisationBrief = Schemas["OrganisationBrief"];
 export type Project = Schemas["Project"];
 export type ProjectDetail = Schemas["ProjectDetail"];
 export type ProposalState = Schemas["ProposalState"];
+export type PullRequest = Schemas["PullRequest"];
 export type RunnerSession = Schemas["RunnerSession"];
 export type RunnerSessionState = Schemas["RunnerSessionState"];
 export type Session = Schemas["Session"];

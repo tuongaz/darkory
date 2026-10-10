@@ -149,6 +149,24 @@ type fakeRunner struct {
 	sessions []runnerapi.Session
 	nudged   []string
 	stopped  []string
+	// merge answers Merge, nil for ErrNoPullRequest.
+	merge func(ctx context.Context, task string, number int64) error
+	// pullRequest answers PullRequest; nil for ErrNoPullRequest.
+	pullRequest func(ctx context.Context, task string, number int64, url string) (runnerapi.PullRequest, error)
+}
+
+func (f *fakeRunner) PullRequest(ctx context.Context, task string, number int64, url string) (runnerapi.PullRequest, error) {
+	if f.pullRequest == nil {
+		return runnerapi.PullRequest{}, runnerapi.ErrNoPullRequest
+	}
+	return f.pullRequest(ctx, task, number, url)
+}
+
+func (f *fakeRunner) Merge(ctx context.Context, task string, number int64) error {
+	if f.merge == nil {
+		return runnerapi.ErrNoPullRequest
+	}
+	return f.merge(ctx, task, number)
 }
 
 func (f *fakeRunner) Sessions() []runnerapi.Session {

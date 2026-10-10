@@ -23,9 +23,9 @@ import { workingOf, type Working } from "@/lib/work";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { liveClaim } from "@/work";
-import { AgentMenuItems, AgentPeek, EndPill } from "./AgentPeek";
+import { AgentMenuItems, AgentPeek, EndPill, QueueLines } from "./AgentPeek";
 import { agentActions, agentParam, taskOverAgents } from "./agentActions";
-import { aboutProject, agentRows, lapsesIn24h, lastActivity, lastClaimEntry, takesOf, type AgentRow } from "./derive";
+import { aboutProject, agentRows, lapsesIn24h, lastActivity, lastClaimEntry, queueOf, takesOf, type AgentRow } from "./derive";
 import { GroupHeader, ShortTime } from "./parts";
 import { useMemberDetails, useRecentActivity, useStepNames, useTaskMap } from "./queries";
 import { useAgentActions } from "./useAgentActions";
@@ -39,6 +39,9 @@ function workingMark(held: Task[], session: RunnerSession | undefined, now: numb
   if (held.some((t) => liveClaim(t, now))) return workingOf("agent", session?.state);
   return session?.state === "ending" ? "ending" : undefined;
 }
+
+// A Shift that needs someone shows first: the agent's mark takes its colour.
+const shiftOrder: Partial<Record<RunnerSession["state"], number>> = { stalled: 0, waiting: 1 };
 
 /**
  * /projects/:key/agents: the Project's agents, who is working now and is anyone stuck: what each
@@ -64,7 +67,9 @@ export function AgentsPage() {
   // The Project's Members carry no agent settings; the Organisation's list does.
   const agents = memberList.filter((m) => m.kind === "agent" && inProject.has(m.id));
   const others = memberList.filter((m) => m.kind === "agent" && !inProject.has(m.id) && !m.deactivated_at);
-  const rows = agentRows(agents, open.data ?? [], now, (id) => runner.find((s) => s.member_id === id)?.state);
+  // An agent may run several Shifts; the one that needs someone stands for it.
+  const shiftsOf = (id: string) => runner.filter((s) => s.member_id === id).sort((a, b) => (shiftOrder[a.state] ?? 2) - (shiftOrder[b.state] ?? 2));
+  const rows = agentRows(agents, open.data ?? [], now, (id) => shiftsOf(id)[0]?.state);
   const ids = rows.map((r) => r.agent.id);
   const details = useMemberDetails([...ids, ...others.map((m) => m.id)]);
   const detailOf = new Map(details.flatMap((q) => (q.data ? [[q.data.member.id, q.data] as const] : [])));
@@ -151,7 +156,8 @@ export function AgentsPage() {
                       row={row}
                       project={project}
                       detail={detailOf.get(row.agent.id)}
-                      runnerSession={runner.find((s) => s.member_id === row.agent.id)}
+                      runnerSessions={shiftsOf(row.agent.id)}
+                      queue={queueOf({ agent: row.agent, held: row.held, open: open.data ?? [], workflow, projectId: project.id, now, history: history.entries, members })}
                       takes={takesOf(workflow, row.agent.id)}
                       history={history.entries}
                       selected={selected === row.agent.name}
@@ -199,7 +205,8 @@ function AgentTableRow({
   row,
   project,
   detail,
-  runnerSession,
+  runnerSessions,
+  queue,
   takes,
   history,
   selected,
@@ -212,7 +219,10 @@ function AgentTableRow({
   row: AgentRow;
   project: Project;
   detail: MemberDetail | undefined;
-  runnerSession: RunnerSession | undefined;
+  /** The Shifts the Runner runs for it, the one needing someone first. */
+  runnerSessions: RunnerSession[];
+  /** The Tasks waiting at a Step it takes while every Shift of its is busy. */
+  queue: Task[];
   /** The Steps it takes, in the Project's order, as the page names them (`Bugs › Investigate` of several Workflows). */
   takes: string[];
   history: Activity[];
@@ -228,8 +238,9 @@ function AgentTableRow({
   const task = held[0];
   const claim = task && liveClaim(task, now);
   const idle = !claim;
-  const sessionTask = runnerSession && (tasks.get(runnerSession.task_id) ?? held.find((t) => t.id === runnerSession.task_id));
-  const actions = agentActions({ agent, held, me, members, session: runnerSession, sessionKey: sessionTask?.key, project });
+  const runnerSession = runnerSessions[0];
+  const taskOf = (s: RunnerSession) => tasks.get(s.task_id) ?? held.find((t) => t.id === s.task_id);
+  const actions = agentActions({ agent, held, me, members, shifts: runnerSessions.map((rs) => ({ session: rs, taskKey: taskOf(rs)?.key })), project });
   const { run, dialog } = useAgentActions(agent);
   const lapses = lapsesIn24h(history, agent.id, now);
   // Why an idle agent holds nothing, said once: deactivated, paused, or how its last Claim here ended.
@@ -297,16 +308,23 @@ function AgentTableRow({
       <td className="overflow-hidden">
         {claim ? (
           <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="flex min-w-0 items-center gap-1.5">
-              <Key to={taskOverAgents(project, task.key)}>{task.key}</Key>
-              <span className="truncate font-medium text-foreground">{task.title}</span>
-              {held.length > 1 && <span className="text-xs whitespace-nowrap text-muted-foreground">+{held.length - 1}</span>}
-            </span>
-            <small className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              {task.step_id && <span className="truncate">{stepName(task.step_id) ?? "a Step"}</span>}
-              {task.blocked && task.open_blockers?.[0] && <Pill tone="blocked">Blocked by {task.open_blockers[0].key}</Pill>}
-              {claim.expires_at && <HeartbeatMeter claim={claim} variant="compact" />}
-            </small>
+            {held.map((t) => {
+              const c = liveClaim(t, now);
+              return (
+                <span key={t.id} className="flex min-w-0 flex-col gap-0.5">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <Key to={taskOverAgents(project, t.key)}>{t.key}</Key>
+                    <span className="truncate font-medium text-foreground">{t.title}</span>
+                  </span>
+                  <small className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    {t.step_id && <span className="truncate">{stepName(t.step_id) ?? "a Step"}</span>}
+                    {t.blocked && t.open_blockers?.[0] && <Pill tone="blocked">Blocked by {t.open_blockers[0].key}</Pill>}
+                    {c && <HeartbeatMeter claim={c} variant="compact" />}
+                  </small>
+                </span>
+              );
+            })}
+            <QueueLines agent={agent} queue={queue} project={project} stepName={stepName} now={now} />
           </span>
         ) : (
           <span className="flex min-w-0 flex-col gap-0.5">
@@ -318,16 +336,23 @@ function AgentTableRow({
       </td>
       <td className={wide}>
         {runnerSession ? (
-          <span className="flex min-w-0 flex-col items-start gap-0.5">
-            <span className="flex min-w-0 items-center gap-1.5">
-              <SessionStatePill state={runnerSession.state} />
-              {sessionTask && sessionTask.id !== task?.id && <Key to={taskOverAgents(project, sessionTask.key)}>{sessionTask.key}</Key>}
-            </span>
-            <small className="flex max-w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
-              <span className="truncate">{runnerSession.host}</span>
-              <span aria-hidden>·</span>
-              {runnerSession.tmux ? <span className="truncate font-mono">{runnerSession.tmux}</span> : <span>no tmux</span>}
-            </small>
+          <span className="flex min-w-0 flex-col gap-1">
+            {runnerSessions.map((rs) => {
+              const st = taskOf(rs);
+              return (
+                <span key={rs.session_id} className="flex min-w-0 flex-col items-start gap-0.5">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <SessionStatePill state={rs.state} />
+                    {st && (runnerSessions.length > 1 || st.id !== task?.id) && <Key to={taskOverAgents(project, st.key)}>{st.key}</Key>}
+                  </span>
+                  <small className="flex max-w-full min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                    <span className="truncate">{rs.host}</span>
+                    <span aria-hidden>·</span>
+                    {rs.tmux ? <span className="truncate font-mono">{rs.tmux}</span> : <span>no tmux</span>}
+                  </small>
+                </span>
+              );
+            })}
           </span>
         ) : (
           <span className="text-xs text-muted-foreground">{agent.agent ? "Not running" : "Not run by the Runner"}</span>

@@ -39,6 +39,7 @@ const (
 	ActivityKindProjectMemberAdded    ActivityKind = "project.member_added"
 	ActivityKindProjectMemberRemoved  ActivityKind = "project.member_removed"
 	ActivityKindSessionClosed         ActivityKind = "session.closed"
+	ActivityKindSkillChanged          ActivityKind = "skill.changed"
 	ActivityKindSkillCreated          ActivityKind = "skill.created"
 	ActivityKindSkillVersionPublished ActivityKind = "skill.version_published"
 	ActivityKindTaskAdvanced          ActivityKind = "task.advanced"
@@ -58,6 +59,8 @@ const (
 	ActivityKindTaskNudged            ActivityKind = "task.nudged"
 	ActivityKindTaskObserved          ActivityKind = "task.observed"
 	ActivityKindTaskOwnerPassed       ActivityKind = "task.owner_passed"
+	ActivityKindTaskPullRequestMerged ActivityKind = "task.pull_request_merged"
+	ActivityKindTaskPullRequestOpened ActivityKind = "task.pull_request_opened"
 	ActivityKindTaskRanked            ActivityKind = "task.ranked"
 	ActivityKindTaskReleased          ActivityKind = "task.released"
 	ActivityKindTaskSkillProposed     ActivityKind = "task.skill_proposed"
@@ -116,6 +119,8 @@ func (e ActivityKind) Valid() bool {
 		return true
 	case ActivityKindSessionClosed:
 		return true
+	case ActivityKindSkillChanged:
+		return true
 	case ActivityKindSkillCreated:
 		return true
 	case ActivityKindSkillVersionPublished:
@@ -153,6 +158,10 @@ func (e ActivityKind) Valid() bool {
 	case ActivityKindTaskObserved:
 		return true
 	case ActivityKindTaskOwnerPassed:
+		return true
+	case ActivityKindTaskPullRequestMerged:
+		return true
+	case ActivityKindTaskPullRequestOpened:
 		return true
 	case ActivityKindTaskRanked:
 		return true
@@ -313,6 +322,24 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for EvidenceKind.
+const (
+	EvidenceKindEvidence EvidenceKind = "evidence"
+	EvidenceKindLog      EvidenceKind = "log"
+)
+
+// Valid indicates whether the value is a known member of the EvidenceKind enum.
+func (e EvidenceKind) Valid() bool {
+	switch e {
+	case EvidenceKindEvidence:
+		return true
+	case EvidenceKindLog:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FilePurpose.
 const (
 	FilePurposeAvatar  FilePurpose = "avatar"
@@ -442,6 +469,24 @@ func (e ProposalState) Valid() bool {
 	case Published:
 		return true
 	case Superseded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PullRequestState.
+const (
+	PullRequestMerged PullRequestState = "merged"
+	PullRequestOpen   PullRequestState = "open"
+)
+
+// Valid indicates whether the value is a known member of the PullRequestState enum.
+func (e PullRequestState) Valid() bool {
+	switch e {
+	case PullRequestMerged:
+		return true
+	case PullRequestOpen:
 		return true
 	default:
 		return false
@@ -701,7 +746,11 @@ type Activity struct {
 	// milliseconds since the Unix epoch. The Subtasks Darkory files itself (a Breakdown, an
 	// Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
 	// Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
-	// `holder_id` and `nudge`, 1 or 2.
+	// `holder_id` and `nudge`, 1 or 2. `task.evidence_attached` carries `evidence_id`,
+	// `filename`, `size`, `kind` and `claim_id`, null when the Evidence belongs to no Claim. `task.pull_request_opened` and `task.pull_request_merged` carry the
+	// pull request's `number` and `url`. `skill.created` carries `name`, `kind`, `builtin` and
+	// `project_id`, null for a Skill of the whole Organisation; `skill.changed` carries
+	// `project_id`, null when the Skill became the Organisation's.
 	//
 	// `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
 	// (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
@@ -734,7 +783,11 @@ type Activity struct {
 // milliseconds since the Unix epoch. The Subtasks Darkory files itself (a Breakdown, an
 // Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
 // Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
-// `holder_id` and `nudge`, 1 or 2.
+// `holder_id` and `nudge`, 1 or 2. `task.evidence_attached` carries `evidence_id`,
+// `filename`, `size`, `kind` and `claim_id`, null when the Evidence belongs to no Claim. `task.pull_request_opened` and `task.pull_request_merged` carry the
+// pull request's `number` and `url`. `skill.created` carries `name`, `kind`, `builtin` and
+// `project_id`, null for a Skill of the whole Organisation; `skill.changed` carries
+// `project_id`, null when the Skill became the Organisation's.
 //
 // `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
 // (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
@@ -799,6 +852,9 @@ type AgentSettings struct {
 	// than Claude Code (whose transcript the Runner finds itself); it may use the same
 	// placeholders. The Runner sends Heartbeats only while it changes.
 	ProgressFile *string `json:"progress_file,omitempty"`
+
+	// Shifts How many Shifts the Runner runs for the agent at once, one Session and one Claim each; 1 unless set.
+	Shifts int `json:"shifts"`
 
 	// Unattended The Shift runs with the agent's permission checks skipped; the worktree and the exit rules are the fence.
 	Unattended bool `json:"unattended"`
@@ -956,6 +1012,9 @@ type CreateSkillBody struct {
 	Body string    `json:"body"`
 	Kind SkillKind `json:"kind"`
 	Name string    `json:"name"`
+
+	// Project Id or key of the Project the Skill belongs to; only for a company Skill.
+	Project *string `json:"project,omitempty"`
 }
 
 // CreateViewBody defines model for CreateViewBody.
@@ -1059,15 +1118,31 @@ type ErrorCode string
 // Evidence A report, screenshot or log attached to a Task, recording who attached it; Evidence
 // about a Parent as a whole is attached to the Parent.
 type Evidence struct {
-	AttachedBy  shortid.ID `json:"attached_by"`
-	ContentType string     `json:"content_type"`
-	CreatedAt   time.Time  `json:"created_at"`
-	Filename    string     `json:"filename"`
-	ID          shortid.ID `json:"id"`
-	Sha256      string     `json:"sha256"`
-	Size        int64      `json:"size"`
-	TaskID      shortid.ID `json:"task_id"`
+	AttachedBy shortid.ID `json:"attached_by"`
+
+	// ClaimID The Claim the Evidence was attached under: the attacher's Claim when the attacher held
+	// the Task, or the Claim a Shift's log belongs to, named by the Runner. Absent for
+	// Evidence attached by a Member who did not hold the Task, and for Evidence from before
+	// this field.
+	ClaimID     *shortid.ID `json:"claim_id,omitempty"`
+	ContentType string      `json:"content_type"`
+	CreatedAt   time.Time   `json:"created_at"`
+	Filename    string      `json:"filename"`
+	ID          shortid.ID  `json:"id"`
+
+	// Kind `evidence`: attached by the Task's holder or a Member about the work. `log`: a Shift's
+	// terminal log, attached by the Runner when the Shift ends; it belongs to the Claim the Shift
+	// worked under and is not counted or listed as the Task's Evidence.
+	Kind   EvidenceKind `json:"kind"`
+	Sha256 string       `json:"sha256"`
+	Size   int64        `json:"size"`
+	TaskID shortid.ID   `json:"task_id"`
 }
+
+// EvidenceKind `evidence`: attached by the Task's holder or a Member about the work. `log`: a Shift's
+// terminal log, attached by the Runner when the Shift ends; it belongs to the Claim the Shift
+// worked under and is not counted or listed as the Task's Evidence.
+type EvidenceKind string
 
 // File Bytes the Organisation keeps, referenced by id, such as a Member's avatar. Its bytes are
 // at `/v1/files/{id}/content`.
@@ -1460,6 +1535,18 @@ type ProposeSkillVersionBody struct {
 	Skill string `json:"skill"`
 }
 
+// PullRequest The pull request a Task's branch lands through, in a Workspace in `pull_request` mode, as the
+// Runner read it on GitHub: written when it finds one open for the branch and again when it is
+// merged. Absent until the Runner has seen one.
+type PullRequest struct {
+	Number int64            `json:"number"`
+	State  PullRequestState `json:"state"`
+	URL    string           `json:"url"`
+}
+
+// PullRequestState defines model for PullRequestState.
+type PullRequestState string
+
 // RankTaskBody defines model for RankTaskBody.
 type RankTaskBody struct {
 	Position int64 `json:"position"`
@@ -1582,6 +1669,7 @@ type SetAgentSettingsBody struct {
 	Model        *string            `json:"model,omitempty"`
 	Paused       *bool              `json:"paused,omitempty"`
 	ProgressFile *string            `json:"progress_file,omitempty"`
+	Shifts       *int               `json:"shifts,omitempty"`
 	Unattended   *bool              `json:"unattended,omitempty"`
 }
 
@@ -1602,6 +1690,16 @@ type SetProjectSeenBody struct {
 type SetTaskLabelsBody struct {
 	// Labels Label ids or names, each the Task's Project's own or the Organisation's; the whole set it carries.
 	Labels []string `json:"labels"`
+}
+
+// SetTaskPullRequestBody defines model for SetTaskPullRequestBody.
+type SetTaskPullRequestBody struct {
+	Number int64            `json:"number"`
+	State  PullRequestState `json:"state"`
+
+	// URL The pull request's own `https` address, `https://<host>/<owner>/<repo>/pull/<number>`,
+	// on `github.com` or on the host `GH_HOST` names.
+	URL string `json:"url"`
 }
 
 // SetWorkflowBody defines model for SetWorkflowBody.
@@ -1653,6 +1751,10 @@ type Skill struct {
 	ID             shortid.ID `json:"id"`
 	Kind           SkillKind  `json:"kind"`
 	Name           string     `json:"name"`
+
+	// ProjectID The Project a company Skill belongs to; absent for a generic Skill and for a company
+	// Skill of the whole Organisation.
+	ProjectID *shortid.ID `json:"project_id,omitempty"`
 }
 
 // SkillDetail defines model for SkillDetail.
@@ -1876,6 +1978,11 @@ type Task struct {
 	ParentID  *shortid.ID `json:"parent_id,omitempty"`
 	ProjectID shortid.ID  `json:"project_id"`
 
+	// PullRequest The pull request a Task's branch lands through, in a Workspace in `pull_request` mode, as the
+	// Runner read it on GitHub: written when it finds one open for the branch and again when it is
+	// merged. Absent until the Runner has seen one.
+	PullRequest *PullRequest `json:"pull_request,omitempty"`
+
 	// Rank Position in the Project's Rank, 1 first; an ended Task keeps its place. Absent on a
 	// Subtask, which sorts by its Parent's.
 	Rank *int64 `json:"rank,omitempty"`
@@ -2039,6 +2146,12 @@ type UpdateProjectBody struct {
 	// DefaultWorkspace Workspace id or name; `""` clears the Project's default.
 	DefaultWorkspace *string `json:"default_workspace,omitempty"`
 	Name             *string `json:"name,omitempty"`
+}
+
+// UpdateSkillBody defines model for UpdateSkillBody.
+type UpdateSkillBody struct {
+	// Project Id or key of the Project the company Skill belongs to; `""` makes it the Organisation's.
+	Project string `json:"project"`
 }
 
 // UpdateViewBody defines model for UpdateViewBody.
@@ -2226,6 +2339,9 @@ type BlockerRef = string
 
 // Cursor defines model for Cursor.
 type Cursor = string
+
+// EvidenceClaim defines model for EvidenceClaim.
+type EvidenceClaim = shortid.ID
 
 // EvidenceFilename defines model for EvidenceFilename.
 type EvidenceFilename = string
@@ -2578,6 +2694,13 @@ type CreateSkillParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// UpdateSkillParams defines parameters for UpdateSkill.
+type UpdateSkillParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListTasksParams defines parameters for ListTasks.
 type ListTasksParams struct {
 	// Project Only Tasks of this Project, by id or key.
@@ -2643,7 +2766,7 @@ type ListTasksParams struct {
 	// (Workspace id the Task names) · `model` (the live Claim's model label) · `filed_at` (when
 	// it was filed) · `completed_at` (when it ended done; a dropped Task has none) · `ended_at`
 	// (when it ended, done or dropped) · `q` (`contains`, ignoring case, over the key and the
-	// title).
+	// title) · `pull_request` (`open`, `merged`, or `none`: no pull request recorded).
 	//
 	// Example: `filter=step:in:<id>,<id>&filter=holder:is:none&filter=filed_at:last:7d`. An
 	// unknown field, an operator the field does not take, the wrong number of values or a value
@@ -2725,6 +2848,13 @@ type AttachTaskEvidenceParams struct {
 	// Filename The file's name, as it should be shown and downloaded.
 	Filename EvidenceFilename `form:"filename" json:"filename"`
 
+	// Kind What the file is; `evidence` unless given.
+	Kind *EvidenceKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Claim The Claim the Evidence belongs to: one on this Task whose holder is the caller, ended or
+	// not. Without it, the caller's Claim when the caller holds the Task, else none.
+	Claim *EvidenceClaim `form:"claim,omitempty" json:"claim,omitempty"`
+
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -2774,6 +2904,20 @@ type ObserveParams struct {
 
 // PassOwnershipParams defines parameters for PassOwnership.
 type PassOwnershipParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// SetTaskPullRequestParams defines parameters for SetTaskPullRequest.
+type SetTaskPullRequestParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// MergeTaskPullRequestParams defines parameters for MergeTaskPullRequest.
+type MergeTaskPullRequestParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -2914,6 +3058,9 @@ type RequestEmailSignInJSONRequestBody = EmailSignInBody
 // CreateSkillJSONRequestBody defines body for CreateSkill for application/json ContentType.
 type CreateSkillJSONRequestBody = CreateSkillBody
 
+// UpdateSkillJSONRequestBody defines body for UpdateSkill for application/json ContentType.
+type UpdateSkillJSONRequestBody = UpdateSkillBody
+
 // FileTaskJSONRequestBody defines body for FileTask for application/json ContentType.
 type FileTaskJSONRequestBody = FileTaskBody
 
@@ -2946,6 +3093,9 @@ type ObserveJSONRequestBody = ObserveBody
 
 // PassOwnershipJSONRequestBody defines body for PassOwnership for application/json ContentType.
 type PassOwnershipJSONRequestBody = PassOwnershipBody
+
+// SetTaskPullRequestJSONRequestBody defines body for SetTaskPullRequest for application/json ContentType.
+type SetTaskPullRequestJSONRequestBody = SetTaskPullRequestBody
 
 // RankTaskJSONRequestBody defines body for RankTask for application/json ContentType.
 type RankTaskJSONRequestBody = RankTaskBody
@@ -3141,6 +3291,9 @@ type ServerInterface interface {
 	// GetSkill Get a Skill with its current version
 	// (GET /v1/skills/{skill})
 	GetSkill(w http.ResponseWriter, r *http.Request, skill SkillRef)
+	// UpdateSkill Set the Project a company Skill belongs to (admin)
+	// (PATCH /v1/skills/{skill})
+	UpdateSkill(w http.ResponseWriter, r *http.Request, skill SkillRef, params UpdateSkillParams)
 	// ListSkillVersions List a Skill's published versions
 	// (GET /v1/skills/{skill}/versions)
 	ListSkillVersions(w http.ResponseWriter, r *http.Request, skill SkillRef)
@@ -3201,6 +3354,12 @@ type ServerInterface interface {
 	// PassOwnership Pass a Task's ownership, with its Subtasks', to another Member
 	// (POST /v1/tasks/{task}/owner)
 	PassOwnership(w http.ResponseWriter, r *http.Request, task TaskRef, params PassOwnershipParams)
+	// SetTaskPullRequest Record the pull request a Task's branch lands through
+	// (PUT /v1/tasks/{task}/pull-request)
+	SetTaskPullRequest(w http.ResponseWriter, r *http.Request, task TaskRef, params SetTaskPullRequestParams)
+	// MergeTaskPullRequest Merge a Task's open pull request
+	// (POST /v1/tasks/{task}/pull-request/merge)
+	MergeTaskPullRequest(w http.ResponseWriter, r *http.Request, task TaskRef, params MergeTaskPullRequestParams)
 	// RankTask Move a Task to a position in its Project's Rank
 	// (POST /v1/tasks/{task}/rank)
 	RankTask(w http.ResponseWriter, r *http.Request, task TaskRef, params RankTaskParams)
@@ -5602,6 +5761,56 @@ func (siw *ServerInterfaceWrapper) GetSkill(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// UpdateSkill operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSkill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "skill" -------------
+	var skill SkillRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "skill", r.PathValue("skill"), &skill, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skill", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateSkillParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSkill(w, r, skill, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSkillVersions operation middleware
 func (siw *ServerInterfaceWrapper) ListSkillVersions(w http.ResponseWriter, r *http.Request) {
 
@@ -6268,6 +6477,32 @@ func (siw *ServerInterfaceWrapper) AttachTaskEvidence(w http.ResponseWriter, r *
 		return
 	}
 
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "claim" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "claim", r.URL.Query(), &params.Claim, runtime.BindQueryParameterOptions{Type: "string", Format: "id"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "claim"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "claim", Err: err})
+		}
+		return
+	}
+
 	headers := r.Header
 
 	// ------------- Optional header parameter "Idempotency-Key" -------------
@@ -6633,6 +6868,106 @@ func (siw *ServerInterfaceWrapper) PassOwnership(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PassOwnership(w, r, task, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetTaskPullRequest operation middleware
+func (siw *ServerInterfaceWrapper) SetTaskPullRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "task" -------------
+	var task TaskRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetTaskPullRequestParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTaskPullRequest(w, r, task, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MergeTaskPullRequest operation middleware
+func (siw *ServerInterfaceWrapper) MergeTaskPullRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "task" -------------
+	var task TaskRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params MergeTaskPullRequestParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MergeTaskPullRequest(w, r, task, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7447,6 +7782,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skills", wrapper.ListSkills)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/skills", wrapper.CreateSkill)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skills/{skill}", wrapper.GetSkill)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/skills/{skill}", wrapper.UpdateSkill)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skills/{skill}/versions", wrapper.ListSkillVersions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skill-proposals/{proposal}", wrapper.GetSkillProposal)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces", wrapper.ListWorkspaces)
@@ -7470,6 +7806,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/owner", wrapper.PassOwnership)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/rank", wrapper.RankTask)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tasks/{task}/labels", wrapper.SetTaskLabels)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tasks/{task}/pull-request", wrapper.SetTaskPullRequest)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/pull-request/merge", wrapper.MergeTaskPullRequest)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/notes", wrapper.AddNote)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tasks/{task}/observations", wrapper.ListTaskObservations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/observations", wrapper.Observe)

@@ -54,6 +54,17 @@ describe("what an entry says", () => {
     expect(words(entry(1, "project.member_added", web.id, { actor_id: ada.id, payload: { member_id: bob.id } }))).toBe("ada added bob to Web");
   });
 
+  it("words a pull request opened and merged, and a Skill moved to a Project or the Organisation", () => {
+    expect(words(entry(1, "task.pull_request_opened", cart.id, { actor_id: builder.id, payload: { number: 7, url: "https://github.com/o/r/pull/7" } }))).toBe(
+      "builder opened #7 on WEB-3 Build the cart",
+    );
+    expect(words(entry(1, "task.pull_request_merged", cart.id, { actor_id: ada.id, payload: { number: 7, url: "https://github.com/o/r/pull/7" } }))).toBe(
+      "ada merged #7 on WEB-3 Build the cart",
+    );
+    expect(words(entry(1, "skill.changed", engineer.id, { actor_id: ada.id, payload: { project_id: web.id } }))).toBe(`ada moved ${engineer.name} to WEB`);
+    expect(words(entry(1, "skill.changed", engineer.id, { actor_id: ada.id, payload: { project_id: null } }))).toBe(`ada moved ${engineer.name} to the Organisation`);
+  });
+
   it("says Darkory filed its own Subtasks, at their Step, and names a deleted Step plainly", () => {
     expect(words(entry(1, "task.filed", cart.id, { payload: { step_id: "st-gone", parent_id: checkout.id } }))).toBe(
       "Darkory filed WEB-3 Build the cart at a Step · under WEB-1",
@@ -166,5 +177,40 @@ describe("a Project's Activity", () => {
     await userEvent.click(screen.getByRole("button", { name: "Load older" }));
     await waitFor(() => expect(rows()).toHaveLength(130));
     expect(screen.queryByRole("button", { name: "Load older" })).not.toBeInTheDocument();
+  });
+});
+
+describe("a Claim folded in the Activity", () => {
+  it("says the Claim's end with what it carried, links its files, and counts entries and rows", async () => {
+    const trail = [
+      entry(14, "task.evidence_attached", cart.id, { actor_id: builder.id, at: minutes(0), payload: { evidence_id: "e-log", filename: "shift-WEB-3-builder-101600.log", size: 56_800, kind: "log" } }),
+      entry(13, "task.released", cart.id, { actor_id: builder.id, at: minutes(-1), payload: { claim_id: "c" } }),
+      entry(12, "task.evidence_attached", cart.id, { actor_id: builder.id, at: minutes(-2), payload: { evidence_id: "e-wc", filename: "wc.log", size: 753, kind: "evidence" } }),
+      entry(11, "task.note_added", cart.id, { actor_id: builder.id, at: minutes(-3), payload: {} }),
+      entry(10, "task.claimed", cart.id, { actor_id: builder.id, at: minutes(-4), payload: { claim_id: "c", skill_id: engineer.id } }),
+    ];
+    recordApi({ tasks: [cart], activity: trail });
+    renderApp("/projects/WEB/activity");
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    const released = rows()[0];
+    expect(released).toHaveTextContent("builder released WEB-3 Build the cart · a Note");
+    expect(within(released).getByRole("link", { name: /wc\.log/ })).toHaveAttribute("href", "/v1/evidence/e-wc/content");
+    expect(within(released).getByRole("link", { name: /Shift log/ })).toHaveTextContent("Shift log · 56.8 kB");
+    expect(screen.getByRole("contentinfo")).toHaveTextContent("5 entries · 2 rows");
+  });
+
+  it("folds the entries the Kind filter kept, not those it left out", async () => {
+    recordApi({
+      tasks: [cart],
+      activity: [
+        entry(3, "task.released", cart.id, { actor_id: builder.id, at: minutes(-1), payload: { claim_id: "c" } }),
+        entry(2, "task.note_added", cart.id, { actor_id: builder.id, at: minutes(-2), payload: {} }),
+        entry(1, "task.claimed", cart.id, { actor_id: builder.id, at: minutes(-3), payload: { claim_id: "c" } }),
+      ],
+    });
+    renderApp("/projects/WEB/activity?kind=task.note_added");
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(rows()[0]).toHaveTextContent("builder added a Note to WEB-3");
+    expect(screen.getByRole("contentinfo")).toHaveTextContent(/^1 entry$/);
   });
 });

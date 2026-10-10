@@ -168,6 +168,10 @@ func (s *session) run(ctx context.Context) bool {
 		delete(r.sessions, s.rec.Session())
 		r.mu.Unlock()
 		close(s.over)
+		if ctx.Err() == nil {
+			// Not when the runner stops: the Task goes back, and the next runner's Poll reads it.
+			s.readPullRequests(ctx)
+		}
 		s.cleanUp(context.WithoutCancel(ctx))
 	}()
 	s.log.Info("took a Task", "title", s.d.Task.Title, "step", stepName(s.d), "session", s.rec.Session())
@@ -380,9 +384,11 @@ func (s *session) prompt(ctx context.Context, parent *ParentInfo, checkouts []Ch
 				texts = append(texts, base)
 			}
 		} else {
-			// The company's version of a generic Skill, when the agent has one, comes first.
+			// The company's version of a generic Skill, when the agent has one, comes first: one of
+			// the Organisation's or of the Task's Project, never another Project's (ADR 0020).
 			for _, own := range s.a.me.Skills {
-				if own.Kind == client.Company && own.BaseSkillID != nil && *own.BaseSkillID == sk.Skill.ID {
+				if own.Kind == client.Company && own.BaseSkillID != nil && *own.BaseSkillID == sk.Skill.ID &&
+					(own.ProjectID == nil || *own.ProjectID == d.Task.ProjectID) {
 					if c, err := s.rec.Skill(ctx, own.ID); err == nil {
 						texts = append([]*client.SkillDetail{c}, texts...)
 					}
@@ -403,7 +409,8 @@ func (s *session) prompt(ctx context.Context, parent *ParentInfo, checkouts []Ch
 		p.Notes = append(p.Notes, pn)
 	}
 	for _, e := range d.Evidence {
-		if e.TaskID == d.Task.ID {
+		// A Shift's log is the Claim's, not the Task's Evidence.
+		if e.TaskID == d.Task.ID && e.Kind == client.EvidenceKindEvidence {
 			p.Evidence = append(p.Evidence, PromptEvidence{ID: e.ID, Filename: e.Filename, ContentType: e.ContentType,
 				AttachedBy: or(names[e.AttachedBy], e.AttachedBy), Size: e.Size})
 		}
@@ -867,11 +874,12 @@ func (s *session) shutdown(ctx context.Context) {
 	s.attachLog(bctx)
 }
 
-// attachLog attaches the session's log as Evidence on the Task. When another Member holds the Task
-// by now, as the next holder may as soon as the agent advanced it, the record takes Evidence from
-// that holder alone (plan invariant 6), so the log waits on disk and the runner attaches it the
-// moment the Task is free (attachPending). It is named for the Task, the agent and the time the
-// session began (UTC), so the builder's and the reviewer's logs of one Task tell apart.
+// attachLog attaches the session's log to the Task as a log, the Claim's and not the Task's
+// Evidence, naming the Shift's Claim: the record takes it so whoever holds the Task now, as the
+// next holder may as soon as the agent advanced it. A log that cannot be attached (the record
+// refuses it, or does not answer) waits on disk with its Claim, and the runner attaches it later
+// (attachKept). It is named for the Task, the agent and the time the session began (UTC), so the
+// builder's and the reviewer's logs of one Task tell apart.
 func (s *session) attachLog(ctx context.Context) {
 	b, err := readTail(s.logPath, maxLog)
 	if err != nil || len(b) == 0 {
@@ -881,18 +889,18 @@ func (s *session) attachLog(ctx context.Context) {
 		return
 	}
 	name := SessionLogName(s.key, s.a.name(), s.started)
-	err = s.rec.Attach(ctx, s.key, name, b)
+	err = s.rec.Attach(ctx, s.key, name, client.EvidenceKindLog, s.claimID, b)
 	switch {
 	case err == nil:
 		s.log.Info("attached the Shift's log", "evidence", name, "bytes", len(b))
 	case refusedBy(err, client.ErrorCodeNotHolder):
-		if err := s.r.keepLog(s.a, s.key, name, b); err != nil {
+		if err := s.r.keepLog(s.a, s.key, s.claimID, name, b); err != nil {
 			s.log.Error("could not keep the Shift's log for later", "evidence", name, "err", err)
 			return
 		}
 		s.log.Info("the Task is held by its next holder; the Shift's log is attached once it is free", "evidence", name)
 	default:
-		if err := s.r.keepLog(s.a, s.key, name, b); err != nil {
+		if err := s.r.keepLog(s.a, s.key, s.claimID, name, b); err != nil {
 			s.log.Error("could not attach the Shift's log, nor keep it for later", "evidence", name, "err", err)
 			return
 		}
@@ -922,6 +930,35 @@ func readTail(path string, n int64) ([]byte, error) {
 		return nil, err
 	}
 	return io.ReadAll(f)
+}
+
+// readPullRequests reads, once the Claim has ended, the pull requests of the Task's branch in each
+// of its Workspaces in pull_request mode, which the agent may have opened or merged in its Shift,
+// and writes the newest open or merged one that is the Task's (landing) on the Task, as the Shift.
+func (s *session) readPullRequests(ctx context.Context) {
+	for _, c := range s.checkouts {
+		if c.Workspace.Mode != ModePullRequest {
+			continue
+		}
+		cctx, cancel := context.WithTimeout(ctx, ghTimeout)
+		log := s.log.With("workspace", c.Workspace.Name)
+		prs, err := s.r.gh.PullRequestsForBranch(cctx, c.Workspace.Path, c.Branch)
+		if err != nil {
+			log.Warn("listing the pull requests of the Task's branch", "branch", c.Branch, "err", err)
+		} else {
+			prs = slices.DeleteFunc(prs, func(pr PullRequest) bool {
+				why := s.r.notLanding(cctx, s.d, c.Workspace, pr)
+				if why != "" {
+					log.Info(why, "pr", pr.Number, "branch", pr.HeadRefName, "base", pr.BaseRefName)
+				}
+				return why != ""
+			})
+			if pr, ok := newestPullRequest(prs); ok {
+				s.r.writePullRequest(cctx, s.rec, s.key, pullRequestBody(pr), log, "read the Task's pull request")
+			}
+		}
+		cancel()
+	}
 }
 
 // cleanUp removes the Task's worktrees once the Task has ended, keeping its branches.

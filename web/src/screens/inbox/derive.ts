@@ -1,7 +1,8 @@
-import type { Activity, Member, RunnerSessionState, Skill, Task, TaskDetail, Workflows } from "@/api/client";
+import type { Activity, Member, PullRequest, RunnerSessionState, Skill, Task, TaskDetail, Workflows } from "@/api/client";
 import { stepTitle } from "@/components/workflowLine/model";
 import { stepsInOrder } from "@/screens/board/derive";
-import { liveClaim } from "@/work";
+import { allShiftsBusy, liveClaim } from "@/work";
+import { everyTakerBusy, stepTakers, waitsAtStep } from "@/screens/task/takers";
 
 // The rules the four screens read, apart from rendering, so the tests can hold them to the plan.
 
@@ -41,7 +42,20 @@ export type Decision =
   /** A Parent whose Subtasks have all ended: its Owner completes or drops it. */
   | { kind: "complete"; task: Task; acceptance?: "done" | "dropped" }
   /** A Retrospective carrying a proposal written against a Skill version no longer current. */
-  | { kind: "stale"; task: Task; skill: string; basedOn: number; current: number };
+  | { kind: "stale"; task: Task; skill: string; basedOn: number; current: number }
+  /** A Done Task whose pull request is open: its Owner merges it. */
+  | { kind: "merge"; task: Task; pr: PullRequest };
+
+/**
+ * The Done Tasks `me` owns whose pull request the Runner read open on GitHub, oldest Done first:
+ * the work is finished and lands once its Owner merges it.
+ */
+export function awaitingMerge(tasks: readonly Task[], me: string): Extract<Decision, { kind: "merge" }>[] {
+  return tasks
+    .filter((t) => t.state === "done" && t.owner_id === me && t.pull_request?.state === "open")
+    .sort((a, b) => Date.parse(a.ended_at ?? "") - Date.parse(b.ended_at ?? ""))
+    .map((task) => ({ kind: "merge" as const, task, pr: task.pull_request! }));
+}
 
 /**
  * The open Parents among `owned` whose every Subtask has ended and which wait for their Owner's
@@ -315,13 +329,6 @@ export function count(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-/** "70 B", "1.2 kB", "3.4 MB". */
-export function sizeText(bytes: number): string {
-  if (bytes < 1000) return `${bytes} B`;
-  if (bytes < 1_000_000) return `${(bytes / 1000).toFixed(1)} kB`;
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
-}
-
 /**
  * The Steps a Member takes in a Project, in its order, as the Agents page names them: `Bugs ›
  * Investigate` when the Project has two or more Workflows, else the Step's name.
@@ -331,4 +338,53 @@ export function takesOf(workflow: Pick<Workflows, "workflows" | "steps"> | undef
   return stepsInOrder(workflow)
     .filter((s) => s.takers.some((t) => t.id === memberId))
     .map((s) => stepTitle(s, workflow.workflows));
+}
+
+/**
+ * What waits for a busy agent in a Project: the open Tasks of the Project that wait at their Step
+ * (`waitsAtStep`), not Parents, where the agent is among the Step's takers (`stepTakers`: never a
+ * Task it held under another Skill, as the claims in `history` say) and every taker holds as many
+ * other Tasks as it runs Shifts: the Task page's "waits for" says the same. The longest waiting at
+ * its Step comes first.
+ */
+export function queueOf({
+  agent,
+  held,
+  open,
+  workflow,
+  projectId,
+  now,
+  history = [],
+  members = new Map([[agent.id, agent]]),
+}: {
+  agent: Member;
+  held: readonly Task[];
+  open: readonly Task[];
+  workflow: Pick<Workflows, "steps"> | undefined;
+  projectId: string;
+  now: number;
+  /** Activity that carries `task.claimed` entries: the Skills each Member held each Task under. */
+  history?: readonly Activity[];
+  /** The Members by id, for each taker's Shifts; the agent alone when not given. */
+  members?: Map<string, Pick<Member, "agent">>;
+}): Task[] {
+  if (!workflow || !allShiftsBusy(agent, held.length)) return [];
+  const heldUnder = new Map<string, string[]>();
+  for (const e of history) {
+    const skill = str(e.payload, "skill_id");
+    if (e.kind === "task.claimed" && e.actor_id && skill) {
+      const k = `${e.subject_id} ${e.actor_id}`;
+      heldUnder.set(k, [...(heldUnder.get(k) ?? []), skill]);
+    }
+  }
+  const stepOf = new Map(workflow.steps.map((s) => [s.id, s]));
+  const since = (t: Task) => Date.parse(t.step_since ?? t.waiting_since);
+  return open
+    .filter((t) => {
+      const step = t.step_id ? stepOf.get(t.step_id) : undefined;
+      if (t.project_id !== projectId || !waitsAtStep(t, step, now)) return false;
+      const takers = stepTakers(t, step, (id) => heldUnder.get(`${t.id} ${id}`) ?? []);
+      return takers.includes(agent.id) && everyTakerBusy(takers, t, open, members, now);
+    })
+    .sort((a, b) => since(a) - since(b));
 }
