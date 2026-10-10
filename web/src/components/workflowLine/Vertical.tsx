@@ -43,6 +43,9 @@ import {
  * divider, "When a Parent ends".
  */
 
+/** How long a count pulses when a Task folds into it: chip-pulse's two beats. */
+const PULSE_MS = 2_400;
+
 /** The most held Tasks a Step draws as chips; the rest are in its count. */
 const HELD_CHIPS = 3;
 
@@ -190,6 +193,40 @@ export function VerticalLine({
   const at = new Map<string, LineTask[]>();
   for (const task of tasks) if (task.stepId && !flow.transit.has(task.id)) at.set(task.stepId, [...(at.get(task.stepId) ?? []), task]);
   for (const list of at.values()) list.sort((a, b) => Number(!!b.holder) - Number(!!a.holder) || (a.since ?? 0) - (b.since ?? 0));
+
+  /** A waiting Task standing as a chip for now: its live moment plays (it arrived, it pulses, a tag names it) or it is selected. */
+  const standing = (task: LineTask) =>
+    flow.arrived.has(task.id) || flow.pulses.has(task.id) || selected === task.id || (!!task.stepId && !!flow.callouts.get(task.stepId)?.some((c) => c.taskId === task.id));
+  /** A Step's Tasks split: its chips (held, at most three, and a waiting one while it stands) and the rest, counted. */
+  const split = (id: string) => {
+    const list = at.get(id) ?? [];
+    const held = list.filter((x) => x.holder);
+    const ids = new Set([...held.slice(0, HELD_CHIPS), ...list.filter((x) => !x.holder && standing(x))].map((x) => x.id));
+    return { held, chips: list.filter((x) => ids.has(x.id)), rest: list.filter((x) => !ids.has(x.id)) };
+  };
+
+  // A count that grows pulses once, so a Task folding into it after its moment never goes unseen.
+  const counted = JSON.stringify([...at.keys()].sort().map((id) => [id, split(id).rest.map((x) => x.id)]));
+  const was = useRef<Map<string, string[]> | null>(null);
+  const beats = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    const now = new Map<string, string[]>(JSON.parse(counted));
+    const before = was.current;
+    was.current = now;
+    if (!before) return;
+    const grew = [...now].filter(([id, ids]) => ids.some((x) => !before.get(id)?.includes(x))).map(([id]) => id);
+    if (grew.length === 0) return;
+    setFolded((f) => new Set([...f, ...grew]));
+    for (const id of grew) {
+      clearTimeout(beats.current.get(id));
+      beats.current.set(id, setTimeout(() => setFolded((f) => new Set([...f].filter((x) => x !== id))), PULSE_MS));
+    }
+  }, [counted]);
+  useEffect(() => {
+    const timers = beats.current;
+    return () => timers.forEach(clearTimeout);
+  }, []);
 
   const traversed = new Set(trace?.traversed ?? []);
   const next = new Set(trace?.next ?? []);
@@ -342,10 +379,6 @@ export function VerticalLine({
     </>
   );
 
-  /** A waiting Task standing as a chip for now: its live moment plays (it arrived, it pulses, a tag names it) or it is selected. */
-  const standing = (task: LineTask) =>
-    flow.arrived.has(task.id) || flow.pulses.has(task.id) || selected === task.id || (!!task.stepId && !!flow.callouts.get(task.stepId)?.some((c) => c.taskId === task.id));
-
   /**
    * A Step's Tasks at rest (vf-4): its held Tasks as chips, at most three, and a waiting one while
    * its moment plays; one count for the rest, "N waiting", or "N more" when held Tasks are among
@@ -353,10 +386,7 @@ export function VerticalLine({
    */
   const atStep = (id: string) => {
     const s = steps.get(id);
-    const list = at.get(id) ?? [];
-    const held = list.filter((x) => x.holder);
-    const chips = new Set([...held.slice(0, HELD_CHIPS), ...list.filter((x) => !x.holder && standing(x))].map((x) => x.id));
-    const rest = list.filter((x) => !chips.has(x.id));
+    const { held, chips, rest } = split(id);
     const n = hidden?.get(id) ?? 0;
     const hold = !!s && isHoldStep(s);
     const text = `${rest.length} ${held.length > HELD_CHIPS ? "more" : "waiting"}`;
@@ -364,7 +394,7 @@ export function VerticalLine({
     const controls = `${listId}-${id}`;
     return (
       <>
-        {list.filter((x) => chips.has(x.id)).map(token)}
+        {chips.map(token)}
         {rest.length > 0 && (
           <Count
             stepId={id}
@@ -374,6 +404,7 @@ export function VerticalLine({
             open={shown}
             controls={controls}
             ringed={rest.some((x) => ringed?.has(x.id))}
+            pulse={folded.has(id)}
             onToggle={() => setOpen(shown ? null : id)}
             buttonRef={(el) => {
               if (el) counts.current.set(id, el);

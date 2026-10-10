@@ -1,7 +1,7 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { quiet, type FlowState } from "@/components/workflow/live";
 import { DARK } from "./fixtures";
 import type { LineMember, LineTask } from "./model";
@@ -132,6 +132,26 @@ describe("the Tasks at a Step", () => {
     );
     expect(chips(station("build"))).toEqual(["DARK-21"]);
     expect(count(station("build"))).toHaveTextContent("13 waiting");
+  });
+
+  it("pulses the count once when a Task folds into it, never on the first draw", () => {
+    vi.useFakeTimers();
+    try {
+      const line = (flow?: FlowState) => (
+        <MemoryRouter>
+          <WorkflowLine workflow={DARK("impl")} tasks={BUSY} now={NOW} stepHref={href} flow={flow} />
+        </MemoryRouter>
+      );
+      const { rerender } = render(line({ ...quiet, arrived: new Set(["k-30"]) }));
+      expect(count(station("build"))).not.toHaveAttribute("data-pulse");
+      rerender(line());
+      expect(count(station("build"))).toHaveTextContent("13 waiting");
+      expect(count(station("build"))).toHaveAttribute("data-pulse");
+      act(() => vi.advanceTimersByTime(2_500));
+      expect(count(station("build"))).not.toHaveAttribute("data-pulse");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("selects a waiting Task from its row, and the selected Task stands as a chip at its Step", async () => {

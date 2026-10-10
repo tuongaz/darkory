@@ -638,6 +638,9 @@
   .wl-token[data-pulse="lapsed"] { --moment: var(--state-claimed); }
   .wl-token[data-pulse="back"] { --moment: var(--state-blocked); }
   .wl-token[data-arrived] { animation: chip-arrive 2s ease-out; }
+  /* A Step's count, when a Task folds into it: the token's pulse, in the waiting colour. */
+  .wl-count[data-pulse] { --moment: var(--state-waiting); animation: chip-pulse 1.2s ease-in-out 2; }
+  .wl-count[data-ringed] { box-shadow: 0 0 0 3px var(--background), 0 0 0 5px var(--ring); }
   .wl-token[data-selected] { box-shadow: 0 0 0 3px var(--background), 0 0 0 5px var(--foreground); }
   .wl-token[data-ringed] { box-shadow: 0 0 0 3px var(--background), 0 0 0 5px var(--ring); }
   .wl-ring { border: 1.5px solid var(--tone); }
@@ -660,6 +663,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .wl-token[data-pulse],
+    .wl-count[data-pulse],
     .wl-token[data-arrived],
     .wl-chain,
     .wl-dim {

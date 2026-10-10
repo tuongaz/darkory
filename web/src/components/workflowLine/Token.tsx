@@ -150,6 +150,7 @@ export function Count({
   open,
   controls,
   ringed,
+  pulse,
   onToggle,
   buttonRef,
 }: {
@@ -160,6 +161,8 @@ export function Count({
   open: boolean;
   controls: string;
   ringed?: boolean;
+  /** A Task just folded into it: one brief pulse. */
+  pulse?: boolean;
   onToggle: () => void;
   buttonRef?: Ref<HTMLButtonElement>;
 }) {
@@ -169,6 +172,7 @@ export function Count({
       type="button"
       data-count={stepId}
       data-ringed={ringed ? "" : undefined}
+      data-pulse={pulse ? "" : undefined}
       aria-label={`${stepName}: ${text}`}
       aria-expanded={open}
       aria-controls={open ? controls : undefined}
