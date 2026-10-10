@@ -243,3 +243,33 @@ test("the Claim's Session id reads on one line in the rail at 1440, its 22 chara
   await shot(page, "session-id-one-line");
   expect(errors).toEqual([]);
 });
+
+test("a Done Task's pull request reads on its facts line and in its rail, a link to GitHub; with no Runner there is no Merge", async ({ browser }) => {
+  // TSK lands its branches through pull requests from here on: its default Workspace is in pull_request mode.
+  await v1(as.ada, "POST", "/v1/workspaces", { name: "tsk-repo", path: "/srv/tsk", mode: "pull_request", default_branch: "main" });
+  await v1(as.ada, "PATCH", "/v1/projects/TSK", { default_workspace: "tsk-repo" });
+  const filed = await v1<Detail>(as.ada, "POST", "/v1/tasks", { project: "TSK", title: "A sidebar trigger on desktop" });
+  await v1(as.builder, "POST", `/v1/tasks/${filed.task.id}/claim`, {});
+  await v1(as.builder, "POST", `/v1/tasks/${filed.task.id}/advance`, { outcome: "pass" });
+  await v1(as.ada, "POST", `/v1/tasks/${filed.task.id}/claim`, {});
+  await v1(as.ada, "POST", `/v1/tasks/${filed.task.id}/advance`, { outcome: "pass" });
+  const url = "https://github.com/o/r/pull/7";
+  await v1(as.ada, "PUT", `/v1/tasks/${filed.task.id}/pull-request`, { number: 7, url, state: "open" });
+
+  const { page, errors } = await open(browser);
+  await page.goto(`${base()}/tasks/${filed.task.key}`);
+  const head = page.getByRole("heading", { level: 1 }).locator("xpath=ancestor::header[1]");
+  await expect(head).toContainText("Done");
+  await expect(head.getByRole("link", { name: "#7 open" })).toHaveAttribute("href", url);
+  const workspace = page.getByRole("complementary", { name: "Properties" }).getByRole("region", { name: "Workspace" });
+  await expect(workspace).toContainText("Pull request");
+  await expect(workspace.getByRole("link", { name: "#7 open" })).toHaveAttribute("href", url);
+  await expect(page.getByRole("button", { name: "Merge" })).toHaveCount(0);
+  await shot(page, "pull-request-open");
+
+  await v1(as.ada, "PUT", `/v1/tasks/${filed.task.id}/pull-request`, { number: 7, url, state: "merged" });
+  await page.reload();
+  await expect(head.getByRole("link", { name: "#7 merged" })).toHaveAttribute("href", url);
+  await shot(page, "pull-request-merged");
+  expect(errors).toEqual([]);
+});

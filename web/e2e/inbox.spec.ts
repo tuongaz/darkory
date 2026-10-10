@@ -242,6 +242,39 @@ test("a lapse on my Task that its Step's agent can take up clears itself; Activi
   expect(errors).toEqual([]);
 });
 
+test("my Done Task whose pull request is open waits in Needs you for my merge; with no Runner its act opens the pull request", async ({ page }) => {
+  const errors = consoleErrors(page);
+  // PRQ lands its branches through pull requests: its default Workspace is in pull_request mode.
+  await v1(admin, "POST", "/v1/workspaces", { name: "prq-repo", path: "/srv/prq", mode: "pull_request", default_branch: "main" });
+  await v1(admin, "POST", "/v1/projects", { key: "PRQ", name: "Pull requests", members: ["ada", "inbox-builder"], default_workspace: "prq-repo" });
+  const filed = (await v1<TaskDetail>(admin, "POST", "/v1/tasks", { project: "PRQ", title: "A sidebar trigger on desktop" })).task;
+  // The agent builds it; at Review nobody in PRQ has review, so its Owner, ada, takes it into Done.
+  await v1(agent, "POST", `/v1/tasks/${filed.id}/claim`, {});
+  await v1(agent, "POST", `/v1/tasks/${filed.id}/advance`, { outcome: "pass" });
+  await v1(admin, "POST", `/v1/tasks/${filed.id}/claim`, {});
+  await v1(admin, "POST", `/v1/tasks/${filed.id}/advance`, { outcome: "pass" });
+  const url = "https://github.com/o/r/pull/7";
+  await v1(admin, "PUT", `/v1/tasks/${filed.id}/pull-request`, { number: 7, url, state: "open" });
+
+  await signIn(page, admin, "ada");
+  const row = page.getByRole("region", { name: "Needs you" }).locator(`[data-task="${filed.key}"]`);
+  await expect(row).toContainText("A sidebar trigger on desktop");
+  await expect(row).toContainText("Awaits your merge");
+  await expect(row.getByRole("link", { name: "#7 open" })).toHaveAttribute("href", url);
+  // --runner=off: nothing beside the server merges, so the act is the pull request on GitHub.
+  await expect(row.getByRole("link", { name: "Open #7" })).toHaveAttribute("href", url);
+  await expect(row.getByRole("button", { name: /Merge/ })).toHaveCount(0);
+  await shot(page, "merge-row");
+
+  // Merged on GitHub: the row leaves.
+  await v1(admin, "PUT", `/v1/tasks/${filed.id}/pull-request`, { number: 7, url, state: "merged" });
+  await page.reload();
+  const loaded = page.getByRole("region", { name: "Needs you" }).or(page.getByRole("region", { name: "Takeable by you" })).or(page.getByRole("heading", { name: "Nothing needs you" }));
+  await expect(loaded.first()).toBeVisible();
+  await expect(page.locator(`[data-task="${filed.key}"]`)).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("Inbox, My work, Agents and Activity fit a phone without a sideways scroll", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
