@@ -139,8 +139,8 @@ function heldClaim(e: Evidence, claims: readonly Claim[]): Claim | undefined {
 }
 
 /**
- * Evidence rows next to each other, by one attacher, inside one Claim (or both outside any of
- * theirs), become one row at the first one's time.
+ * Evidence rows next to each other, by one attacher, inside one Claim of theirs, become one row at
+ * the first one's time; Evidence attached outside any Claim stays a row each.
  */
 function foldEvidence(entries: RecordEntry[], claims: readonly Claim[]): RecordEntry[] {
   const out: RecordEntry[] = [];
@@ -148,7 +148,8 @@ function foldEvidence(entries: RecordEntry[], claims: readonly Claim[]): RecordE
     const last = out.at(-1);
     if (e.kind === "evidence" && last?.kind === "evidence") {
       const [a, b] = [last.evidence[0], e.evidence[0]];
-      if (a.attached_by === b.attached_by && heldClaim(a, claims)?.id === heldClaim(b, claims)?.id) {
+      const c = heldClaim(a, claims);
+      if (a.attached_by === b.attached_by && c && c.id === heldClaim(b, claims)?.id) {
         out[out.length - 1] = { ...last, evidence: [...last.evidence, ...e.evidence] };
         continue;
       }

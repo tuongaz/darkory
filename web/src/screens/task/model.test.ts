@@ -261,6 +261,11 @@ describe("Evidence in the record", () => {
     expect(record.find((e) => e.kind === "evidence")!.at).toBe(iso(5));
   });
 
+  it("folds nothing attached outside any Claim of the attacher's", () => {
+    const record = taskRecord(detail(t, { claims: [], evidence: [file("e1", ada.id, 5), file("e2", ada.id, 5)] }));
+    expect(rows(record)).toEqual([["e1"], ["e2"]]);
+  });
+
   it("never folds across two Claims, another attacher or a row between", () => {
     const claims = [claim("a", builder.id, 0, 4), claim("b", builder.id, 4, 9)];
     const notes = [{ id: "n-1", task_id: "k-1", author_id: builder.id, body: "x", created_at: iso(6.5) }];
