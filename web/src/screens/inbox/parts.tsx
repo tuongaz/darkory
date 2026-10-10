@@ -1,7 +1,7 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { GitMergeIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate, type To } from "react-router";
+import { Link, type To } from "react-router";
 import { api, call, type Project, type Task } from "@/api/client";
 import { useDirectory, useLabels, useRunnerSessions, useTask } from "@/api/queries";
 import { usePeekLink } from "@/app/peek";
@@ -16,6 +16,7 @@ import { WorkGlyph } from "@/components/WorkGlyph";
 import { cn } from "@/lib/utils";
 import { kindLabel, taskWorkGlyph } from "@/work";
 import { MergeDialog } from "@/screens/task/dialogs";
+import { AnswerDialog } from "./AnswerDialog";
 import { startOfDay } from "./derive";
 import type { StepName } from "./queries";
 import { refusalToast } from "./toast";
@@ -177,34 +178,16 @@ export function ClaimButton({ task, primary }: { task: Task; primary?: boolean }
   );
 }
 
-/**
- * Answers a question aimed at me: claims it, then opens its peek with the Note composer focused.
- * A refusal is a toast.
- */
+/** Answers a question aimed at me: opens the dialog that claims it and completes it with the answer. */
 export function AnswerButton({ task, primary }: { task: Task; primary?: boolean }) {
-  const qc = useQueryClient();
-  const navigate = useNavigate();
-  const peek = usePeekLink();
-  const answer = useMutation({
-    mutationFn: () => call(api.POST("/v1/tasks/{task}/claim", { params: { path: { task: task.key } }, body: {} })),
-    onSuccess: () => {
-      // The Claim's Activity refreshes these too; not waiting for it puts the composer up at once.
-      for (const root of ["tasks", "task", "takeable"]) void qc.invalidateQueries({ queryKey: [root] });
-      void navigate(peek(task.key), { state: { note: true } });
-    },
-    onError: refusalToast,
-  });
+  const [open, setOpen] = useState(false);
   return (
-    <Button
-      size="xs"
-      variant={primary ? "default" : "outline"}
-      className="relative z-10"
-      disabled={answer.isPending}
-      aria-label={`Answer ${task.key}`}
-      onClick={() => answer.mutate()}
-    >
-      Answer
-    </Button>
+    <>
+      <Button size="xs" variant={primary ? "default" : "outline"} className="relative z-10" aria-label={`Answer ${task.key}`} onClick={() => setOpen(true)}>
+        Answer
+      </Button>
+      {open && <AnswerDialog task={task} open onOpenChange={setOpen} />}
+    </>
   );
 }
 
