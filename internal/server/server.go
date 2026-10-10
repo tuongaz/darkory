@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -24,11 +25,13 @@ import (
 
 // Server implements every operation in api/openapi.yaml.
 type Server struct {
-	store *store.Store
-	core  *core.Service
-	auth  *auth.Authenticator
-	wake  *wake.Notifier
-	log   *slog.Logger
+	// merging holds a mutex per Task whose pull request a request is merging (lockMerge).
+	merging sync.Map
+	store   *store.Store
+	core    *core.Service
+	auth    *auth.Authenticator
+	wake    *wake.Notifier
+	log     *slog.Logger
 	// publicURL is where the Install is reached, for login links; empty to use the request's host.
 	publicURL string
 	keepAlive time.Duration

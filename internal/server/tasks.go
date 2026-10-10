@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
@@ -241,7 +242,15 @@ func (s *Server) SetTaskPullRequest(w http.ResponseWriter, r *http.Request, task
 // and answers not_found.
 func (s *Server) MergeTaskPullRequest(w http.ResponseWriter, r *http.Request, task gen.TaskRef, _ gen.MergeTaskPullRequestParams) {
 	ctx, c := r.Context(), caller(r)
-	t, pr, err := s.core.MayMergePullRequest(ctx, c, task)
+	d, err := s.core.GetTask(ctx, c, task)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// One merge of a Task at a time: a second request waits, then finds the pull request merged.
+	unlock := s.lockMerge(d.Task.ID)
+	defer unlock()
+	t, pr, err := s.core.MayMergePullRequest(ctx, c, d.Task.ID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -268,4 +277,13 @@ func (s *Server) SetTaskLabels(w http.ResponseWriter, r *http.Request, task gen.
 	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.SetTaskLabelsBody, idem core.Idem) (core.Task, error) {
 		return s.core.SetTaskLabels(r.Context(), c, task, body.Labels, idem)
 	})
+}
+
+// lockMerge holds the merge of the Task taskID until the returned func is called, so two requests
+// cannot both find its pull request open and both have the Runner merge it.
+func (s *Server) lockMerge(taskID string) func() {
+	m, _ := s.merging.LoadOrStore(taskID, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }

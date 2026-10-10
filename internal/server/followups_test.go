@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/shortid"
@@ -162,6 +165,53 @@ func TestSkillProjectEvidenceKindAndShiftsThroughTheClient(t *testing.T) {
 			want(t, http.StatusOK).JSON200
 		if m.Agent.Shifts != 2 {
 			t.Fatalf("two %+v", m.Agent)
+		}
+	})
+}
+
+// One merge of a Task at a time: of two requests at once, one merges and is answered with the
+// Task, and the other, waiting, finds the pull request merged and is answered not_found.
+func TestMergeOneAtATime(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		h := newHarness(t, st)
+		ctx := t.Context()
+		ada := h.admin
+		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(ada.AddProjectMemberWithResponse(ctx, "WEB", "ada", &client.AddProjectMemberParams{})).want(t, http.StatusNoContent)
+		mode := client.WorkspaceModePullRequest
+		got(ada.CreateWorkspaceWithResponse(ctx, &client.CreateWorkspaceParams{}, client.CreateWorkspaceBody{Name: "web", Path: "/src/web", Mode: &mode})).
+			want(t, http.StatusCreated)
+		task := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Checkout",
+			Workspaces: &[]string{"web"}})).want(t, http.StatusCreated).JSON201.Task
+		got(ada.SetTaskPullRequestWithResponse(ctx, task.Key, &client.SetTaskPullRequestParams{},
+			client.SetTaskPullRequestBody{Number: 7, URL: "https://github.com/acme/web/pull/7", State: client.PullRequestOpen})).want(t, http.StatusOK)
+
+		var merges atomic.Int32
+		h.srv.AttachRunner(&fakeRunner{merge: func(string, int64) error {
+			merges.Add(1)
+			time.Sleep(50 * time.Millisecond) // GitHub takes its time; the other request arrives meanwhile
+			return nil
+		}})
+		codes := make(chan int, 2)
+		var wg sync.WaitGroup
+		for range 2 {
+			wg.Go(func() {
+				res, err := ada.MergeTaskPullRequestWithResponse(ctx, task.Key, &client.MergeTaskPullRequestParams{})
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				codes <- res.StatusCode()
+			})
+		}
+		wg.Wait()
+		close(codes)
+		got := map[int]int{}
+		for c := range codes {
+			got[c]++
+		}
+		if merges.Load() != 1 || got[http.StatusOK] != 1 || got[http.StatusNotFound] != 1 {
+			t.Fatalf("%d merges, answers %v", merges.Load(), got)
 		}
 	})
 }
