@@ -299,6 +299,8 @@ test("Evidence shows itself: the holder's screenshots fold into one row of thumb
     await shooter.context().close();
     darkory(as.builder, "attach", key, join(dir, "03-workflow-page.png"));
     darkory(as.builder, "attach", key, join(dir, "07-delete-dialog.png"));
+    writeFileSync(join(dir, "triage-log.md"), "# Triage log, the delete\n\n| Where | Width | Delete |\n");
+    darkory(as.builder, "attach", key, join(dir, "triage-log.md"));
     await v1(as.builder, "POST", `/v1/tasks/${filed.task.id}/release`, {});
     const log = join(dir, `shift-${key}-tsk-builder-101600.log`);
     writeFileSync(log, "$ make web-check\n".repeat(400));
@@ -310,8 +312,12 @@ test("Evidence shows itself: the holder's screenshots fold into one row of thumb
   const { page, errors } = await open(browser);
   await page.goto(`${base()}/tasks/${key}`);
   const record = page.getByRole("list", { name: "Record" });
-  const attached = record.getByRole("listitem").filter({ hasText: "tsk-builder attached 2 Evidence" });
+  const attached = record.getByRole("listitem").filter({ hasText: "tsk-builder attached 3 Evidence" });
   await expect(attached).toBeVisible();
+  // A small text file's first lines, read through the page's own fetch (its cookie, the CSP).
+  const box = attached.getByRole("figure", { name: "triage-log.md" });
+  await expect(box.locator("pre")).toContainText("# Triage log, the delete");
+  await expect(box.getByRole("link", { name: "open ↗" })).toHaveAttribute("href", /\/v1\/evidence\/.+\/content$/);
   // Each image a thumbnail that loads, though its download is an attachment.
   for (const name of ["03-workflow-page.png", "07-delete-dialog.png"]) {
     const img = attached.getByRole("img", { name });

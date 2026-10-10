@@ -583,6 +583,28 @@ describe("Evidence in a Task's record", () => {
     expect(within(row).queryByRole("img", { name: "trace.zip" })).toBeNull();
   });
 
+  it("shows a text file it cannot read as a plain row, and asks once", async () => {
+    const d = detail(copy, { claims: [claim], evidence: [evidence("e-log", "triage-log.md", "text/markdown", 3_700, 12), evidence("e-zip", "trace.zip", "application/zip", 9_000, 12)] });
+    const api = mockApi(taskRoutes({ "GET /v1/tasks/:task": d, "GET /v1/evidence/:id/content": () => refuse(404, "not_found", "No Evidence") }));
+    renderApp("/tasks/WEB-1");
+    const record = await screen.findByRole("list", { name: "Record" });
+    const row = within(record).getByText(/attached/).closest("li")!;
+    await waitFor(() => expect(within(row).queryByRole("figure")).toBeNull());
+    expect(within(row).getByRole("link", { name: /triage-log\.md/ })).toHaveAttribute("href", "/v1/evidence/e-log/content");
+    expect(api.calls.filter((c) => c.path === "/v1/evidence/e-log/content")).toHaveLength(1);
+  });
+
+  it("keeps a text box empty and short while its file loads", async () => {
+    const d = detail(copy, { claims: [claim], evidence: [evidence("e-log", "triage-log.md", "text/markdown", 3_700, 12)] });
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": d, "GET /v1/evidence/:id/content": () => new Promise<Response>(() => {}) }));
+    renderApp("/tasks/WEB-1");
+    const box = await screen.findByRole("figure", { name: "triage-log.md" });
+    const body = box.querySelector("[aria-busy]")!;
+    expect(body).toHaveAttribute("aria-busy", "true");
+    expect(body).toHaveTextContent("");
+    expect(body).toHaveClass("h-7");
+  });
+
   it("keeps one Evidence's row with its name, and fetches no text file of 20 kB or more", async () => {
     const d = detail(copy, { claims: [claim], evidence: [evidence("e-big", "pw-all.log", "text/plain", 58_163, 12)] });
     const api = mockApi(taskRoutes({ "GET /v1/tasks/:task": d }));

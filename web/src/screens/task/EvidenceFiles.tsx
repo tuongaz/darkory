@@ -27,7 +27,7 @@ export function EvidenceFiles({ files, plain = true }: { files: readonly Evidenc
   return (
     <div className="mt-2 flex flex-col gap-2">
       {texts.map((f) => (
-        <TextBox key={f.id} file={f} />
+        <TextBox key={f.id} file={f} plain={plain} />
       ))}
       {pictures.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -78,8 +78,12 @@ function Thumbnail({ file }: { file: Evidence }) {
   );
 }
 
-/** A small text file: its name, size and open on one line, then its first lines in a box that fades out at 112px. */
-function TextBox({ file }: { file: Evidence }) {
+/**
+ * A small text file: its name, size and open on one line, then its first lines in a box that fades
+ * out at 112px. While it loads the box is one short empty line; a file it cannot read is a plain
+ * row in a folded row (`plain`), nothing under a row that names it already; it is asked for once.
+ */
+function TextBox({ file, plain }: { file: Evidence; plain: boolean }) {
   const text = useQuery({
     queryKey: ["evidence-text", file.id],
     queryFn: async () => {
@@ -87,9 +91,12 @@ function TextBox({ file }: { file: Evidence }) {
       if (!res.ok) throw new Error(`${res.status}`);
       return res.text();
     },
-    // Evidence never changes once attached.
+    // Evidence never changes once attached; a refusal will not change on asking again.
     staleTime: Infinity,
+    retry: false,
   });
+  // A single Evidence's row names its file already.
+  if (text.isError) return plain ? <FileLink file={file} /> : null;
   return (
     <figure aria-label={file.filename} className="flex min-w-0 flex-col overflow-hidden rounded-md border bg-card text-xs">
       <figcaption className="flex min-w-0 items-center gap-1.5 border-b px-2.5 py-1.5">
@@ -100,10 +107,14 @@ function TextBox({ file }: { file: Evidence }) {
           open ↗
         </a>
       </figcaption>
-      <div className="relative max-h-[112px] overflow-hidden">
-        <pre className="px-2.5 py-2 font-mono text-[11.5px] leading-[1.45] whitespace-pre text-foreground">{text.data ?? ""}</pre>
-        <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-b from-transparent to-card" />
-      </div>
+      {text.isPending ? (
+        <div aria-busy="true" className="h-7" />
+      ) : (
+        <div className="relative max-h-[112px] overflow-hidden">
+          <pre className="px-2.5 py-2 font-mono text-[11.5px] leading-[1.45] whitespace-pre text-foreground">{text.data}</pre>
+          <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-b from-transparent to-card" />
+        </div>
+      )}
     </figure>
   );
 }
