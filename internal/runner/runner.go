@@ -482,7 +482,7 @@ var errNotStarted = errors.New("the Runner is starting; try again in a moment")
 // key, whatever the title said when the branch was made) and that its base is that branch's own:
 // the Parent's branch for a Subtask, else the Workspace's default branch. It records nothing: the
 // server records the merge as the Member who asked. It merges the commit it checked: GitHub
-// refuses when the head moved meanwhile. GitHub's refusal is the error, as gh said it. ctx bounds
+// refuses when the head moved meanwhile. GitHub's refusal is the error, in GitHub's words. ctx bounds
 // it all; gh runs under it.
 func (r *Runner) Merge(ctx context.Context, taskID string, number int64) error {
 	d, ws, pr, err := r.findPullRequest(ctx, taskID, number, "", true)
@@ -501,7 +501,11 @@ func (r *Runner) Merge(ctx context.Context, taskID string, number int64) error {
 		return fmt.Errorf("pull request #%d is into %s, not %s", number, pr.BaseRefName, base)
 	}
 	if err := r.gh.MergePR(ctx, ws.Path, number, pr.HeadRefOid); err != nil {
-		r.log.Info("GitHub refused to merge a Task's pull request", "task", key, "workspace", ws.Name, "pr", number, "err", err)
+		detail := err
+		if ge := (*ghError)(nil); errors.As(err, &ge) {
+			detail = ge
+		}
+		r.log.Info("GitHub refused to merge a Task's pull request", "task", key, "workspace", ws.Name, "pr", number, "err", detail)
 		return err
 	}
 	r.log.Info("merged a Task's pull request on GitHub", "task", key, "workspace", ws.Name, "pr", number, "branch", pr.HeadRefName, "into", base)
@@ -530,7 +534,10 @@ func (r *Runner) PullRequest(ctx context.Context, taskID string, number int64, u
 		Landing: r.notLanding(ctx, d, ws, pr) == ""}, nil
 }
 
-// ghMissing says gh found no pull request of that number in the repository.
+// ghMissing says gh found no pull request of that number in the repository. It matches the
+// English text GitHub's API gives on gh's stderr ("Could not resolve to a PullRequest with the
+// number of 7."), the only sign gh gives; a gh that said it otherwise would read as GitHub not
+// answering, which the server shows as it is.
 func ghMissing(err error) bool {
 	return strings.Contains(err.Error(), "Could not resolve to a PullRequest")
 }

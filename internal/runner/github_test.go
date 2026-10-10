@@ -3,6 +3,7 @@
 package runner
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +16,7 @@ func fakeGh(t *testing.T, script string) (argsLog string) {
 	t.Helper()
 	dir := t.TempDir()
 	argsLog = filepath.Join(dir, "args")
-	body := "#!/bin/sh\necho \"$*\" >> " + argsLog + "\n" + script + "\n"
+	body := "#!/bin/sh\necho \"$*\" >> '" + argsLog + "'\n" + script + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -65,9 +66,14 @@ esac`)
 	if pr.Number != 7 || pr.State != "OPEN" || pr.HeadRefName != "dark-3-fix" || pr.BaseRefName != "main" {
 		t.Fatalf("PullRequest: %+v", pr)
 	}
+	// GitHub's refusal is its own sentence, with nothing of gh's around it; the log keeps it all.
 	err = g.MergePR(ctx, repo, 7, "abc123")
-	if err == nil || !strings.Contains(err.Error(), "X Pull request acme/web#7 is not mergeable: the merge commit cannot be cleanly created.") {
+	if err == nil || err.Error() != "Pull request acme/web#7 is not mergeable: the merge commit cannot be cleanly created." {
 		t.Fatalf("MergePR's refusal: %v", err)
+	}
+	var ge *ghError
+	if !errors.As(err, &ge) || ge.Error() != "gh pr merge 7: exit status 1: X Pull request acme/web#7 is not mergeable: the merge commit cannot be cleanly created." {
+		t.Fatalf("the refusal's gh error: %v", ge)
 	}
 
 	want := []string{

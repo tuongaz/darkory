@@ -340,8 +340,8 @@ func TestRunnerMerge(t *testing.T) {
 		{name: "from a fork", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PROpen,
 			IsCrossRepository: true}, noPR: true},
 		{name: "GitHub refuses", task: "t-3", pr: PullRequest{HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PROpen},
-			refuse: "gh pr merge 7: exit status 1: X Pull request acme/web#7 is not mergeable: the merge commit cannot be cleanly created.",
-			want:   "gh pr merge 7: exit status 1: X Pull request acme/web#7 is not mergeable: the merge commit cannot be cleanly created."},
+			refuse: "Pull request acme/web#7 is not mergeable: the merge commit cannot be cleanly created.",
+			want:   "Pull request acme/web#7 is not mergeable: the merge commit cannot be cleanly created."},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			gh := &recordingGitHub{refuse: tc.refuse}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -62,13 +63,40 @@ const prFields = "number,title,headRefName,baseRefName,url,state,headRefOid,isCr
 // ghCLI is GitHub through the gh CLI, signed in as the person running the Install.
 type ghCLI struct{}
 
+// ghError is gh failing: the command, how it ended, and what it said on stderr. Its text is all of
+// it, for logs.
+type ghError struct {
+	Args   []string
+	Err    error
+	Stderr string
+}
+
+func (e *ghError) Error() string {
+	return fmt.Sprintf("gh %s: %v: %s", strings.Join(e.Args[:min(len(e.Args), 3)], " "), e.Err, e.Stderr)
+}
+
+func (e *ghError) Unwrap() error { return e.Err }
+
+// githubRefusal is GitHub refusing an act: its text is GitHub's own sentence, as the Owner reads
+// it, without gh's command or its leading "X "; the gh error under it is for logs.
+type githubRefusal struct{ gh *ghError }
+
+func (e *githubRefusal) Error() string {
+	if e.gh.Stderr == "" {
+		return e.gh.Error()
+	}
+	return strings.TrimPrefix(e.gh.Stderr, "X ")
+}
+
+func (e *githubRefusal) Unwrap() error { return e.gh }
+
 func (ghCLI) gh(ctx context.Context, repo string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	cmd.Dir = repo
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("gh %s: %w: %s", strings.Join(args[:min(len(args), 3)], " "), err, strings.TrimSpace(stderr.String()))
+		return nil, &ghError{Args: args, Err: err, Stderr: strings.TrimSpace(stderr.String())}
 	}
 	return stdout.Bytes(), nil
 }
@@ -115,6 +143,10 @@ func (g ghCLI) PullRequest(ctx context.Context, repo string, n int64) (PullReque
 
 func (g ghCLI) MergePR(ctx context.Context, repo string, n int64, head string) error {
 	_, err := g.gh(ctx, repo, "pr", "merge", strconv.FormatInt(n, 10), "--merge", "--match-head-commit", head)
+	var ge *ghError
+	if errors.As(err, &ge) {
+		return &githubRefusal{gh: ge}
+	}
 	return err
 }
 
