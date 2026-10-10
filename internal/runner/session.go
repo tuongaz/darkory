@@ -380,9 +380,11 @@ func (s *session) prompt(ctx context.Context, parent *ParentInfo, checkouts []Ch
 				texts = append(texts, base)
 			}
 		} else {
-			// The company's version of a generic Skill, when the agent has one, comes first.
+			// The company's version of a generic Skill, when the agent has one, comes first: one of
+			// the Organisation's or of the Task's Project, never another Project's (ADR 0020).
 			for _, own := range s.a.me.Skills {
-				if own.Kind == client.Company && own.BaseSkillID != nil && *own.BaseSkillID == sk.Skill.ID {
+				if own.Kind == client.Company && own.BaseSkillID != nil && *own.BaseSkillID == sk.Skill.ID &&
+					(own.ProjectID == nil || *own.ProjectID == d.Task.ProjectID) {
 					if c, err := s.rec.Skill(ctx, own.ID); err == nil {
 						texts = append([]*client.SkillDetail{c}, texts...)
 					}
@@ -403,7 +405,8 @@ func (s *session) prompt(ctx context.Context, parent *ParentInfo, checkouts []Ch
 		p.Notes = append(p.Notes, pn)
 	}
 	for _, e := range d.Evidence {
-		if e.TaskID == d.Task.ID {
+		// A Shift's log is the Claim's, not the Task's Evidence.
+		if e.TaskID == d.Task.ID && e.Kind == client.EvidenceKindEvidence {
 			p.Evidence = append(p.Evidence, PromptEvidence{ID: e.ID, Filename: e.Filename, ContentType: e.ContentType,
 				AttachedBy: or(names[e.AttachedBy], e.AttachedBy), Size: e.Size})
 		}

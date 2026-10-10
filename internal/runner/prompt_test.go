@@ -1,7 +1,9 @@
 package runner
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -142,5 +144,94 @@ func TestOutcomesNameAnotherWorkflow(t *testing.T) {
 	}
 	if !leadsToAStep(d) || leadsToAStep(&client.TaskDetail{Connectors: []client.Connector{{Name: "done"}}}) {
 		t.Fatal("leadsToAStep reads the Connectors wrong")
+	}
+}
+
+// promptRecord stands in for the Install as far as a Shift's prompt reads it: Members, Skills by
+// id, the Skills list. Anything else it is asked panics on the nil Record it embeds.
+type promptRecord struct {
+	Record
+	skills map[string]client.SkillDetail
+}
+
+func (p *promptRecord) Members(context.Context) ([]client.Member, error) {
+	return []client.Member{{ID: "m-ada", Name: "ada"}, {ID: "m-qa", Name: "tester"}}, nil
+}
+
+func (p *promptRecord) Skill(_ context.Context, ref string) (*client.SkillDetail, error) {
+	sk, ok := p.skills[ref]
+	if !ok {
+		return nil, fmt.Errorf("no Skill %s", ref)
+	}
+	return &sk, nil
+}
+
+func (p *promptRecord) Skills(context.Context) ([]client.Skill, error) {
+	var out []client.Skill
+	for _, sk := range p.skills {
+		out = append(out, sk.Skill)
+	}
+	return out, nil
+}
+
+// promptSession is a Shift of the agent tester, holding skills, on a Task of Project project at
+// a Step under the generic Skill qa, with evidence on it.
+func promptSession(t *testing.T, rec *promptRecord, project string, skills []client.Skill, evidence []client.Evidence) *session {
+	t.Helper()
+	data := t.TempDir()
+	r := &Runner{cfg: Config{Data: data, Workspaces: filepath.Join(data, "workspaces")}, skills: map[string]client.Skill{}}
+	a := &agent{r: r, me: client.Me{Member: client.Member{ID: "m-qa", Name: "tester"}, Skills: skills}}
+	d := &client.TaskDetail{Task: client.Task{ID: "t-1", Key: "WEB-3", Title: "Check the cart", ProjectID: project, OwnerID: "m-ada",
+		Kind: client.Work, SkillID: ptr("s-qa")}, Evidence: evidence}
+	return &session{r: r, a: a, rec: rec, d: d, key: d.Task.Key, taskID: d.Task.ID}
+}
+
+// A Shift's prompt carries the agent's company Skill built on the Step's generic Skill only when
+// it is the Organisation's or the Task's Project's (ADR 0020): a company Skill of another Project
+// stays out, as enably-qa should have stayed out of DARK-3.
+func TestPromptCarriesTheCompanySkillsOfTheTasksProject(t *testing.T) {
+	qa := client.Skill{ID: "s-qa", Name: "qa", Kind: client.Generic}
+	ofA := client.Skill{ID: "s-qa-a", Name: "qa-a", Kind: client.Company, BaseSkillID: ptr("s-qa"), ProjectID: ptr("p-a")}
+	org := client.Skill{ID: "s-qa-org", Name: "qa-acme", Kind: client.Company, BaseSkillID: ptr("s-qa")}
+	rec := &promptRecord{skills: map[string]client.SkillDetail{}}
+	for _, sk := range []client.Skill{qa, ofA, org} {
+		rec.skills[sk.ID] = client.SkillDetail{Skill: sk, Current: client.SkillVersion{Version: 1, Body: sk.Name + "'s text"}}
+	}
+	held := []client.Skill{qa, ofA, org}
+	for _, tc := range []struct {
+		project string
+		want    []string
+	}{
+		{"p-b", []string{"qa-acme", "qa"}},
+		{"p-a", []string{"qa-acme", "qa-a", "qa"}},
+	} {
+		p, err := promptSession(t, rec, tc.project, held, nil).prompt(t.Context(), nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, sk := range p.Skills {
+			got = append(got, sk.Name)
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("a Task of %s: Skills %v, want %v", tc.project, got, tc.want)
+		}
+	}
+}
+
+// The prompt's Evidence is the Task's Evidence: no Shift's log, which is the Claim's.
+func TestPromptListsEvidenceNotLogs(t *testing.T) {
+	qa := client.Skill{ID: "s-qa", Name: "qa", Kind: client.Generic}
+	rec := &promptRecord{skills: map[string]client.SkillDetail{"s-qa": {Skill: qa, Current: client.SkillVersion{Version: 1, Body: "QA."}}}}
+	evidence := []client.Evidence{
+		{ID: "e-1", TaskID: "t-1", Filename: "wc.log", Kind: client.EvidenceKindEvidence, AttachedBy: "m-qa", Size: 753},
+		{ID: "e-2", TaskID: "t-1", Filename: "shift-WEB-3-tester-101500.log", Kind: client.EvidenceKindLog, AttachedBy: "m-qa", Size: 56800},
+	}
+	p, err := promptSession(t, rec, "p-a", []client.Skill{qa}, evidence).prompt(t.Context(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Evidence) != 1 || p.Evidence[0].Filename != "wc.log" || p.Evidence[0].AttachedBy != "tester" {
+		t.Fatalf("the prompt's Evidence: %+v", p.Evidence)
 	}
 }
