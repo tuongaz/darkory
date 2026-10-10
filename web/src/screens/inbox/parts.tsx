@@ -190,7 +190,7 @@ export function AnswerButton({ task, primary }: { task: Task; primary?: boolean 
       <Button size="xs" variant={primary ? "default" : "outline"} className="relative z-10" aria-label={`Answer ${task.key}`} onClick={() => setOpen(true)}>
         Answer
       </Button>
-      {open && <AnswerDialog task={task} open onOpenChange={setOpen} />}
+      <AnswerDialog task={task} open={open} onOpenChange={setOpen} />
     </>
   );
 }

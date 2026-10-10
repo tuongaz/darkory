@@ -18,22 +18,36 @@ import { liveClaim } from "@/work";
 /**
  * Answers a question aimed at me in one act: claims it, then completes it with the answer as its
  * Note. A refusal stops the chain and the dialog stays open with it; when the claim landed and the
- * complete was refused, the dialog says I hold the question, and a second Answer only completes.
+ * complete was refused, or I held it already, the dialog says I hold the question, and a second
+ * Answer only completes. It stays mounted, so it closes with its animation.
  */
 export function AnswerDialog({ task, open, onOpenChange }: { task: Task; open: boolean; onOpenChange: (open: boolean) => void }) {
   const qc = useQueryClient();
   const now = useNow();
   const me = useCurrentMe().member.id;
   const name = useMemberName();
-  const detail = useTask(task.key).data;
-  const question = detail?.task ?? task;
-  const blocks = detail?.blocking[0];
   const [answer, setAnswer] = useState("");
   // The claim landed in this dialog, or I held the question already.
   const [claimed, setClaimed] = useState(false);
+  // Each opening is a round: it starts with no answer, and shows only its own refusal. The
+  // question's record is read once the dialog has opened, and kept while it closes.
+  const [round, setRound] = useState(open ? 1 : 0);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setRound(round + 1);
+      setAnswer("");
+      setClaimed(false);
+    }
+  }
+  const detail = useTask(round > 0 ? task.key : undefined).data;
+  const question = detail?.task ?? task;
+  const blocks = detail?.blocking[0];
   const holding = claimed || liveClaim(question, now)?.holder_id === me;
 
-  const send = useMutation({
+  // The round it was sent in is its variable.
+  const send = useMutation<unknown, Error, number>({
     mutationFn: async () => {
       const ref = { params: { path: { task: task.key } } };
       if (!holding) {
@@ -51,6 +65,7 @@ export function AnswerDialog({ task, open, onOpenChange }: { task: Task; open: b
     },
   });
 
+  const refused = send.isError && send.variables === round;
   return (
     <FormDialog
       open={open}
@@ -58,7 +73,7 @@ export function AnswerDialog({ task, open, onOpenChange }: { task: Task; open: b
       title={`Answer ${task.key}`}
       hint={`Answers and ends ${task.key}`}
       submitLabel="Answer"
-      onSubmit={() => send.mutate()}
+      onSubmit={() => send.mutate(round)}
       pending={send.isPending}
       submitDisabled={answer.trim() === ""}
     >
@@ -84,8 +99,8 @@ export function AnswerDialog({ task, open, onOpenChange }: { task: Task; open: b
           Your answer
         </Label>
         <Textarea id="answer-text" value={answer} onChange={(e) => setAnswer(e.target.value)} className="min-h-24" autoFocus />
-        <Refusal error={send.error} />
-        {send.isError && claimed && (
+        <Refusal error={refused && send.error} />
+        {refused && holding && (
           <p className="text-xs text-muted-foreground">
             You hold {task.key}; complete it from{" "}
             <Link to={taskPath(task.key)} className="text-foreground underline underline-offset-2">

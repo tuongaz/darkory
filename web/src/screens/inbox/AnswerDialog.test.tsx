@@ -96,4 +96,39 @@ describe("Answer", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(posts(calls)).toEqual(["/v1/tasks/WEB-8/claim", "/v1/tasks/WEB-8/complete", "/v1/tasks/WEB-8/complete"]);
   });
+
+  it("says I hold the question when I held it already and the complete was refused", async () => {
+    // The list read it free; its record says I hold it now.
+    const { calls } = recordApi({
+      tasks: [blocked, question],
+      details: { "WEB-8": { task: { ...question, claim: claim(question.id, ada.id) }, blocking: [blocked] } },
+      extra: { "POST /v1/tasks/:task/complete": () => refuse(409, "conflict", "WEB-8 changed meanwhile") },
+    });
+    const dialog = await openDialog();
+    await waitFor(() => expect(dialog).toHaveTextContent("blocks WEB-3"));
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Your answer" }), "EUR.");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Answer" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("WEB-8 changed meanwhile");
+    expect(dialog).toHaveTextContent("You hold WEB-8; complete it from its page");
+    expect(posts(calls)).toEqual(["/v1/tasks/WEB-8/complete"]);
+  });
+
+  it("opens afresh after Cancel: no answer, no refusal, and reads the question only once opened", async () => {
+    const { calls } = answerApi({ "POST /v1/tasks/:task/claim": () => refuse(409, "already_claimed", "bob holds WEB-8") });
+    renderApp("/inbox");
+    const needs = await screen.findByRole("region", { name: "Needs you" });
+    await waitFor(() => expect(needs.querySelector('[data-task="WEB-8"]')).not.toBeNull());
+    expect(calls.some((c) => c.method === "GET" && c.path === "/v1/tasks/WEB-8")).toBe(false);
+    await userEvent.click(within(needs).getByRole("button", { name: "Answer WEB-8" }));
+    let dialog = await screen.findByRole("dialog", { name: "Answer WEB-8" });
+    await userEvent.type(within(dialog).getByRole("textbox", { name: "Your answer" }), "EUR.");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Answer" }));
+    await within(dialog).findByRole("alert");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await userEvent.click(within(needs).getByRole("button", { name: "Answer WEB-8" }));
+    dialog = await screen.findByRole("dialog", { name: "Answer WEB-8" });
+    expect(within(dialog).getByRole("textbox", { name: "Your answer" })).toHaveValue("");
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+  });
 });
