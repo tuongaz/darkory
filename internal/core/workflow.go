@@ -364,7 +364,11 @@ func seedWorkflow(t *tx, projectID, kind, from string) error {
 		names := map[string]string{}
 		for _, s := range w.Steps {
 			names[s.ID] = s.Name
-			in.Steps = append(in.Steps, StepInput{Workflow: wfName[s.WorkflowID], Name: s.Name, Skill: s.SkillID, Position: s.Position,
+			skill, err := copiedSkill(t, s.SkillID)
+			if err != nil {
+				return err
+			}
+			in.Steps = append(in.Steps, StepInput{Workflow: wfName[s.WorkflowID], Name: s.Name, Skill: skill, Position: s.Position,
 				X: ptr(s.X), Y: ptr(s.Y)})
 		}
 		for _, k := range w.Connectors {
@@ -623,6 +627,14 @@ func replaceWorkflow(t *tx, projectID string, w WorkflowsInput) (Workflows, erro
 	next, err := resolveWorkflow(t, current, w)
 	if err != nil {
 		return Workflows{}, err
+	}
+	for _, st := range next.steps {
+		if st.SkillID == nil {
+			continue
+		}
+		if err := stepSkillFits(t, projectID, *st.SkillID); err != nil {
+			return Workflows{}, err
+		}
 	}
 	kept := map[string]bool{}
 	for _, st := range next.steps {
@@ -1209,4 +1221,21 @@ func median(ds []int64) int64 {
 		return ds[n/2]
 	}
 	return (ds[n/2-1] + ds[n/2]) / 2
+}
+
+// copiedSkill is the Skill a copied Step carries in a new Project: the one it carries, unless that
+// is a company Skill belonging to the Project copied, which no other Project's Step may carry;
+// the copy then carries the generic Skill it builds on.
+func copiedSkill(t *tx, skillID *string) (*string, error) {
+	if skillID == nil {
+		return nil, nil
+	}
+	sk, err := getSkill(t.ctx, t, t.caller.OrgID, *skillID)
+	if err != nil {
+		return nil, err
+	}
+	if sk.ProjectID != nil {
+		return sk.BaseSkillID, nil
+	}
+	return skillID, nil
 }

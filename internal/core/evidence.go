@@ -20,9 +20,11 @@ type EvidenceTarget struct {
 	Task string
 }
 
-// NewEvidence is a file already in the Evidence store, under BlobKey, to record.
+// NewEvidence is a file already in the Evidence store, under BlobKey, to record. Kind is
+// EvidenceKindEvidence when empty.
 type NewEvidence struct {
 	ID          string
+	Kind        string
 	BlobKey     string
 	Filename    string
 	ContentType string
@@ -57,17 +59,24 @@ func evidenceTarget(ctx context.Context, r store.Reader, c *auth.Caller, target 
 // AttachEvidence records Evidence whose file is already in the Evidence store. When it fails, the
 // caller deletes the file.
 func (s *Service) AttachEvidence(ctx context.Context, c *auth.Caller, target EvidenceTarget, ne NewEvidence, idem Idem) (Evidence, error) {
+	switch ne.Kind {
+	case "":
+		ne.Kind = EvidenceKindEvidence
+	case EvidenceKindEvidence, EvidenceKindLog:
+	default:
+		return Evidence{}, refuse(CodeInvalid, "Evidence is of kind evidence or log, not %q", ne.Kind)
+	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		task, err := evidenceTarget(ctx, t, c, target, t.now)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := t.Exec(ctx, `INSERT INTO evidence (id, org_id, task_id, filename, content_type, size, sha256, blob_key, attached_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, ne.ID, c.OrgID, task.ID, ne.Filename, ne.ContentType, ne.Size, ne.SHA256,
+		if _, err := t.Exec(ctx, `INSERT INTO evidence (id, org_id, task_id, kind, filename, content_type, size, sha256, blob_key, attached_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, ne.ID, c.OrgID, task.ID, ne.Kind, ne.Filename, ne.ContentType, ne.Size, ne.SHA256,
 			ne.BlobKey, c.MemberID, ms(t.now)); err != nil {
 			return nil, err
 		}
-		payload := map[string]any{"evidence_id": ne.ID, "filename": ne.Filename, "size": ne.Size}
+		payload := map[string]any{"evidence_id": ne.ID, "filename": ne.Filename, "size": ne.Size, "kind": ne.Kind}
 		if err := t.recordByCaller("task.evidence_attached", task.ID, payload); err != nil {
 			return nil, err
 		}

@@ -42,7 +42,13 @@ type AgentSettings struct {
 	// ProgressFile is the file whose modified time shows progress, for a command other than
 	// Claude Code; empty for none.
 	ProgressFile string `json:"progress_file,omitempty"`
+	// Shifts is how many Shifts the Runner runs for the agent at once, one Session and one Claim
+	// each, 1 to MaxShifts; settings stored before it existed read as 1.
+	Shifts int `json:"shifts"`
 }
+
+// MaxShifts bounds AgentSettings.Shifts.
+const MaxShifts = 8
 
 type MemberDetail struct {
 	Member   Member
@@ -88,10 +94,13 @@ type Workspace struct {
 }
 
 type Skill struct {
-	ID             string
-	Name           string
-	Kind           string
-	BaseSkillID    *string
+	ID          string
+	Name        string
+	Kind        string
+	BaseSkillID *string
+	// ProjectID is the Project a company Skill belongs to; nil for a generic Skill and for a
+	// company Skill of the whole Organisation.
+	ProjectID      *string
 	Builtin        bool
 	CurrentVersion int64
 	CreatedAt      time.Time
@@ -243,6 +252,9 @@ type Task struct {
 	OpenBlockers []TaskBrief
 	// WorkspaceIDs are the Workspaces the Task names, in the order named.
 	WorkspaceIDs []string
+	// PullRequest is the pull request the Task's branch lands through, as the Runner read it on
+	// GitHub; nil until it has seen one.
+	PullRequest *PullRequest
 	// SubtaskCounts counts a Parent's Subtasks; nil on a Task with none.
 	SubtaskCounts *SubtaskCounts
 	// FiledBy is nil for the Subtasks Darkory files itself: Breakdown, Acceptance, Retrospective.
@@ -253,6 +265,20 @@ type Task struct {
 	CreatedAt    time.Time
 	EndedAt      *time.Time
 }
+
+// PullRequest is a pull request on GitHub: its number, its address, and whether it is open or
+// merged.
+type PullRequest struct {
+	Number int64
+	URL    string
+	State  string
+}
+
+// The states of a PullRequest.
+const (
+	PullRequestOpen   = "open"
+	PullRequestMerged = "merged"
+)
 
 // SubtaskCounts counts a Parent's Subtasks by state; Working counts the open ones with a live
 // Claim.
@@ -344,8 +370,11 @@ type Observation struct {
 }
 
 type Evidence struct {
-	ID          string
-	TaskID      string
+	ID     string
+	TaskID string
+	// Kind is EvidenceKindEvidence, about the work, or EvidenceKindLog, a Shift's terminal log,
+	// which belongs to the Claim the Shift worked under.
+	Kind        string
 	Filename    string
 	ContentType string
 	Size        int64
@@ -355,6 +384,12 @@ type Evidence struct {
 	// BlobKey is where the Evidence store keeps the file; it is not shown.
 	BlobKey string
 }
+
+// The kinds of Evidence.
+const (
+	EvidenceKindEvidence = "evidence"
+	EvidenceKindLog      = "log"
+)
 
 // File is bytes an Organisation keeps, referenced by id: a Member's avatar, or any file a later
 // feature keeps. The bytes are in the file store under BlobKey; this is what describes them.

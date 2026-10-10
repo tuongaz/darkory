@@ -272,6 +272,10 @@ var taskFields = fieldMap(
 		word{"both", func(q *sqlQuery) string { return "(" + takenBy("agent")(q) + " AND " + takenBy("human")(q) + ")" }}),
 	filterField{name: "rank", kind: numberField,
 		cols: []string{"COALESCE(t.rank, (SELECT xr.rank FROM tasks xr WHERE xr.org_id = t.org_id AND xr.id = t.parent_id))"}},
+	enum("pull_request",
+		word{"open", fixed("COALESCE(t.pull_request_state = 'open', FALSE)")},
+		word{"merged", fixed("COALESCE(t.pull_request_state = 'merged', FALSE)")},
+		word{"none", fixed("t.pull_request_state IS NULL")}),
 	boolean("auto_complete", fixed("t.auto_complete = TRUE")),
 	boolean("acceptance", fixed("t.acceptance = TRUE")),
 	filterField{name: "workspace", kind: idField, match: func(q *sqlQuery, vals []string) string {

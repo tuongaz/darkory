@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"net/url"
 	"strings"
 	"unicode/utf8"
 
@@ -723,4 +724,87 @@ func (s *Service) PassOwnership(ctx context.Context, c *auth.Caller, ref, ownerR
 		return Task{}, err
 	}
 	return res.(Task), nil
+}
+
+// SetPullRequest records the pull request a Task's branch lands through, as the Runner read it on
+// GitHub: by the Task's Owner or a Member of its Project, whoever holds it, open or ended, since
+// the next holder may already have the Task when the Runner reads the pull request. The Task must
+// name a Workspace in pull_request mode, through its own Workspaces or, naming none, its
+// Project's default. Writing the values it already carries changes nothing; open written over a
+// merged pull request is refused conflict. Records task.pull_request_opened on the first write of
+// an open pull request and task.pull_request_merged on a write of merged.
+func (s *Service) SetPullRequest(ctx context.Context, c *auth.Caller, ref string, pr PullRequest, idem Idem) (Task, error) {
+	if err := pr.validate(); err != nil {
+		return Task{}, err
+	}
+	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
+		task, err := taskOf(t, ref)
+		if err != nil {
+			return nil, err
+		}
+		if err := inProjectOrOwner(ctx, t, c, task, "record the pull request of"); err != nil {
+			return nil, err
+		}
+		landsByPR, err := landsByPullRequest(t, task)
+		if err != nil {
+			return nil, err
+		}
+		if !landsByPR {
+			return nil, refuse(CodeInvalid, "%s names no Workspace in pull_request mode, so no pull request lands it", task.Key)
+		}
+		was := task.PullRequest
+		if was != nil && *was == pr {
+			return task, nil
+		}
+		if was != nil && was.State == PullRequestMerged && pr.State == PullRequestOpen {
+			return nil, refuse(CodeConflict, "#%d is already merged", was.Number)
+		}
+		if _, err := t.Exec(ctx, `UPDATE tasks SET pull_request_number = $1, pull_request_url = $2, pull_request_state = $3
+WHERE org_id = $4 AND id = $5`, pr.Number, pr.URL, pr.State, c.OrgID, task.ID); err != nil {
+			return nil, err
+		}
+		payload := map[string]any{"number": pr.Number, "url": pr.URL}
+		switch {
+		case pr.State == PullRequestOpen && (was == nil || was.Number != pr.Number):
+			err = t.recordByCaller("task.pull_request_opened", task.ID, payload)
+		case pr.State == PullRequestMerged && (was == nil || was.Number != pr.Number || was.State != PullRequestMerged):
+			err = t.recordByCaller("task.pull_request_merged", task.ID, payload)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return getTask(ctx, t, c.OrgID, task.ID, t.now)
+	})
+	if err != nil {
+		return Task{}, err
+	}
+	return res.(Task), nil
+}
+
+// validate refuses a pull request with no number, a state other than open or merged, or an
+// address that is not an http or https URL: the app links to it.
+func (pr PullRequest) validate() error {
+	if pr.Number < 1 {
+		return refuse(CodeInvalid, "a pull request's number is 1 or more")
+	}
+	if pr.State != PullRequestOpen && pr.State != PullRequestMerged {
+		return refuse(CodeInvalid, "a pull request is open or merged, not %q", pr.State)
+	}
+	u, err := url.Parse(pr.URL)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || len(pr.URL) > 2000 {
+		return refuse(CodeInvalid, "a pull request's url is its http or https address, at most 2000 characters")
+	}
+	return nil
+}
+
+// landsByPullRequest says whether task names a Workspace in pull_request mode: one of its own,
+// or, when it names none, its Project's default.
+func landsByPullRequest(t *tx, task Task) (bool, error) {
+	var n int
+	err := t.QueryRow(t.ctx, `SELECT COUNT(*) FROM workspaces w WHERE w.org_id = $1 AND w.mode = 'pull_request' AND (
+	w.id IN (SELECT tw.workspace_id FROM task_workspaces tw WHERE tw.org_id = $1 AND tw.task_id = $2)
+	OR (NOT EXISTS (SELECT 1 FROM task_workspaces tw WHERE tw.org_id = $1 AND tw.task_id = $2)
+		AND w.id = (SELECT p.default_workspace_id FROM projects p WHERE p.org_id = $1 AND p.id = $3)))`,
+		t.caller.OrgID, task.ID, task.ProjectID).Scan(&n)
+	return n > 0, err
 }
