@@ -1485,3 +1485,153 @@ export function railX(t: LineTopology): number {
   const deepest = Math.max(0, ...brackets(t).map((b) => b.depth));
   return Math.max(VERTICAL_RAIL, VERTICAL_GUTTER + BRACKET_OFF + deepest * BRACKET_STEP);
 }
+
+/* ------------------------------------------------------------------------------------------ */
+/* The line down the page: the rail from Start, returns as tracks in lanes beside it.         */
+/* ------------------------------------------------------------------------------------------ */
+
+/**
+ * The main line split where the rail begins: the stations before the start Step stand in "Also
+ * starts here" beside it (a Backlog that only leads into Triage), the rail runs from the start
+ * Step (its first station, filled) to Done. With no start Step on the line, the rail is all of it.
+ */
+export function railOf(t: Pick<LineTopology, "main" | "start">): { lead: string[]; rail: string[] } {
+  const at = t.start === undefined ? -1 : t.main.indexOf(t.start);
+  return at <= 0 ? { lead: [], rail: [...t.main] } : { lead: t.main.slice(0, at), rail: t.main.slice(at) };
+}
+
+/** A stub's height at its station: just above its centre, at it, or just below. */
+export type StubHeight = -1 | 0 | 1;
+
+/** One end of a track: a stub from the station at `at` (an index into the line's stations), at `dy`. */
+export type TrackEnd = { at: number; dy: StubHeight; connectors: LineConnector[] };
+
+/**
+ * The Connectors into one Step that the rail cannot carry (returns, and skips over a Step), drawn
+ * as one track in a lane beside the rail: a stub from each Step they leave, one into the Step they
+ * reach with its arrowhead. Lane 0 is the one nearest the rail.
+ */
+export type LaneTrack = { target: string; to: number; lo: number; hi: number; connectors: LineConnector[]; ends: TrackEnd[]; lane: number };
+
+/**
+ * A line's tracks, one per Step reached, from the Connectors between its stations (`stations`, Done
+ * last) that are not a segment of the rail (`along`). Lanes and stub heights are picked for the
+ * fewest crossings (`trackCrossings`); among equals a track nested in another runs inside it, and
+ * of two that overlap the longer runs inside.
+ */
+export function laneTracks(stations: readonly string[], connectors: readonly LineConnector[], along: ReadonlySet<string>): LaneTrack[] {
+  const index = new Map(stations.map((id, i) => [id, i]));
+  const by = new Map<string, LineConnector[]>();
+  for (const c of connectors) {
+    if (along.has(c.id) || c.to === null || !index.has(c.from) || !index.has(c.to) || c.from === c.to) continue;
+    by.set(c.to, [...(by.get(c.to) ?? []), c]);
+  }
+  const list: LaneTrack[] = [...by].map(([target, cs]) => {
+    const to = index.get(target)!;
+    const from = new Map<number, LineConnector[]>();
+    for (const c of cs) from.set(index.get(c.from)!, [...(from.get(index.get(c.from)!) ?? []), c]);
+    const ends: TrackEnd[] = [{ at: to, dy: -1, connectors: [] }, ...[...from].sort((a, b) => a[0] - b[0]).map(([at, connectors]): TrackEnd => ({ at, dy: 1, connectors }))];
+    const ats = ends.map((e) => e.at);
+    return { target, to, lo: Math.min(...ats), hi: Math.max(...ats), connectors: cs, ends, lane: 0 };
+  });
+  list.sort((a, b) => a.to - b.to);
+  if (list.length === 0) return list;
+
+  // Which ends could meet another track's (on a row another track ends at): their heights are worth trying both ways.
+  const rows = new Map<number, number>();
+  for (const k of list) for (const r of new Set([k.lo, k.hi, ...k.ends.map((e) => e.at)])) rows.set(r, (rows.get(r) ?? 0) + 1);
+  const free = list.flatMap((k) => k.ends.filter((e) => (rows.get(e.at) ?? 0) > 1));
+  const preference = (lanes: number[]) => {
+    let n = 0;
+    for (let a = 0; a < list.length; a++) {
+      for (let b = 0; b < list.length; b++) {
+        if (a === b || lanes[a] >= lanes[b]) continue;
+        const [inner, outer] = [list[a], list[b]];
+        const nested = outer.lo <= inner.lo && inner.hi <= outer.hi;
+        const holds = inner.lo <= outer.lo && outer.hi <= inner.hi;
+        const overlap = inner.lo < outer.hi && outer.lo < inner.hi;
+        // Inside: the nested one; of two overlapping, the longer.
+        if (holds && !nested) n++;
+        else if (!nested && !holds && overlap && inner.hi - inner.lo < outer.hi - outer.lo) n++;
+      }
+    }
+    return n;
+  };
+  let best: { cost: number; pref: number; lanes: number[]; dys: StubHeight[] } | undefined;
+  const tryLanes = (lanes: number[]) => {
+    list.forEach((k, i) => (k.lane = lanes[i]));
+    const dys = pickHeights(list, free);
+    const cost = trackCrossings(list);
+    const pref = preference(lanes);
+    if (!best || cost < best.cost || (cost === best.cost && pref < best.pref)) best = { cost, pref, lanes, dys };
+  };
+  if (list.length <= 6) for (const p of permutations(list.length)) tryLanes(p);
+  else tryLanes(list.map((_, i) => i).sort((a, b) => list[a].hi - list[a].lo - (list[b].hi - list[b].lo)).reduce<number[]>((lanes, i, rank) => ((lanes[i] = rank), lanes), []));
+  list.forEach((k, i) => (k.lane = best!.lanes[i]));
+  free.forEach((e, i) => (e.dy = best!.dys[i]));
+  return list;
+}
+
+/** The heights of the ends that could meet another track's, tried every way (or improved one at a time when many), the fewest crossings kept. */
+function pickHeights(list: LaneTrack[], free: TrackEnd[]): StubHeight[] {
+  const heights: StubHeight[] = [-1, 0, 1];
+  const set = (dys: StubHeight[]) => free.forEach((e, i) => (e.dy = dys[i]));
+  let best = free.map((e): StubHeight => (e.connectors.length === 0 ? -1 : 1));
+  set(best);
+  let cost = trackCrossings(list);
+  if (free.length <= 7) {
+    for (let code = 0; code < 3 ** free.length && cost > 0; code++) {
+      const dys = free.map((_, i) => heights[Math.floor(code / 3 ** i) % 3]);
+      set(dys);
+      const c = trackCrossings(list);
+      if (c < cost) [best, cost] = [dys, c];
+    }
+  } else {
+    for (let changed = true; changed && cost > 0; ) {
+      changed = false;
+      for (let i = 0; i < free.length; i++) {
+        for (const h of heights) {
+          const dys = best.map((d, j) => (j === i ? h : d));
+          set(dys);
+          const c = trackCrossings(list);
+          if (c < cost) [best, cost, changed] = [dys, c, true];
+        }
+      }
+    }
+  }
+  set(best);
+  return best;
+}
+
+function permutations(n: number): number[][] {
+  if (n === 0) return [[]];
+  return permutations(n - 1).flatMap((p) => Array.from({ length: n }, (_, i) => [...p.slice(0, i), n - 1, ...p.slice(i)]));
+}
+
+/**
+ * Where tracks cross: a stub running out past a track in a lane nearer the rail, at a height
+ * inside that track's run; or two stubs of different tracks at one station and one height.
+ */
+export function trackCrossings(list: readonly LaneTrack[]): number {
+  const key = (e: TrackEnd) => e.at * 3 + e.dy + 1;
+  let n = 0;
+  for (const a of list) {
+    for (const b of list) {
+      if (a === b) continue;
+      const span = b.ends.map(key);
+      const [top, bot] = [Math.min(...span), Math.max(...span)];
+      for (const e of a.ends) {
+        if (b.lane < a.lane && top <= key(e) && key(e) <= bot) n++;
+        if (a.lane < b.lane && b.ends.some((f) => key(f) === key(e))) n++;
+      }
+    }
+  }
+  return n;
+}
+
+/** The main rail's tracks: every Connector between two of its stations that is not one of its segments. */
+export function tracks(t: LineTopology): LaneTrack[] {
+  const { rail } = railOf(t);
+  const along = new Set(t.segments.flatMap((s) => (s.connector ? [s.connector.id] : [])));
+  return laneTracks(rail, [...t.connectors.values()], along);
+}

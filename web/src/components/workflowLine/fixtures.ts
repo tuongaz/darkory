@@ -238,3 +238,54 @@ export function HOTFIX(): LineWorkflow {
     drawn: "work",
   };
 }
+
+/**
+ * DARK on the final design's g2 (wf-round fixture.json): Implementation (Backlog · Plan · Build ·
+ * Review), Bug triage (Triage · Fix · Code review · Verify, its feature into Implementation's
+ * Build) and Retrospective (Retro · Skill review), drawing `drawn`.
+ */
+export function DARK(drawn: "impl" | "bugs" | "retros"): LineWorkflow {
+  return several(
+    [
+      ["impl", "Implementation", [["backlog", "Backlog", null], ["plan", "Plan", "breakdown"], ["build", "Build", "engineer"], ["review", "Review", "review"]]],
+      ["bugs", "Bug triage", [["triage", "Triage", "triage"], ["fix", "Fix", "engineer"], ["creview", "Code review", "review"], ["verify", "Verify", "qa"]]],
+      ["retros", "Retrospective", [["retro", "Retro", "retro"], ["skillreview", "Skill review", "skill-review"]]],
+    ],
+    [
+      ["plan", "done", null],
+      ["build", "pass", "review"],
+      ["review", "pass", null],
+      ["review", "needs changes", "build"],
+      ["triage", "bug", "fix"],
+      ["triage", "not a bug", null],
+      ["triage", "feature", "build"],
+      ["fix", "ready", "creview"],
+      ["creview", "pass", "verify"],
+      ["creview", "needs changes", "fix"],
+      ["verify", "pass", null],
+      ["verify", "fail", "fix"],
+      ["retro", "done", null],
+      ["retro", "propose", "skillreview"],
+      ["skillreview", "publish", null],
+      ["skillreview", "needs changes", "retro"],
+    ],
+    drawn,
+  );
+}
+
+/** NEWS's Editorial (fixture.json): Legal a hold on the line, moved on to Publish by hand. */
+export const NEWS = workflow(
+  [
+    ["draft", "Draft", "writer"],
+    ["edit", "Edit", "editor"],
+    ["legal", "Legal", null],
+    ["publish", "Publish", "publisher"],
+  ],
+  [
+    ["draft", "ready", "edit"],
+    ["edit", "approved", "legal"],
+    ["edit", "needs changes", "draft"],
+    ["publish", "published", null],
+    ["publish", "broken link", "draft"],
+  ],
+);

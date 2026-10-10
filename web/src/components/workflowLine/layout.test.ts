@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { wfId, wfStep } from "@/test/fixtures";
-import { BIG, FIVE, MAIN } from "./fixtures";
-import { crossings, densityFor, horizontal, lineTopology, topologyCrossings, type Arc, type Track } from "./layout";
+import { BIG, DEFAULT, FIVE, MAIN, SACCA, SOFTWARE } from "./fixtures";
+import { crossings, densityFor, horizontal, lineTopology, railOf, topologyCrossings, trackCrossings, tracks, type Arc, type Track } from "./layout";
 import { DONE_STATION, type LineWorkflow } from "./model";
 import { overlaps } from "./place";
 
@@ -312,5 +312,58 @@ describe("one Workflow of several drawn alone (ADR 0019): a Connector into anoth
     const t = lineTopology(FIVE(wfId.prototypes));
     expect(t.entries.map((e) => e.text)).toEqual(["from Triage · prototype"]);
     expect([...t.connectors.values()].map((c) => c.name)).toEqual(["ready", "approved", "redesign"]);
+  });
+});
+
+describe("the line down the page: returns as tracks in lanes beside the rail", () => {
+  const named = (t: ReturnType<typeof lineTopology>, list: ReturnType<typeof tracks>) =>
+    list.map((k) => [t.steps.get(k.target)?.name, k.connectors.map((c) => `${t.steps.get(c.from)?.name}:${c.name}`).sort(), k.lane]);
+
+  it("starts the rail at the start Step; a Step before it stands beside the start (BIG's Backlog)", () => {
+    expect(railOf(lineTopology(BIG))).toEqual({ lead: ["backlog"], rail: ["triage", "plan", "design", "build", "creview", "qa", "sec", "docs", "acc", "release", "retro", DONE_STATION] });
+    expect(railOf(lineTopology(MAIN))).toEqual({ lead: [], rail: ["build", "qa", "review", DONE_STATION] });
+  });
+
+  it("draws one track per Step returned to: MAIN's two into Build share one, needs QA into QA another; the skip into Review its own", () => {
+    const t = lineTopology(MAIN);
+    expect(named(t, tracks(t)).map(([n, cs]) => [n, cs])).toEqual([
+      ["Build", ["QA:fail", "Review:needs changes"]],
+      ["QA", ["Review:needs QA"]],
+      ["Review", ["Build:no UI change"]],
+    ]);
+  });
+
+  it("merges the software Workflow's four into Build on one track", () => {
+    const t = lineTopology(SOFTWARE);
+    const build = tracks(t).find((k) => t.steps.get(k.target)?.name === "Build")!;
+    const into = [...t.connectors.values()].filter((c) => c.to === build.target && !t.segments.some((s) => s.connector?.id === c.id));
+    expect(into.filter((c) => t.main.indexOf(c.from) > t.main.indexOf(build.target)).length).toBe(4);
+    expect(build.connectors.map((c) => c.id).sort()).toEqual(into.map((c) => c.id).sort());
+  });
+
+  it("lays BIG's three tracks with one crossing: rework inside, Build's long track next, rollback into QA outside it", () => {
+    const t = lineTopology(BIG);
+    const list = tracks(t);
+    expect(named(t, list).map(([n, , lane]) => [n, lane])).toEqual([
+      ["Plan", 0],
+      ["Build", 1],
+      ["QA", 2],
+    ]);
+    expect(trackCrossings(list)).toBe(1);
+  });
+
+  it("crosses nothing on MAIN, the default, the Sacca Workflow and Bug triage's shared track", () => {
+    for (const wf of [MAIN, DEFAULT, SACCA]) expect(trackCrossings(tracks(lineTopology(wf)))).toBe(0);
+  });
+
+  it("never carries a Connector into Done, nor one the rail carries", () => {
+    for (const wf of [MAIN, BIG, SOFTWARE, SACCA]) {
+      const t = lineTopology(wf);
+      const along = new Set(t.segments.map((s) => s.connector?.id));
+      for (const k of tracks(t)) for (const c of k.connectors) {
+        expect(c.to).not.toBeNull();
+        expect(along.has(c.id)).toBe(false);
+      }
+    }
   });
 });
