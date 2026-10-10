@@ -357,7 +357,8 @@ export function VerticalLine({
     for (const c of t.connectors.values()) {
       if (c.from !== id) continue;
       const kind: MarkKind = c.to === null ? "done" : isHoldStep(s) ? "hand" : "chip";
-      out.push(mark(kind, c.id, said(c, name(c.to)), outcomeHint(c, fullName), { "data-connector": c.id }));
+      // A hold's Connector names where a move by hand lands by default (D5): its hover is the hold's.
+      out.push(mark(kind, c.id, said(c, name(c.to)), kind === "hand" ? holdHint(s.name) : outcomeHint(c, fullName), { "data-connector": c.id }));
     }
     for (const e of t.exits.filter((x) => x.stepId === id)) out.push(mark("exit", e.connector.id, said(e.connector, fullName(e.connector.to)), e.hint, { "data-connector": e.connector.id, "data-chip": "exit", "data-exit": e.connector.id }));
     return out;

@@ -116,6 +116,8 @@ describe("Also starts here", () => {
     render(<WorkflowLine workflow={BIG} tasks={[]} now={0} />);
     const group = screen.getByRole("region", { name: "Also starts here" });
     expect(group.querySelector('[data-side="backlog"] [data-mark]')).toHaveTextContent("⇢ pass → Triage");
+    expect(group.querySelector('[data-side="backlog"] [data-mark]')).toHaveAttribute("data-mark", "hand");
+    expect(group.querySelector('[data-side="backlog"] [data-mark]')).toHaveAttribute("data-hint", "Backlog: a hold. No one is offered these; a human moves a Task on by hand, to any Step");
     expect(stations(rail())[0]).toHaveAttribute("data-station", "triage");
   });
 
