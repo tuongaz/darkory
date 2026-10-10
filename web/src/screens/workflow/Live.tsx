@@ -1,21 +1,19 @@
-import { useCallback, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useMemo, useState } from "react";
 import type { Project, Task } from "@/api/client";
 import { useLiveEntries } from "@/api/live";
 import { useMembers } from "@/api/queries";
 import { projectPath } from "@/app/currentProject";
-import { peekParam } from "@/app/peek";
 import { stepFilterSearch, type FilterPill } from "@/components/filters/filterState";
 import { Refusal } from "@/components/Refusal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { BlockingView } from "@/components/workflow/blocking";
-import { scopePills, useLineData, WorkflowLine, type Chain, type LineData } from "@/components/workflowLine";
+import { scopePills, useLineData, WorkflowLine, type LineData } from "@/components/workflowLine";
 import { branchSkills } from "@/components/workflowLine/model";
 import { useNow } from "@/clock";
-import { AnswerButton, ClaimButton } from "@/screens/inbox/parts";
 import { lineText, onDrawnLine, trailLine, type FlowContext } from "./flowEvents";
 import { LineText } from "./LineText";
+import { useFirstMove, useOpenTask } from "./lineMoves";
 import type { LineView } from "./lineView";
 import { NeedsYouPanel, StoriesPanel, useStoriesQuiet } from "./panels";
 import { useLiveFlow, useReducedMotion } from "./useLiveFlow";
@@ -51,16 +49,7 @@ export function LiveWorkflow({
   // Of a Project of several Workflows the page is the drawn one's: its panels list its Tasks.
   const shown = data?.shown;
   const now = useNow();
-  const [, setParams] = useSearchParams();
-  const openTask = useCallback(
-    (key: string) =>
-      setParams((p) => {
-        const next = new URLSearchParams(p);
-        next.set(peekParam, key);
-        return next;
-      }),
-    [setParams],
-  );
+  const openTask = useOpenTask();
   const [selected, setSelected] = useState<string | null>(null);
   const [ringed, setRinged] = useState<string | null>(null);
   const quiet = useStoriesQuiet(project, shown);
@@ -143,13 +132,7 @@ function LiveLine({
   }, [project.id, data.facts, data.drawnSteps, data.records, members.data]);
   const flow = useLiveFlow(ctx, reduced);
   const announced = useAnnouncement(ctx);
-  const recordOf = useMemo(() => new Map<string, Task>(data.records.map((t) => [t.id, t])), [data.records]);
-  const actionFor = (first: Chain["first"]) => {
-    if (first.kind === "none") return null;
-    const task = recordOf.get(first.task.id);
-    if (!task) return null;
-    return first.kind === "answer" ? <AnswerButton task={task} /> : <ClaimButton task={task} />;
-  };
+  const actionFor = useFirstMove(data.records);
   const s = data.scoped;
   // A Step's list links to the Tasks list at the Step, under the scope and Filter its count was made
   // under: one pill per field, the scope's Parent over a Filter's.

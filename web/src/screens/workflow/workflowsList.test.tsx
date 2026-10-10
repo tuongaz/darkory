@@ -9,13 +9,14 @@ import { newQueryClient } from "@/queryClient";
 import { mockApi, refuse } from "@/test/api";
 import { ada, bob, signedIn, task, wfId, wfStep, workflow, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
+import { liveClaimOf } from "@/screens/board/testData";
 import { answer, type Body } from "@/test/workflowPut";
-import { workflowRows } from "./workflowRows";
 
-// The Workflows page (shell-navigation-plan.md, Task 3): every Project opens on a list of its
-// Workflows with their figures, a Project of one included; a row opens that Workflow's page, whose
-// chip goes to another's. For an admin each row carries its acts (‹ › ✎ 🗑, folded into one ⋯ on a
-// phone) and the bar's primary is + Workflow; each act is one PUT of the whole graph, said in a toast.
+// The Workflows page (workflow-vertical-plan.md, Task 4; vf-8): every Project opens on its
+// Workflows, each drawn as its own line in a column, a Project of one included; a column's name
+// opens that Workflow's page, whose chip goes to another's. For an admin each column's head carries
+// its acts (the grip, Edit, the ⋯ with Move earlier, Move later and Delete) and the bar's primary is
+// + Workflow; each act is one PUT of the whole graph, said in a toast.
 
 // Bugs: 2 at Investigate (1 worked), 1 at Fix; Support: 3 at Support (2 worked).
 const graph = () =>
@@ -26,7 +27,6 @@ const graph = () =>
   });
 const doneAt = (n: number, at: Date, extra: Partial<Task> = {}) => task(n, { state: "done", step_id: undefined, ended_at: at.toISOString(), ...extra });
 const doneToday = (n: number, extra: Partial<Task> = {}) => doneAt(n, new Date(), extra);
-const yesterday = () => new Date(Date.now() - 36 * 3600 * 1000);
 
 /**
  * The `/v1/tasks` the page reads, as `/v1` answers it: `state=`, and each `completed_at:gte:<time>`
@@ -81,50 +81,87 @@ function renderWithAddress(path: string) {
 }
 const address = () => screen.getByLabelText("Address").textContent;
 
-const table = () => screen.findByRole("table", { name: "Workflows" });
-// The figures: Workflow · Steps · Waiting · Working · Done today; an admin's act cells follow them.
-const cells = (row: HTMLElement) =>
-  within(row)
-    .getAllByRole("cell")
-    .slice(0, 5)
-    .map((c) => c.textContent);
-const names = async () =>
-  within(await table())
-    .getAllByRole("row")
-    .slice(1)
-    .map((r) => r.getAttribute("aria-label"));
+const list = () => screen.findByRole("list", { name: "Workflows" });
+/** The list's columns, one per Workflow, in order (the lines' own Steps are lists too: only the list's own items). */
+const columns = (l: HTMLElement) => [...l.children].filter((c): c is HTMLElement => c instanceof HTMLElement && c.tagName === "LI");
+const names = async () => columns(await list()).map((c) => c.getAttribute("aria-label"));
+const column = async (name: string) => within((await list()).querySelector<HTMLElement>(`:scope > [aria-label="${name}"]`)!);
+/** A column's line: its Steps' rows, in order, as the line names them. */
+const stations = (col: ReturnType<typeof within>) => [...col.getByRole("list", { name: "Steps on the line" }).querySelectorAll(":scope > li[data-station]")].map((li) => li.getAttribute("data-head"));
+/** The ⋯ of a column, opened: its menu. */
+async function more(name: string) {
+  await userEvent.click((await column(name)).getByRole("button", { name: `More for ${name}` }));
+  return within(await screen.findByRole("menu"));
+}
 
 afterEach(() => localStorage.clear());
 
 describe("the Workflows page of a Project of several", () => {
-  it("lists each Workflow in order with its Steps, waiting, working and done today", async () => {
-    // One done in Bugs; one the server places in no Workflow, listed in the first, as on the board;
-    // one done in Bugs yesterday, not counted.
-    const { calls } = serve([doneToday(7, { workflow_id: wfId.bugs }), doneToday(8), doneAt(9, yesterday(), { workflow_id: wfId.bugs })]);
+  it("draws each Workflow as its own line, in order: Start, then its Steps, then Done", async () => {
+    serve([]);
     renderApp("/projects/WEB/workflows");
-    const list = await table();
-    // The figures' heads; an admin's act columns are named for a screen reader alone.
-    expect(within(list).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Workflow", "Steps", "Waiting", "Working", "Done today", "Order", "Edit or delete", "More"]);
-    await waitFor(() => expect(cells(within(list).getByRole("row", { name: "Bugs" }))).toEqual(["Bugs", "4", "2", "1", "1"]));
-    const rows = within(list).getAllByRole("row").slice(1);
-    expect(rows.map(cells)).toEqual([
-      ["Triage", "1", "0", "0", "1"],
-      ["Bugs", "4", "2", "1", "1"],
-      ["Features", "4", "0", "0", "0"],
-      ["Prototypes", "2", "0", "0", "0"],
-      ["Support", "4", "1", "2", "0"],
-    ]);
-    const read = calls.find((c) => c.path === "/v1/tasks" && c.query.get("state") === "done");
-    expect(read?.query.getAll("filter")).toEqual([expect.stringMatching(/^completed_at:gte:/)]);
-    // No chip: the list is every Workflow.
+    expect(await names()).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support"]);
+    const bugs = await column("Bugs");
+    await waitFor(() => expect(stations(bugs)).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]));
+    // Its line starts at its first Step: Start above it, its station the start.
+    expect(bugs.getByRole("list", { name: "Steps on the line" }).querySelector(":scope > li[data-station]")).toHaveAttribute("data-start");
+    expect(bugs.getByText("Start")).toBeInTheDocument();
+    expect(stations(await column("Features"))).toEqual(["Build", "Code review", "QA", "Release", "Done"]);
+    expect(stations(await column("Triage"))).toEqual(["Triage", "Done"]);
+    // No chip: the list is every Workflow; no table of figures.
+    expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByRole("button", { name: /^Workflow: / })).toBeNull();
     expect(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByText("Workflows")).toBeInTheDocument();
   });
 
-  it("opens a Workflow's page from its row, the crumbs leading back to the list", async () => {
+  it("heads each column with the open Tasks listed on its Workflow, as its page lists them", async () => {
+    // Two open in Bugs; one open the server places in no Workflow, listed on every one, as on the
+    // board; one done in Bugs today, not open.
+    serve([
+      task(2, { step_id: wfStep.investigate, workflow_id: wfId.bugs, skill_id: undefined }),
+      task(3, { step_id: wfStep.fix, workflow_id: wfId.bugs, skill_id: undefined }),
+      task(4, { step_id: undefined, workflow_id: undefined, skill_id: undefined }),
+      doneToday(7, { workflow_id: wfId.bugs }),
+    ]);
+    renderApp("/projects/WEB/workflows");
+    await waitFor(async () => expect((await column("Bugs")).getByText("3 Tasks")).toBeInTheDocument());
+    expect((await column("Triage")).getByText("1 Task")).toBeInTheDocument();
+    // Done today is said at its line's Done.
+    expect((await column("Bugs")).getByText("1 today")).toBeInTheDocument();
+  });
+
+  it("says a Workflow with no open Task listed has none", async () => {
     serve([task(2, { step_id: wfStep.investigate, workflow_id: wfId.bugs, skill_id: undefined })]);
     renderApp("/projects/WEB/workflows");
-    const link = within(await table()).getByRole("link", { name: "Bugs" });
+    await waitFor(async () => expect((await column("Bugs")).getByText("1 Task")).toBeInTheDocument());
+    expect((await column("Support")).getByText("no open Tasks")).toBeInTheDocument();
+  });
+
+  it("reads the Project's Workflows and open Tasks once for every line", async () => {
+    const { calls } = serve([task(2, { step_id: wfStep.investigate, workflow_id: wfId.bugs, skill_id: undefined })]);
+    renderApp("/projects/WEB/workflows");
+    await waitFor(async () => expect((await column("Bugs")).getByText("1 Task")).toBeInTheDocument());
+    expect(calls.filter((c) => c.method === "GET" && c.path === "/v1/projects/WEB/workflow")).toHaveLength(1);
+    expect(calls.filter((c) => c.path === "/v1/tasks" && c.query.get("project") === "WEB" && c.query.get("state") === "open")).toHaveLength(1);
+    expect(calls.filter((c) => c.path === "/v1/tasks" && c.query.get("project") === "WEB" && c.query.get("state") === "done")).toHaveLength(1);
+  });
+
+  it("puts a Task at its Step on its own Workflow's line; selecting it shows its strip in that column alone", async () => {
+    const held = task(2, { step_id: wfStep.investigate, workflow_id: wfId.bugs, skill_id: undefined, claim: liveClaimOf(ada, "k-2") });
+    serve([held]);
+    renderApp("/projects/WEB/workflows");
+    const bugs = await column("Bugs");
+    const chip = await bugs.findByRole("button", { name: /^WEB-2\b/ });
+    expect((await column("Triage")).queryByRole("button", { name: /^WEB-2\b/ })).toBeNull();
+    await userEvent.click(chip);
+    expect(await bugs.findByRole("region", { name: "WEB-2's way" })).toBeInTheDocument();
+    expect(screen.getAllByRole("region", { name: "WEB-2's way" })).toHaveLength(1);
+  });
+
+  it("opens a Workflow's page from its column's name, the crumbs leading back to the list", async () => {
+    serve([task(2, { step_id: wfStep.investigate, workflow_id: wfId.bugs, skill_id: undefined })]);
+    renderApp("/projects/WEB/workflows");
+    const link = (await column("Bugs")).getByRole("link", { name: "Bugs" });
     expect(link).toHaveAttribute("href", `/projects/WEB/workflows/${wfId.bugs}`);
     await userEvent.click(link);
     expect(await screen.findByRole("button", { name: "Workflow: Bugs" })).toBeInTheDocument();
@@ -144,7 +181,7 @@ describe("the Workflows page of a Project of several", () => {
     expect(screen.getByRole("link", { name: "Edit Support" })).toHaveAttribute("href", `/projects/WEB/workflows/${wfId.support}/edit`);
     expect(localStorage.getItem("darkory.workflow.WEB")).toBe(wfId.support);
     await userEvent.click(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByRole("link", { name: "Workflows" }));
-    expect(await table()).toBeInTheDocument();
+    expect(await list()).toBeInTheDocument();
   });
 
   it("opens the Workflow a ?workflow= names, as the board's address says it", async () => {
@@ -159,15 +196,21 @@ describe("the Workflows page of a Project of several", () => {
     expect((await screen.findAllByText("Not found")).length).toBeGreaterThan(0);
     expect(screen.queryByRole("region", { name: "Workflow" })).toBeNull();
   });
-  it("orders each row with ‹ ›, the first never earlier, the last never later; nothing sent on opening", async () => {
+
+  it("heads each column for an admin with the grip, Edit and the ⋯; the first never earlier, the last never later; nothing sent on opening", async () => {
     const { puts } = serve([]);
     renderApp("/projects/WEB/workflows");
-    const list = within(await table());
-    expect(await names()).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support"]);
-    await waitFor(() => expect(list.getByRole("button", { name: "Move Bugs earlier" })).toBeEnabled());
-    expect(list.getByRole("button", { name: "Move Triage earlier" })).toBeDisabled();
-    expect(list.getByRole("button", { name: "Move Support later" })).toBeDisabled();
-    expect(list.getByRole("button", { name: "Delete Bugs" })).toBeEnabled();
+    const bugs = await column("Bugs");
+    expect(bugs.getByRole("button", { name: /^Drag to order Bugs/ })).toBeInTheDocument();
+    expect(bugs.getByRole("link", { name: "Edit Bugs" })).toHaveAttribute("href", `/projects/WEB/workflows/${wfId.bugs}/edit`);
+    let menu = await more("Triage");
+    expect(menu.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Move earlier", "Move later", "Delete"]);
+    expect(menu.getByRole("menuitem", { name: "Move earlier" })).toHaveAttribute("aria-disabled", "true");
+    await userEvent.keyboard("{Escape}");
+    menu = await more("Support");
+    expect(menu.getByRole("menuitem", { name: "Move later" })).toHaveAttribute("aria-disabled", "true");
+    expect(menu.getByRole("menuitem", { name: "Delete" })).not.toHaveAttribute("aria-disabled");
+    await userEvent.keyboard("{Escape}");
     expect(within(screen.getByRole("group", { name: "Page" })).getByRole("button", { name: "Workflow" })).toBeEnabled();
     expect(puts).toEqual([]);
   });
@@ -175,7 +218,7 @@ describe("the Workflows page of a Project of several", () => {
   it("adds a Workflow at once and opens its editor with the name to type", async () => {
     const { puts, current } = serve([]);
     renderWithAddress("/projects/WEB/workflows");
-    await table();
+    await list();
     await userEvent.click(within(screen.getByRole("group", { name: "Page" })).getByRole("button", { name: "Workflow" }));
     await waitFor(() => expect(puts).toHaveLength(1));
     expect(puts[0].workflows).toEqual([
@@ -206,10 +249,9 @@ describe("the Workflows page of a Project of several", () => {
   it("moves a Workflow later at once and says where New Tasks start when that changes", async () => {
     const { puts } = serve([]);
     renderApp("/projects/WEB/workflows");
-    const list = within(await table());
-    const later = list.getByRole("button", { name: "Move Triage later" });
-    await waitFor(() => expect(later).toBeEnabled());
-    await userEvent.click(later);
+    let menu = await more("Triage");
+    await waitFor(() => expect(menu.getByRole("menuitem", { name: "Move later" })).not.toHaveAttribute("aria-disabled"));
+    await userEvent.click(menu.getByRole("menuitem", { name: "Move later" }));
     await waitFor(() => expect(puts).toHaveLength(1));
     expect(puts[0].workflows.slice(0, 2)).toEqual([
       { id: wfId.bugs, name: "Bugs", position: 1 },
@@ -218,7 +260,9 @@ describe("the Workflows page of a Project of several", () => {
     await waitFor(async () => expect(await names()).toEqual(["Bugs", "Triage", "Features", "Prototypes", "Support"]));
     // Bugs first: New Tasks start at its first Step now, and the toast says so.
     expect(await screen.findByText("Moved Triage later. New Tasks start at Investigate.")).toBeInTheDocument();
-    await userEvent.click(list.getByRole("button", { name: "Move Support earlier" }));
+    menu = await more("Support");
+    await waitFor(() => expect(menu.getByRole("menuitem", { name: "Move earlier" })).not.toHaveAttribute("aria-disabled"));
+    await userEvent.click(menu.getByRole("menuitem", { name: "Move earlier" }));
     await waitFor(() => expect(puts).toHaveLength(2));
     await waitFor(async () => expect(await names()).toEqual(["Bugs", "Triage", "Features", "Support", "Prototypes"]));
     // Where New Tasks start is unchanged: the move alone is said.
@@ -226,15 +270,27 @@ describe("the Workflows page of a Project of several", () => {
     expect(screen.queryByText(/^Moved Support earlier\./)).toBeNull();
   });
 
-  it("sends one PUT for two clicks in the same moment", async () => {
+  it("moves a Workflow by its grip from the keyboard: one PUT, the same toast", async () => {
     const { puts } = serve([]);
     renderApp("/projects/WEB/workflows");
-    const later = within(await table()).getByRole("button", { name: "Move Features later" });
-    await waitFor(() => expect(later).toBeEnabled());
+    const grip = (await column("Features")).getByRole("button", { name: /^Drag to order Features/ });
+    await waitFor(() => expect(grip).toBeEnabled());
+    grip.focus();
+    await userEvent.keyboard("{ArrowLeft}");
+    await waitFor(() => expect(puts).toHaveLength(1));
+    await waitFor(async () => expect(await names()).toEqual(["Triage", "Features", "Bugs", "Prototypes", "Support"]));
+    expect(await screen.findByText("Moved Features earlier")).toBeInTheDocument();
+  });
+
+  it("sends one PUT for two moves in the same moment", async () => {
+    const { puts } = serve([]);
+    renderApp("/projects/WEB/workflows");
+    const grip = (await column("Features")).getByRole("button", { name: /^Drag to order Features/ });
+    await waitFor(() => expect(grip).toBeEnabled());
     // Both in one moment: React draws nothing between them.
     act(() => {
-      later.click();
-      later.click();
+      grip.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      grip.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     });
     await waitFor(async () => expect(await names()).toEqual(["Triage", "Bugs", "Prototypes", "Features", "Support"]));
     expect(puts).toHaveLength(1);
@@ -243,7 +299,7 @@ describe("the Workflows page of a Project of several", () => {
   it("asks before deleting, then writes once: its Tasks need a Step of another, the outcome into it is removed unless led on", async () => {
     const { puts } = serve([], workflowsFixture(undefined, { fix: { tasks: 1 } }));
     renderApp("/projects/WEB/workflows");
-    await userEvent.click(within(await table()).getByRole("button", { name: "Delete Bugs" }));
+    await userEvent.click((await more("Bugs")).getByRole("menuitem", { name: "Delete" }));
     const dialog = within(await screen.findByRole("dialog", { name: "Delete Bugs" }));
     expect(dialog.getByText("The Steps of Bugs go with it: Investigate, Fix, Review, Verify.")).toBeInTheDocument();
     expect(dialog.getByText("1 Task at Fix")).toBeInTheDocument();
@@ -277,7 +333,7 @@ describe("the Workflows page of a Project of several", () => {
     await waitFor(() => expect(puts).toHaveLength(1));
     expect(puts[0].workflows.map((w) => w.name)).toEqual(["Triage", "Features", "Prototypes", "Support"]);
     expect((await screen.findAllByText("Deleted Bugs")).length).toBeGreaterThan(0);
-    expect(await screen.findByRole("table", { name: "Workflows" })).toBeInTheDocument();
+    expect(await screen.findByRole("list", { name: "Workflows" })).toBeInTheDocument();
   });
 
   it("offers a Member who is not an admin no Delete on a Workflow's page", async () => {
@@ -291,59 +347,33 @@ describe("the Workflows page of a Project of several", () => {
     const api = serve([]);
     api.routes["PUT /v1/projects/:project/workflow"] = refuse(400, "invalid", 'two Workflows are named "Bugs"; names are unique, ignoring case');
     renderApp("/projects/WEB/workflows");
-    const earlier = within(await table()).getByRole("button", { name: "Move Bugs earlier" });
-    await waitFor(() => expect(earlier).toBeEnabled());
-    await userEvent.click(earlier);
+    const menu = await more("Bugs");
+    await waitFor(() => expect(menu.getByRole("menuitem", { name: "Move earlier" })).not.toHaveAttribute("aria-disabled"));
+    await userEvent.click(menu.getByRole("menuitem", { name: "Move earlier" }));
     expect(await screen.findByText('two Workflows are named "Bugs"; names are unique, ignoring case')).toBeInTheDocument();
     expect(await names()).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support"]);
   });
 
-  it("folds a row's acts into one ⋯ menu for a phone: Edit, Move earlier, Move later, Delete", async () => {
-    serve([]);
-    renderApp("/projects/WEB/workflows");
-    await userEvent.click(within(await table()).getByRole("button", { name: "More for Triage" }));
-    const menu = within(await screen.findByRole("menu"));
-    expect(menu.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Edit", "Move earlier", "Move later", "Delete"]);
-    expect(menu.getByRole("menuitem", { name: "Edit" })).toHaveAttribute("href", `/projects/WEB/workflows/${wfId.triage}/edit`);
-    expect(menu.getByRole("menuitem", { name: "Move earlier" })).toHaveAttribute("aria-disabled", "true");
-    await userEvent.click(menu.getByRole("menuitem", { name: "Delete" }));
-    expect(await screen.findByRole("dialog", { name: "Delete Triage" })).toBeInTheDocument();
-  });
-
-  it("draws a row's acts muted at rest and full while the row is hovered or focused, with ⋯ after them at every width", async () => {
-    serve([]);
-    renderApp("/projects/WEB/workflows");
-    const row = within(await table()).getByRole("row", { name: "Bugs" });
-    expect(row).toHaveClass("group/row", "hover:bg-accent/60", "focus-within:bg-accent/60");
-    for (const name of ["Move Bugs earlier", "Move Bugs later", "Edit Bugs", "Delete Bugs"]) {
-      const act = within(row).getByRole(name.startsWith("Edit") ? "link" : "button", { name });
-      expect(act).toHaveClass("size-7", "text-muted-foreground", "group-hover/row:text-foreground", "group-focus-within/row:text-foreground");
-    }
-    // The ⋯ is the row's last cell, shown at every width, not only on a phone.
-    const more = within(row).getByRole("button", { name: "More for Bugs" });
-    expect(more).toHaveClass("text-muted-foreground", "group-hover/row:text-foreground", "group-focus-within/row:text-foreground");
-    const cell = more.closest('[role="cell"]')!;
-    expect(within(row).getAllByRole("cell").at(-1)).toBe(cell);
-    expect(cell.className).not.toMatch(/(^|\s)(sm:)?hidden(\s|$)/);
-  });
-
-  it("opens a Workflow's editor from its row's pencil", async () => {
+  it("opens a Workflow's editor from its column's Edit", async () => {
     serve([]);
     renderWithAddress("/projects/WEB/workflows");
-    const pencil = within(await table()).getByRole("link", { name: "Edit Bugs" });
-    expect(pencil).toHaveAttribute("href", `/projects/WEB/workflows/${wfId.bugs}/edit`);
-    await userEvent.click(pencil);
+    const edit = (await column("Bugs")).getByRole("link", { name: "Edit Bugs" });
+    expect(edit).toHaveAttribute("href", `/projects/WEB/workflows/${wfId.bugs}/edit`);
+    await userEvent.click(edit);
     expect(await screen.findByRole("textbox", { name: "Name of the Workflow" })).toHaveValue("Bugs");
     expect(address()).toBe(`/projects/WEB/workflows/${wfId.bugs}/edit`);
   });
 
-  it("shows a Member who is not an admin the figures and no acts", async () => {
-    serve([], graph(), bob);
+  it("shows a Member who is not an admin the lines and no acts", async () => {
+    serve([task(2, { step_id: wfStep.investigate, workflow_id: wfId.bugs, skill_id: undefined })], graph(), bob);
     renderApp("/projects/WEB/workflows");
-    const list = within(await table());
-    expect(list.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Workflow", "Steps", "Waiting", "Working", "Done today"]);
-    expect(list.queryAllByRole("button")).toEqual([]);
-    expect(list.queryByRole("link", { name: /^Edit / })).toBeNull();
+    const bugs = await column("Bugs");
+    await waitFor(() => expect(bugs.getByText("1 Task")).toBeInTheDocument());
+    expect(stations(bugs)).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]);
+    expect(bugs.getByRole("link", { name: "Bugs" })).toBeInTheDocument();
+    expect(bugs.queryByRole("button", { name: /^Drag to order / })).toBeNull();
+    expect(bugs.queryByRole("button", { name: /^More for / })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^Edit / })).toBeNull();
     // Nothing for the bar's second row: no + Workflow.
     expect(screen.queryByRole("group", { name: "Page" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Workflow" })).toBeNull();
@@ -351,40 +381,27 @@ describe("the Workflows page of a Project of several", () => {
 });
 
 describe("the Workflows page of a Project of one", () => {
-  it("lists its one Workflow, with + Workflow and the acts for an admin", async () => {
+  it("draws its one Workflow, with + Workflow and the acts for an admin; the last stays", async () => {
     serve([], workflow());
     renderApp("/projects/WEB/workflows");
-    const t = await table();
-    expect(within(t).getAllByRole("row")).toHaveLength(2);
-    expect(within(t).getByRole("link", { name: "Work" })).toHaveAttribute("href", "/projects/WEB/workflows/wf-work");
+    expect(await names()).toEqual(["Work"]);
+    const work = await column("Work");
+    expect(work.getByRole("link", { name: "Work" })).toHaveAttribute("href", "/projects/WEB/workflows/wf-work");
     // The + Workflow primary.
     expect(screen.getByRole("group", { name: "Page" })).toHaveTextContent("Workflow");
-    // The last stays.
-    const trash = within(t).getByRole("button", { name: /^Delete /, hidden: true });
-    expect(trash).toHaveAttribute("aria-disabled", "true");
-    expect(trash).toHaveAccessibleDescription("The last Workflow stays");
-    // Its reason is on the control: hovering the button itself says so.
-    await userEvent.hover(trash);
-    expect((await screen.findAllByText("The last Workflow stays")).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: /^Workflow: / })).toBeNull();
-  });
-
-  it("keeps its one Workflow in the ⋯ menu too: Delete is off", async () => {
-    serve([], workflow());
-    renderApp("/projects/WEB/workflows");
-    await userEvent.click(within(await table()).getByRole("button", { name: "More for Work" }));
-    const menu = within(await screen.findByRole("menu"));
+    const menu = await more("Work");
     const del = menu.getByRole("menuitem", { name: /^Delete/ });
     expect(del).toHaveAttribute("aria-disabled", "true");
     expect(del).toHaveTextContent("The last Workflow stays");
     expect(menu.getByRole("menuitem", { name: "Move earlier" })).toHaveAttribute("aria-disabled", "true");
     expect(menu.getByRole("menuitem", { name: "Move later" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.queryByRole("button", { name: /^Workflow: / })).toBeNull();
   });
 
-  it("opens its one Workflow's page from the row, which names it as its last crumb, with no chip", async () => {
+  it("opens its one Workflow's page from its name, which names it as its last crumb, with no chip", async () => {
     serve([task(2)], workflow());
     renderApp("/projects/WEB/workflows");
-    await userEvent.click(within(await table()).getByRole("link", { name: "Work" }));
+    await userEvent.click((await column("Work")).getByRole("link", { name: "Work" }));
     expect(await within(await screen.findByRole("region", { name: "Workflow" })).findByRole("button", { name: "Build: 1 Task waiting" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Workflow: / })).toBeNull();
     const crumbs = within(screen.getByRole("navigation", { name: "Breadcrumb" }));
@@ -394,12 +411,5 @@ describe("the Workflows page of a Project of one", () => {
     // Only the Project and Workflows link away.
     expect(crumbs.getAllByRole("link")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Edit Work" })).toHaveAttribute("href", "/projects/WEB/workflows/wf-work/edit");
-  });
-});
-
-describe("workflowRows", () => {
-  it("never counts a Step's waiting below none", () => {
-    const rows = workflowRows(workflowsFixture(undefined, { triage: { tasks: 1, working: 2 } }), []);
-    expect(rows[0]).toMatchObject({ name: "Triage", waiting: 0, working: 2 });
   });
 });
