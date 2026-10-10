@@ -449,7 +449,7 @@ func (s *Server) addTools() {
 			}
 			return *res.JSON200, nil
 		})
-	tool(s, "skill_show", "Read a Skill and its current version's text: how this Organisation does that work.",
+	tool(s, "skill_show", "Read a Skill and its current version's text: how this Project, or this Organisation, does that work.",
 		func(ctx context.Context, in skillIn) (client.SkillDetail, error) {
 			res, err := c.GetSkillWithResponse(ctx, in.Skill)
 			if err := check(res, err, http.StatusOK); err != nil {

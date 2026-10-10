@@ -395,8 +395,21 @@ func (s *session) prompt(ctx context.Context, parent *ParentInfo, checkouts []Ch
 				}
 			}
 		}
+		// An own Skill says whose it is: its Project's key, read once, or the Organisation's.
+		keys := map[string]string{}
 		for _, t := range texts {
-			p.Skills = append(p.Skills, PromptSkill{Name: t.Skill.Name, Version: t.Current.Version, Own: t.Skill.Kind == client.Own, Body: t.Current.Body})
+			ps := PromptSkill{Name: t.Skill.Name, Version: t.Current.Version, Own: t.Skill.Kind == client.Own, Body: t.Current.Body}
+			if id := t.Skill.ProjectID; ps.Own && id != nil {
+				if _, ok := keys[*id]; !ok {
+					pr, err := s.rec.Project(ctx, *id)
+					if err != nil {
+						return Prompt{}, err
+					}
+					keys[*id] = pr.Key
+				}
+				ps.Project = keys[*id]
+			}
+			p.Skills = append(p.Skills, ps)
 		}
 	}
 	for _, n := range d.Notes {
