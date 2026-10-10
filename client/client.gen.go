@@ -4530,8 +4530,10 @@ type ClientInterface interface {
 	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 	// checked on GitHub through the Runner beside this server, when one is attached: the pull
 	// request must be merged there, its head branch must start with the Task's key, as the
-	// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
-	// write, a write of `open`, and any write with no Runner attached are not checked.
+	// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+	// compared without regard to case). A bad address is refused before GitHub is asked. A
+	// human's write, a write of `open`, a write of what the Task already carries, and any write
+	// with no Runner attached are not checked.
 	// Writing the values the Task already carries changes nothing and records nothing. Records
 	// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 	// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
@@ -4559,8 +4561,10 @@ type ClientInterface interface {
 	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 	// checked on GitHub through the Runner beside this server, when one is attached: the pull
 	// request must be merged there, its head branch must start with the Task's key, as the
-	// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
-	// write, a write of `open`, and any write with no Runner attached are not checked.
+	// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+	// compared without regard to case). A bad address is refused before GitHub is asked. A
+	// human's write, a write of `open`, a write of what the Task already carries, and any write
+	// with no Runner attached are not checked.
 	// Writing the values the Task already carries changes nothing and records nothing. Records
 	// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 	// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
@@ -7220,8 +7224,10 @@ func (c *Client) PassOwnership(ctx context.Context, task TaskRef, params *PassOw
 // digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 // checked on GitHub through the Runner beside this server, when one is attached: the pull
 // request must be merged there, its head branch must start with the Task's key, as the
-// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
-// write, a write of `open`, and any write with no Runner attached are not checked.
+// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+// compared without regard to case). A bad address is refused before GitHub is asked. A
+// human's write, a write of `open`, a write of what the Task already carries, and any write
+// with no Runner attached are not checked.
 // Writing the values the Task already carries changes nothing and records nothing. Records
 // `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 // a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
@@ -7259,8 +7265,10 @@ func (c *Client) SetTaskPullRequestWithBody(ctx context.Context, task TaskRef, p
 // digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 // checked on GitHub through the Runner beside this server, when one is attached: the pull
 // request must be merged there, its head branch must start with the Task's key, as the
-// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
-// write, a write of `open`, and any write with no Runner attached are not checked.
+// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+// compared without regard to case). A bad address is refused before GitHub is asked. A
+// human's write, a write of `open`, a write of what the Task already carries, and any write
+// with no Runner attached are not checked.
 // Writing the values the Task already carries changes nothing and records nothing. Records
 // `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 // a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
@@ -14303,8 +14311,10 @@ type ClientWithResponsesInterface interface {
 	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 	// checked on GitHub through the Runner beside this server, when one is attached: the pull
 	// request must be merged there, its head branch must start with the Task's key, as the
-	// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
-	// write, a write of `open`, and any write with no Runner attached are not checked.
+	// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+	// compared without regard to case). A bad address is refused before GitHub is asked. A
+	// human's write, a write of `open`, a write of what the Task already carries, and any write
+	// with no Runner attached are not checked.
 	// Writing the values the Task already carries changes nothing and records nothing. Records
 	// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 	// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
@@ -14332,8 +14342,10 @@ type ClientWithResponsesInterface interface {
 	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 	// checked on GitHub through the Runner beside this server, when one is attached: the pull
 	// request must be merged there, its head branch must start with the Task's key, as the
-	// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
-	// write, a write of `open`, and any write with no Runner attached are not checked.
+	// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+	// compared without regard to case). A bad address is refused before GitHub is asked. A
+	// human's write, a write of `open`, a write of what the Task already carries, and any write
+	// with no Runner attached are not checked.
 	// Writing the values the Task already carries changes nothing and records nothing. Records
 	// `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 	// a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
@@ -20980,8 +20992,10 @@ func (c *ClientWithResponses) PassOwnershipWithResponse(ctx context.Context, tas
 // digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 // checked on GitHub through the Runner beside this server, when one is attached: the pull
 // request must be merged there, its head branch must start with the Task's key, as the
-// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
-// write, a write of `open`, and any write with no Runner attached are not checked.
+// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+// compared without regard to case). A bad address is refused before GitHub is asked. A
+// human's write, a write of `open`, a write of what the Task already carries, and any write
+// with no Runner attached are not checked.
 // Writing the values the Task already carries changes nothing and records nothing. Records
 // `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 // a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
@@ -21015,8 +21029,10 @@ func (c *ClientWithResponses) SetTaskPullRequestWithBodyWithResponse(ctx context
 // digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 // checked on GitHub through the Runner beside this server, when one is attached: the pull
 // request must be merged there, its head branch must start with the Task's key, as the
-// Runner names a Task's branches, and `url` must be the address GitHub gives it. A human's
-// write, a write of `open`, and any write with no Runner attached are not checked.
+// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+// compared without regard to case). A bad address is refused before GitHub is asked. A
+// human's write, a write of `open`, a write of what the Task already carries, and any write
+// with no Runner attached are not checked.
 // Writing the values the Task already carries changes nothing and records nothing. Records
 // `task.pull_request_opened` on the first write of `open` and `task.pull_request_merged` on
 // a write of `merged`. Errors: `forbidden`, `invalid` (the address is not on GitHub or not
