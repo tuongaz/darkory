@@ -1,4 +1,6 @@
 import type { Activity, Claim, Task } from "@/api/client";
+import type { FilterPill } from "@/components/filters/filterState";
+import { nobody } from "@/components/filters/taskAxes";
 import { workingOf, type MemberKind, type SessionState } from "@/lib/work";
 import { taskPath } from "@/screens/task/path";
 import { liveClaim } from "@/work";
@@ -48,6 +50,13 @@ export function lineTasks(tasks: readonly Task[], ctx: { member: MemberOf; sessi
 
 /** What the line shows: every open Task, those with no Parent, one Parent's Subtasks, or one Task. */
 export type LineScope = { kind: "all" } | { kind: "none" } | { kind: "parent"; id: string } | { kind: "task"; id: string };
+
+/** The Filter a scope stands for on the Tasks list: a Parent's Subtasks, or the Tasks with no Parent. */
+export function scopePills(scope: LineScope): FilterPill[] {
+  if (scope.kind === "parent") return [{ field: "parent", op: "is", values: [scope.id] }];
+  if (scope.kind === "none") return [{ field: "parent", op: "is", values: [nobody] }];
+  return [];
+}
 
 /** The scope `?scope=` names: `none`, or a Task's id (a Parent's narrows to its Subtasks). */
 export function scopeOf(param: string | null, isParent: (id: string) => boolean | undefined): LineScope {

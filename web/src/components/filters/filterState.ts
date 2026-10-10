@@ -16,6 +16,14 @@ export function serializeFilter(pill: FilterPill): string {
   return `${pill.field}:${pill.op}:${pill.values.map(encodeURIComponent).join(",")}`;
 }
 
+/**
+ * The address's search for a list of Tasks at one Step, `filter.tasks=step:is:<id>`, narrowed
+ * further by `pills` (the scope and Filter the Step's Tasks were counted under).
+ */
+export function stepFilterSearch(stepId: string, pills: readonly FilterPill[] = []): string {
+  return [{ field: "step", op: "is", values: [stepId] }, ...pills.filter((p) => p.field !== "step")].map((p) => `filter.tasks=${encodeURIComponent(serializeFilter(p))}`).join("&");
+}
+
 /** Stands for a value `decodeURIComponent` refused; no address decodes to it. */
 const decodeFailed = Symbol("decode-failed") as unknown as string;
 
