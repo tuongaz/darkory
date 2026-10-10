@@ -90,11 +90,9 @@ test("live: a Task filed shows at Build on the line, its pickup reads now, it tr
   await page.screenshot({ path: `${liveShots}0-open.png` });
   const token = (key: string) => line.locator(`button[data-task="${key}"]`);
   const tag = (key: string) => token(key).locator("xpath=..").locator("[data-tag]");
-  /** Whether the Task's token stands in its Step's column. */
-  const at = async (key: string, step: string) => {
-    const [t, h] = [await token(key).boundingBox(), await line.locator(`[data-head="${step}"]`).boundingBox()];
-    return !!t && !!h && Math.abs(t.x + t.width / 2 - (h.x + h.width / 2)) < 8;
-  };
+  /** Whether the Task's token stands in its Step's row on the line, and nowhere else. */
+  const at = async (key: string, step: string) =>
+    (await line.locator(`[data-station][data-head="${step}"] button[data-task="${key}"]`).count()) === 1 && (await token(key).count()) === 1;
 
   // Filed through /v1: its token appears at Build, tagged with who filed it.
   const filed = ((await v1("POST", "/v1/tasks", { project: "MAIN", title: "Count the ledger", step: "Build" })) as { task: { key: string } }).task;
@@ -135,7 +133,8 @@ test("live: a Task filed shows at Build on the line, its pickup reads now, it tr
   await page.waitForTimeout(350);
   await page.screenshot({ path: `${liveShots}5-into-done.png` });
   await expect(token(filed.key)).toHaveCount(0, { timeout: 4_000 });
-  await expect(line.locator('[data-head="Done"]')).toContainText("1 today");
+  // The main line's Done, first; "When a Parent ends" under it has a Done of its own.
+  await expect(line.locator('[data-head="Done"]').first()).toContainText("1 today");
   await page.waitForTimeout(1_500);
   await page.screenshot({ path: `${liveShots}6-done.png` });
 
@@ -339,7 +338,7 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   const { page, errors, ctx } = await open(browser, await workflowPage("MAIN"));
   const line = page.getByRole("region", { name: "Workflow", exact: true });
   // The taker's mark under QA's name, ringed while it works there; the Task's token carries it too.
-  const mark = line.locator('[data-head="QA"]').getByRole("img", { name: "qa-bot (agent), working" });
+  const mark = line.locator('[data-head="QA"] [data-takers]').getByRole("img", { name: "qa-bot (agent), working" });
   await expect(mark).toHaveAttribute("data-working", "running");
   await expect(mark).toHaveAttribute("data-kind", "agent");
   await expect(line.locator(`button[data-task="${filed.key}"]`)).toHaveAttribute("aria-label", `${filed.key} Test the ledger, held by qa-bot (agent)`);
@@ -349,7 +348,7 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   expect(await spin()).not.toBe(first);
 
   // ada, a human not working there: a plain ring, still.
-  const ada = line.locator('[data-head="Make"]').getByRole("img", { name: "ada" });
+  const ada = line.locator('[data-head="Make"] [data-takers]').getByRole("img", { name: "ada" });
   await expect(ada).toHaveAttribute("data-kind", "human");
   await expect(ada).not.toHaveAttribute("data-working");
   await page.screenshot({ path: `${shots}9-01-marks.png`, animations: "disabled" });
@@ -375,7 +374,7 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   await ctx.close();
 });
 
-test("the software Workflow at 1440×900: its line and the whole Loops list show as the page opens, nothing cut by the panels", async ({ browser }) => {
+test("the software Workflow at 1440×900: its seven returns are drawn, each labelled at its Step on a track, none cut by the panels", async ({ browser }) => {
   // The preset's 14 Steps and 7 loops back (examples/workflows/software), its Skills made first.
   const workflow = JSON.parse(readFileSync(fileURLToPath(new URL("../../examples/workflows/software/workflow.json", import.meta.url)), "utf8")) as { steps: { skill?: string }[] };
   const have = new Set(((await v1("GET", "/v1/skills")) as { items: { name: string }[] }).items.map((x) => x.name));
@@ -386,34 +385,39 @@ test("the software Workflow at 1440×900: its line and the whole Loops list show
   await v1("PUT", "/v1/projects/SWL/workflow", workflow);
 
   const { page, errors, ctx } = await open(browser, await workflowPage("SWL"));
-  const loops = page.getByRole("region", { name: "Loops" });
-  await expect(loops).toContainText("Loops 7");
-  const rows = loops.getByRole("listitem");
-  await expect(rows).toHaveCount(7);
-  // Every row is on screen and on top where it is drawn: no pane above it cuts it off.
-  for (const row of await rows.all()) {
-    const seen = await row.evaluate((el) => {
-      const r = el.getBoundingClientRect();
-      return r.top >= 0 && r.bottom <= innerHeight && el.contains(document.elementFromPoint(r.left + 12, r.top + r.height / 2));
-    });
-    expect(seen, await row.innerText()).toBe(true);
+  const line = page.getByRole("region", { name: "Workflow", exact: true });
+  // A return is labelled "↩ outcome → Step" at the Step it leaves, and drawn as a track into the Step it reaches.
+  const labels = line.locator("[data-return]").filter({ hasText: "↩" });
+  await expect(labels).toHaveCount(7);
+  for (const label of await labels.all()) {
+    const id = (await label.getAttribute("data-return"))!;
+    await expect(line.locator(`g[data-track] [data-connectors*="${id}"]`).first(), id).toBeAttached();
   }
-  await page.screenshot({ path: `${liveShots}software-loops-1440.png`, animations: "disabled" });
+  // Every label is on top where it is drawn once scrolled to: no pane over the line cuts it off.
+  for (const label of await labels.all()) {
+    await label.scrollIntoViewIfNeeded();
+    const seen = await label.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= innerHeight && el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+    });
+    expect(seen, await label.innerText()).toBe(true);
+  }
+  await page.screenshot({ path: `${liveShots}software-returns-1440.png`, animations: "disabled" });
   expect(errors).toEqual([]);
   await ctx.close();
 });
 
-test("the software Workflow down a phone and a 1024 window: every loop back's track keeps the gutter at the line's left edge", async ({ browser }) => {
+test("the software Workflow down a phone and a 1024 window: every return's track keeps the gutter at the line's left edge", async ({ browser }) => {
   for (const size of [{ width: 390, height: 844 }, { width: 1024, height: 900 }]) {
     const { page, errors, ctx } = await open(browser, await workflowPage("SWL"), size);
     const line = page.getByRole("region", { name: "Workflow" });
     await expect(line).toHaveAttribute("data-orientation", "vertical");
-    const tracks = line.locator("path[data-track]");
+    const tracks = line.locator("g[data-track] path");
     await expect(tracks.first()).toBeAttached();
     // Each track's left edge, from the line's own left edge, in the page as drawn.
     const gaps = await line.evaluate((el) => {
       const left = el.getBoundingClientRect().left;
-      return [...el.querySelectorAll("path[data-track]")].map((p) => Math.round(p.getBoundingClientRect().left - left));
+      return [...el.querySelectorAll("g[data-track]")].filter((g) => g.childElementCount > 0).map((g) => Math.round(g.getBoundingClientRect().left - left));
     });
     expect(Math.min(...gaps), `${size.width}: ${gaps}`).toBeGreaterThanOrEqual(12);
     await page.screenshot({ path: `${liveShots}software-tracks-${size.width}.png`, animations: "disabled" });

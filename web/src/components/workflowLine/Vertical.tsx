@@ -378,7 +378,7 @@ export function VerticalLine({
           <span className="rounded-full border px-1.5 text-[10.5px] leading-4 font-normal text-muted-foreground">paused</span>
         ) : (
           takers.length > 0 && (
-            <span className={cn("inline-flex items-center", small && "scale-95")}>
+            <span data-takers className={cn("inline-flex items-center", small && "scale-95")}>
               {takers.map((m, i) => (
                 <MemberAvatar key={m.id} member={m} working={m.working} className={cn(i > 0 && "-ml-0.5")} />
               ))}
