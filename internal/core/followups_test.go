@@ -465,6 +465,15 @@ func TestMergePullRequest(t *testing.T) {
 		if _, got, err := f.svc.MayMergePullRequest(ctx, cy, byHuman.Key); err != nil || got != pr {
 			t.Fatalf("the human Owner: %+v, %v", got, err)
 		}
+		// A Dropped Task is not merged: its Owner closes its pull request on GitHub.
+		if _, err := f.svc.DropTask(ctx, cy, byHuman.Key, nil, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		_, _, err = f.svc.MayMergePullRequest(ctx, cy, byHuman.Key)
+		wantCode(t, err, core.CodeConflict)
+		if want := byHuman.Key + " is Dropped; close its pull request on GitHub"; err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("refused with %v, want %q", err, want)
+		}
 		merged, err := f.svc.RecordMerge(ctx, f.admin, byAgent.ID, 7, core.Idem{})
 		if err != nil || merged.PullRequest.State != core.PullRequestMerged || merged.PullRequest.URL != pr.URL {
 			t.Fatalf("an admin's merge: %+v, %v", merged.PullRequest, err)

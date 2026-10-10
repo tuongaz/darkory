@@ -63,6 +63,18 @@ func TestFollowupCommands(t *testing.T) {
 		if out := bob.ok("show", "WEB-1"); !strings.Contains(out, "web: #7 merged") {
 			t.Fatalf("show after the merge:\n%s", out)
 		}
+		// A Dropped Task's pull request is not merged: its Owner closes it on GitHub.
+		var dropped client.TaskDetail
+		bob.json(&dropped, "file", "--project", "WEB", "--title", "Abandoned", "--step", "Build", "--workspace", "web")
+		key := dropped.Task.Key
+		bob.ok("pr", "set", key, "--number", "8", "--link", "https://github.com/acme/web/pull/8", "--state", "open")
+		bob.ok("drop", key)
+		if res := ada.fails(ExitRefused, "pr", "merge", key); !strings.Contains(res.stderr, key+" is Dropped; close its pull request on GitHub") {
+			t.Fatalf("pr merge of a Dropped Task: %s", res.stderr)
+		}
+		if fmt.Sprint(asked) != "[#7]" {
+			t.Fatalf("the Runner was asked %v", asked)
+		}
 
 		// Evidence kind.
 		file := filepath.Join(t.TempDir(), "shift-WEB-1-bob-090000.log")

@@ -849,7 +849,8 @@ func pullRequestWorkspace(t *tx, task Task) (string, error) {
 // MayMergePullRequest returns the Task ref names and its open pull request when the caller may
 // have it merged: a human, its Owner or an admin. Merging lands the work in the default branch as
 // the identity the Runner's gh signs in as, so it is a human's act; an agent, even the Owner, is
-// refused forbidden. A Task with no open pull request recorded is refused not_found.
+// refused forbidden. A Dropped Task is refused conflict: its Owner closes its pull request on
+// GitHub. A Task with no open pull request recorded is refused not_found.
 func (s *Service) MayMergePullRequest(ctx context.Context, c *auth.Caller, ref string) (Task, PullRequest, error) {
 	id, err := resolveTask(ctx, s.store, c.OrgID, ref)
 	if err != nil {
@@ -861,6 +862,10 @@ func (s *Service) MayMergePullRequest(ctx context.Context, c *auth.Caller, ref s
 	}
 	if err := mayMerge(ctx, s.store, c, task); err != nil {
 		return Task{}, PullRequest{}, err
+	}
+	if task.State == "dropped" {
+		// Dropped work does not land: its Owner closes the pull request on GitHub.
+		return Task{}, PullRequest{}, refuse(CodeConflict, "%s is Dropped; close its pull request on GitHub", task.Key)
 	}
 	if task.PullRequest == nil || task.PullRequest.State != PullRequestOpen {
 		return Task{}, PullRequest{}, refuse(CodeNotFound, "%s carries no open pull request", task.Key)
