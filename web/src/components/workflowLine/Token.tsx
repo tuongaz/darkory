@@ -46,7 +46,7 @@ export function Token({
   const time = past ? past.text : picked ? "now" : since !== undefined ? tokenTime(now - since) : undefined;
   const by = blockedWords(task);
   return (
-    <span data-dim={dim ? "" : undefined} className="relative inline-flex items-center">
+    <span data-dim={dim ? "" : undefined} className="relative inline-flex max-w-full flex-wrap items-center gap-y-1">
       <button
         type="button"
         data-task={task.key}
@@ -75,7 +75,7 @@ export function Token({
         )}
         {by && <span className="text-[11px] font-medium text-state-blocked">{by}</span>}
       </button>
-      {/* In the row's flow, so it pushes what follows on (a count, a mark) rather than lying over it. */}
+      {/* In the row's flow, so it pushes what follows on (a count, a mark) rather than lying over it; a long one falls under its token. */}
       {tag && (
         <span data-tag className="pointer-events-none ml-1 flex flex-row-reverse items-center gap-1.5 text-xs font-medium whitespace-nowrap">
           {tag}
