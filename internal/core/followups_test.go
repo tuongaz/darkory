@@ -58,6 +58,9 @@ func TestSetPullRequest(t *testing.T) {
 			{Number: 7, URL: "https://github.com/acme/web/issues/7", State: "open"},
 			{Number: 7, URL: "https://github.com/acme/web/pull/7/files", State: "open"},
 			{Number: 7, URL: "https://github.com/acme/pull/7", State: "open"},
+			// A browser would resolve a . or .. segment to another page.
+			{Number: 7, URL: "https://github.com/../r/pull/7", State: "open"},
+			{Number: 7, URL: "https://github.com/o/../pull/7", State: "open"},
 		} {
 			if _, err := f.svc.SetPullRequest(ctx, lead, task.Key, bad, core.Idem{}); codeOf(err) != core.CodeInvalid {
 				t.Errorf("%+v: %v, want invalid", bad, err)
@@ -475,7 +478,8 @@ func TestMergePullRequest(t *testing.T) {
 		// Merged, there is nothing open to merge.
 		_, _, err = f.svc.MayMergePullRequest(ctx, f.admin, byAgent.Key)
 		wantCode(t, err, core.CodeNotFound)
-		// A second recorder of the same merge is not an error: its entry and Note are written too.
+		// A second recorder of the same merge is not an error: its entry credits who asked, with no
+		// second Note.
 		again, err := f.svc.RecordMerge(ctx, f.admin, byAgent.ID, 7, core.Idem{})
 		if err != nil || again.PullRequest.State != core.PullRequestMerged {
 			t.Fatalf("recording #7's merge again: %+v, %v", again.PullRequest, err)
@@ -483,8 +487,8 @@ func TestMergePullRequest(t *testing.T) {
 		if n := len(f.activity("task.pull_request_merged")); n != 2 {
 			t.Errorf("%d task.pull_request_merged entries, want 2", n)
 		}
-		if n := len(f.get(byAgent.Key).Notes); n != 2 {
-			t.Errorf("%d Notes, want 2", n)
+		if n := len(f.get(byAgent.Key).Notes); n != 1 {
+			t.Errorf("%d Notes, want 1", n)
 		}
 		// The Task's pull request is another now: the merge of #7 is refused.
 		pr8 := core.PullRequest{Number: 8, URL: "https://github.com/acme/web/pull/8", State: core.PullRequestOpen}
