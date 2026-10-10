@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -58,6 +60,9 @@ func TestSetPullRequest(t *testing.T) {
 			{Number: 7, URL: "https://github.com/acme/web/issues/7", State: "open"},
 			{Number: 7, URL: "https://github.com/acme/web/pull/7/files", State: "open"},
 			{Number: 7, URL: "https://github.com/acme/pull/7", State: "open"},
+			// A browser would resolve a . or .. segment to another page.
+			{Number: 7, URL: "https://github.com/../r/pull/7", State: "open"},
+			{Number: 7, URL: "https://github.com/o/../pull/7", State: "open"},
 		} {
 			if _, err := f.svc.SetPullRequest(ctx, lead, task.Key, bad, core.Idem{}); codeOf(err) != core.CodeInvalid {
 				t.Errorf("%+v: %v, want invalid", bad, err)
@@ -475,7 +480,8 @@ func TestMergePullRequest(t *testing.T) {
 		// Merged, there is nothing open to merge.
 		_, _, err = f.svc.MayMergePullRequest(ctx, f.admin, byAgent.Key)
 		wantCode(t, err, core.CodeNotFound)
-		// A second recorder of the same merge is not an error: its entry and Note are written too.
+		// A second recorder of the same merge is not an error: its entry credits who asked, with no
+		// second Note.
 		again, err := f.svc.RecordMerge(ctx, f.admin, byAgent.ID, 7, core.Idem{})
 		if err != nil || again.PullRequest.State != core.PullRequestMerged {
 			t.Fatalf("recording #7's merge again: %+v, %v", again.PullRequest, err)
@@ -483,8 +489,8 @@ func TestMergePullRequest(t *testing.T) {
 		if n := len(f.activity("task.pull_request_merged")); n != 2 {
 			t.Errorf("%d task.pull_request_merged entries, want 2", n)
 		}
-		if n := len(f.get(byAgent.Key).Notes); n != 2 {
-			t.Errorf("%d Notes, want 2", n)
+		if n := len(f.get(byAgent.Key).Notes); n != 1 {
+			t.Errorf("%d Notes, want 1", n)
 		}
 		// The Task's pull request is another now: the merge of #7 is refused.
 		pr8 := core.PullRequest{Number: 8, URL: "https://github.com/acme/web/pull/8", State: core.PullRequestOpen}
@@ -537,4 +543,127 @@ func TestGitHubHostForms(t *testing.T) {
 	if codeOf(err) != core.CodeInvalid || !strings.Contains(err.Error(), "not pull request #7's") {
 		t.Errorf("another number's address: %v", err)
 	}
+}
+
+// An owner or repository segment of . or .. is refused: a browser would resolve the address to
+// another page than the one written. An owner is letters, digits and hyphens, starting with a
+// letter or digit; a repository may carry dots. A port on github.com is never GitHub's own address.
+func TestPullRequestAddressSegments(t *testing.T) {
+	t.Setenv("GH_HOST", "")
+	for _, c := range []struct {
+		addr string
+		ok   bool
+	}{
+		{"https://github.com/acme/web/pull/7", true},
+		{"https://github.com/acme/a.b/pull/7", true},
+		{"https://github.com/acme-co/web_2-x/pull/7", true},
+		{"https://github.com/../web/pull/7", false},
+		{"https://github.com/./web/pull/7", false},
+		{"https://github.com/acme/../pull/7", false},
+		{"https://github.com/acme/./pull/7", false},
+		{"https://github.com/acme/%2e%2e/pull/7", false},
+		{"https://github.com/ac.me/web/pull/7", false},
+		{"https://github.com/ac_me/web/pull/7", false},
+		{"https://github.com/-acme/web/pull/7", false},
+		{"https://github.com:443/acme/web/pull/7", false},
+	} {
+		t.Run(c.addr, func(t *testing.T) {
+			err := core.PullRequest{Number: 7, URL: c.addr, State: core.PullRequestOpen}.Validate()
+			if (err == nil) != c.ok {
+				t.Errorf("%s: %v", c.addr, err)
+			}
+		})
+	}
+}
+
+// Evidence belongs to the Claim it was attached under: the holder's own Claim by default, the
+// Claim named when it is the caller's on the Task, ended or not, and none for a Member who does
+// not hold the Task. A Claim named that is not the caller's on the Task is refused forbidden,
+// before the upload and under the counter.
+func TestEvidenceClaim(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.project("WEB")
+		f.chain("WEB", [2]string{"Build", core.SkillEngineer})
+		lead := f.member("lead", []string{"WEB"}, []string{core.SkillEngineer})
+		builder := f.member("builder", []string{"WEB"}, []string{core.SkillEngineer})
+		task := f.task(lead, "WEB", "Ship it", "Build")
+		other := f.task(lead, "WEB", "Other", "Build")
+		n := 0
+		attach := func(c *auth.Caller, claim, kind string) (core.Evidence, error) {
+			n++
+			id := fmt.Sprintf("00000000-0000-4000-8000-%012d", n)
+			return f.svc.AttachEvidence(ctx, c, core.EvidenceTarget{Task: task.Key, Claim: claim},
+				core.NewEvidence{ID: id, Kind: kind, BlobKey: id, Filename: "f.txt", ContentType: "text/plain", Size: 1, SHA256: "x"}, core.Idem{})
+		}
+		claimOf := func(e core.Evidence) string {
+			if e.ClaimID == nil {
+				return "none"
+			}
+			return *e.ClaimID
+		}
+
+		// The holder's attach belongs to its Claim.
+		held := f.claim(builder, task.Key, noTimeout).Task.Claim.ID
+		e, err := attach(builder, "", "")
+		if err != nil || claimOf(e) != held {
+			t.Fatalf("the holder's attach: %s, %v", claimOf(e), err)
+		}
+		// Another Member's Claim on another Task cannot be named.
+		otherClaim := f.claim(lead, other.Key, noTimeout).Task.Claim.ID
+		if _, err := attach(builder, otherClaim, ""); codeOf(err) != core.CodeForbidden || !strings.Contains(err.Error(), "the Claim is not yours") {
+			t.Errorf("naming another Task's Claim: %v", err)
+		}
+		if _, err := f.svc.Release(ctx, builder, task.Key, nil, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		// The Runner's case: the Shift's log names the Claim it ran under, ended now.
+		if e, err := attach(builder, shortid.Of(held).String(), core.EvidenceKindLog); err != nil || claimOf(e) != held || e.Kind != core.EvidenceKindLog {
+			t.Fatalf("the log of an ended Claim: %s %s, %v", claimOf(e), e.Kind, err)
+		}
+		// A Member who does not hold the Task attaches under no Claim, and cannot name another's.
+		if e, err := attach(lead, "", ""); err != nil || e.ClaimID != nil {
+			t.Fatalf("a Member's attach: %s, %v", claimOf(e), err)
+		}
+		if _, err := attach(lead, held, core.EvidenceKindLog); codeOf(err) != core.CodeForbidden {
+			t.Errorf("naming another Member's Claim: %v", err)
+		}
+		if _, err := attach(lead, "00000000-0000-4000-8000-999999999999", ""); codeOf(err) != core.CodeForbidden {
+			t.Errorf("naming no Claim at all: %v", err)
+		}
+		if err := f.svc.MayAttachEvidence(ctx, lead, core.EvidenceTarget{Task: task.Key, Claim: held}, core.EvidenceKindLog); codeOf(err) != core.CodeForbidden {
+			t.Errorf("before the upload, naming another Member's Claim: %v", err)
+		}
+		var got []string
+		for _, a := range f.activity("task.evidence_attached") {
+			got = append(got, fmt.Sprint(a.Payload["claim_id"]))
+		}
+		if want := fmt.Sprint([]string{held, held, "<nil>"}); fmt.Sprint(got) != want {
+			t.Errorf("payload claim_ids %v, want %s", got, want)
+		}
+		var listed []string
+		for _, e := range f.get(task.Key).Evidence {
+			listed = append(listed, claimOf(e))
+		}
+		if want := fmt.Sprint([]string{held, held, "none"}); fmt.Sprint(listed) != want {
+			t.Errorf("the Task's Evidence %v, want %s", listed, want)
+		}
+
+		// A Shift's log is its Claim's, not the current holder's work: naming its own ended Claim,
+		// it is taken while another Member holds the Task. Anything else keeps the holder's rule.
+		f.claim(lead, task.Key, noTimeout)
+		if e, err := attach(builder, held, core.EvidenceKindLog); err != nil || claimOf(e) != held {
+			t.Fatalf("the log of an ended Claim while another holds: %s, %v", claimOf(e), err)
+		}
+		if err := f.svc.MayAttachEvidence(ctx, builder, core.EvidenceTarget{Task: task.Key, Claim: held}, core.EvidenceKindLog); err != nil {
+			t.Errorf("before the upload, the log of an ended Claim while another holds: %v", err)
+		}
+		if _, err := attach(builder, held, core.EvidenceKindEvidence); codeOf(err) != core.CodeNotHolder {
+			t.Errorf("Evidence naming an ended Claim while another holds: %v", err)
+		}
+		if _, err := attach(builder, "", core.EvidenceKindLog); codeOf(err) != core.CodeNotHolder {
+			t.Errorf("a log naming no Claim while another holds: %v", err)
+		}
+	})
 }

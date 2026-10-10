@@ -23,15 +23,23 @@ import (
 	"github.com/tuongaz/darkory/web"
 )
 
+// defaultRunnerTimeout is how long the server waits for the Runner to read or merge a pull request
+// on GitHub.
+const defaultRunnerTimeout = 90 * time.Second
+
 // Server implements every operation in api/openapi.yaml.
 type Server struct {
-	// merging holds a mutex per Task whose pull request a request is merging (lockMerge).
+	// merging holds a channel of one slot per Task whose pull request a request is merging
+	// (lockMerge).
 	merging sync.Map
-	store   *store.Store
-	core    *core.Service
-	auth    *auth.Authenticator
-	wake    *wake.Notifier
-	log     *slog.Logger
+	// runnerTimeout bounds what the server asks the Runner about a pull request: a merge, or the
+	// check of an agent's merged write.
+	runnerTimeout time.Duration
+	store         *store.Store
+	core          *core.Service
+	auth          *auth.Authenticator
+	wake          *wake.Notifier
+	log           *slog.Logger
 	// publicURL is where the Install is reached, for login links; empty to use the request's host.
 	publicURL string
 	keepAlive time.Duration
@@ -143,7 +151,7 @@ func New(st *store.Store, o Options) *Server {
 	if o.MaxWaiting <= 0 {
 		o.MaxWaiting = DefaultMaxWaiting
 	}
-	s := &Server{
+	s := &Server{runnerTimeout: defaultRunnerTimeout,
 		store:       st,
 		core:        core.New(st, o.Clock, o.Wake, o.Log).WithSessionLimits(o.Sessions),
 		auth:        auth.New(st, o.Clock).WithSessionLimits(o.Sessions),
