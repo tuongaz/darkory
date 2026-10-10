@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,12 +94,23 @@ func runningTasks(r *Runner) []string {
 // holds checks for d that r never runs more than n Shifts at once.
 func holds(t *testing.T, r *Runner, n int, d time.Duration) {
 	t.Helper()
-	for end := time.Now().Add(d); time.Now().Before(end); time.Sleep(50 * time.Millisecond) {
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	for end := time.After(d); ; {
 		if got := runningTasks(r); len(got) > n {
 			t.Fatalf("%d Shifts at once (%v), at most %d", len(got), got, n)
 		}
+		select {
+		case <-end:
+			return
+		case <-tick.C:
+		}
 	}
 }
+
+// holdsFor is how long a test watches that no more Shifts start: ten of the runner's Ticks, in
+// which a free loop would take a waiting Task.
+func (f *fixture) holdsFor() time.Duration { return 10 * f.timings.Tick }
 
 // An agent runs as many Shifts at once as its settings say, one Session and one Claim each, on
 // Tasks of its own; the next Task waits for one of them. A count lowered while two run takes
@@ -114,7 +126,7 @@ func TestRunnerRunsAnAgentsShifts(t *testing.T) {
 	r := f.run("builder")
 
 	eventually(t, 20*time.Second, "two Shifts at once", func() bool { return len(r.Running()) == 2 })
-	holds(t, r, 2, 3*time.Second)
+	holds(t, r, 2, f.holdsFor())
 	running := runningTasks(r)
 	sessions := map[string]bool{}
 	for _, s := range r.Running() {
@@ -140,7 +152,7 @@ func TestRunnerRunsAnAgentsShifts(t *testing.T) {
 		}
 	}
 	eventually(t, 20*time.Second, "one Shift once both ended", func() bool { return len(r.Running()) == 1 })
-	holds(t, r, 1, 3*time.Second)
+	holds(t, r, 1, f.holdsFor())
 }
 
 // With one Shift, as unless set, an agent works one Task at a time.
@@ -153,5 +165,99 @@ func TestRunnerRunsOneShiftUnlessSet(t *testing.T) {
 	r := f.run("builder")
 
 	eventually(t, 20*time.Second, "one Shift", func() bool { return len(r.Running()) == 1 })
-	holds(t, r, 1, 3*time.Second)
+	holds(t, r, 1, f.holdsFor())
+}
+
+// A raised count takes effect within a Tick: the next loop starts and takes a waiting Task.
+func TestRunnerRaisesAnAgentsShifts(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(buildOnly)
+	f.agent("builder", "busy", "engineer")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Totals")
+	r := f.run("builder")
+	eventually(t, 20*time.Second, "one Shift", func() bool { return len(r.Running()) == 1 })
+	holds(t, r, 1, f.holdsFor())
+	f.ok("ada", "agent", "set", "builder", "--shifts", "2")
+	eventually(t, 20*time.Second, "two Shifts once the count is raised", func() bool { return len(r.Running()) == 2 })
+}
+
+// A paused agent's loops all take no work, and all take it again when it is resumed.
+func TestRunnerPausesEveryShift(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(buildOnly)
+	f.agent("builder", "busy", "engineer")
+	f.ok("ada", "agent", "set", "builder", "--shifts", "2", "--paused")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Totals")
+	r := f.run("builder")
+	holds(t, r, 0, f.holdsFor())
+	for _, k := range []string{"WEB-1", "WEB-2"} {
+		if f.task(k).Task.Claim != nil {
+			t.Fatalf("%s is held while the agent is paused", k)
+		}
+	}
+	f.ok("ada", "agent", "set", "builder", "--paused=false")
+	eventually(t, 20*time.Second, "two Shifts once resumed", func() bool { return len(r.Running()) == 2 })
+}
+
+// A revoked token stops every loop of the agent: its Shifts end, no loop takes another Task, and
+// the runner says so once.
+func TestRunnerStopsEveryShiftOfARevokedToken(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(buildOnly)
+	f.agent("builder", "busy", "engineer")
+	f.ok("ada", "agent", "set", "builder", "--shifts", "2")
+	for _, title := range []string{"Cart page", "Totals", "Receipt"} {
+		f.ok("ada", "file", "--project", "WEB", "--title", title)
+	}
+	r := f.run("builder")
+	eventually(t, 20*time.Second, "two Shifts", func() bool { return len(r.Running()) == 2 })
+	f.ok("ada", "token", "revoke", f.tokenIDs["builder"])
+	a := r.agents[0]
+	eventually(t, 30*time.Second, "every loop of the agent ended", func() bool {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		return len(a.loops) == 0 && len(r.Running()) == 0
+	})
+	holds(t, r, 0, f.holdsFor())
+	if n := strings.Count(f.log.String(), "the Install no longer accepts this agent's token"); n != 1 {
+		t.Fatalf("the runner said %d times that the token is refused:\n%s", n, f.log)
+	}
+}
+
+// A count lowered while a loop waits in next: the Task that loop then takes, above the count, is
+// released unworked with a Note saying why, and the loop ends.
+func TestRunnerReleasesATaskTakenAboveALoweredCount(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.timings.Wait = 30 * time.Second // both loops wait in next while the count is lowered
+	f.workflow(buildOnly)
+	f.agent("builder", "busy", "engineer")
+	f.ok("ada", "agent", "set", "builder", "--shifts", "2")
+	r := f.run("builder")
+	eventually(t, 10*time.Second, "the runner running its agents", func() bool {
+		return strings.Contains(f.log.String(), "the runner is running agents")
+	})
+	a := r.agents[0]
+	eventually(t, 20*time.Second, "two loops waiting", func() bool {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		return len(a.loops) == 2
+	})
+	time.Sleep(10 * f.timings.Tick) // both reach next
+	f.ok("ada", "agent", "set", "builder", "--shifts", "1")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Totals")
+	eventually(t, 20*time.Second, "one Shift and one Task released with the Note", func() bool {
+		if len(r.Running()) != 1 {
+			return false
+		}
+		for _, k := range []string{"WEB-1", "WEB-2"} {
+			if d := f.task(k); d.Task.Claim == nil && strings.Contains(notesOf(d), shiftsLoweredNote) {
+				return true
+			}
+		}
+		return false
+	})
+	holds(t, r, 1, f.holdsFor())
 }

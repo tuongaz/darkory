@@ -94,6 +94,7 @@ type fixture struct {
 	ts       *httptest.Server
 	timings  Timings
 	tokens   map[string]string
+	tokenIDs map[string]string
 	ids      map[string]string
 	repo     string
 	data     string
@@ -116,7 +117,7 @@ func newFixture(t *testing.T, st *store.Store) *fixture {
 	}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	f := &fixture{t: t, srv: srv, ts: ts, timings: testTimings, tokens: map[string]string{"ada": init.Token.Secret}, ids: map[string]string{"ada": shortid.Short(init.Member.ID)},
+	f := &fixture{t: t, srv: srv, ts: ts, timings: testTimings, tokens: map[string]string{"ada": init.Token.Secret}, tokenIDs: map[string]string{}, ids: map[string]string{"ada": shortid.Short(init.Member.ID)},
 		repo: gitRepo(t), data: t.TempDir(), progress: t.TempDir(), log: &lockedBuffer{}, gh: &fakeGitHub{}}
 	f.ok("ada", "project", "create", "WEB", "Web", "--member", "ada")
 	f.ok("ada", "workspace", "add", "web", "--path", f.repo)
@@ -137,7 +138,7 @@ func (f *fixture) agent(name, scenario string, skills ...string) {
 	}
 	var tok client.IssuedToken
 	f.json(&tok, "ada", "token", "issue", name, "--name", "runner")
-	f.tokens[name], f.ids[name] = tok.Secret, m.ID
+	f.tokens[name], f.tokenIDs[name], f.ids[name] = tok.Secret, tok.Token.ID, m.ID
 	var env []string
 	if slices.Contains(skills, "review") {
 		env = append(env, "FAKEAGENT_OUTCOME=pass")

@@ -617,11 +617,21 @@ func TestPollerWriteCallsBackIntoTheRunner(t *testing.T) {
 	r := pollRunner(t, rec, gh)
 	var checked []string
 	rec.setHook = func(task string, pr client.PullRequest) error {
-		got, err := r.PullRequest(context.Background(), task, pr.Number, pr.URL)
-		if err != nil {
-			return err
+		// The server's handler asks on its own goroutine while the write waits for its answer.
+		type answer struct {
+			pr  runnerapi.PullRequest
+			err error
 		}
-		checked = append(checked, fmt.Sprintf("%s #%d %s", task, got.Number, got.State))
+		ch := make(chan answer, 1)
+		go func() {
+			got, err := r.PullRequest(context.Background(), task, pr.Number, pr.URL)
+			ch <- answer{got, err}
+		}()
+		a := <-ch
+		if a.err != nil {
+			return a.err
+		}
+		checked = append(checked, fmt.Sprintf("%s #%d %s", task, a.pr.Number, a.pr.State))
 		return nil
 	}
 	done := make(chan struct{})

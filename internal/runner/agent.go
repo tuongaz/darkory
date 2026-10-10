@@ -27,6 +27,10 @@ func (a *agent) name() string { return a.me.Member.Name }
 // pausedNote is the Note of a Task released because its agent was paused while next waited.
 const pausedNote = "The agent was paused while it waited for this Task, so the Runner released it without starting a Shift."
 
+// shiftsLoweredNote is the Note of a Task released because the agent's Shifts were lowered below
+// the loop that took it while next waited.
+const shiftsLoweredNote = "The agent's Shifts were lowered while it waited for this Task, so the Runner released it without starting a Shift."
+
 // run keeps as many pull loops as the agent's settings say it runs Shifts, until ctx ends: it reads
 // the settings every Tick and starts a loop for each place below the count that has none, so a
 // raised count takes effect within a Tick; a loop at a place at or above a lowered count ends
@@ -131,8 +135,10 @@ func (a *agent) loop(ctx context.Context, i int) {
 				return
 			}
 			if stopped(err) {
-				// Its Session or the token is gone: the agent's run opens another loop, or stops.
+				// Its Session or the token is gone: the agent's run opens another loop, or stops. A
+				// pause first, so a Session refused at once is not reopened every Tick.
 				log.Warn("the Install refused the Session waiting for the next Task; it ends", "session", pull.Session(), "err", err)
+				sleep(ctx, r.t.Retry)
 				return
 			}
 			log.Warn("next", "err", err)
@@ -144,14 +150,19 @@ func (a *agent) loop(ctx context.Context, i int) {
 		}
 		rec := pull
 		pull = nil
-		// next may have waited a while: an agent paused meanwhile starts no session.
-		if now, ok, err := a.rec.Agent(ctx, a.me.Member.ID); err == nil && (!ok || now.Paused) {
-			log.Info("the agent was paused while it waited for a Task; releasing it unworked", "task", d.Task.Key)
-			if err := rec.Release(context.WithoutCancel(ctx), d.Task.Key, pausedNote); err != nil {
-				log.Warn("releasing a Task taken while the agent was being paused", "task", d.Task.Key, "err", err)
+		// next may have waited a while: an agent paused meanwhile starts no session, and a loop
+		// above a count lowered meanwhile starts none and ends.
+		if now, ok, err := a.rec.Agent(ctx, a.me.Member.ID); err == nil && (!ok || now.Paused || i >= now.Shifts) {
+			note, why := pausedNote, "paused"
+			if ok && !now.Paused {
+				note, why = shiftsLoweredNote, "its Shifts lowered"
 			}
-			r.closeSession(ctx, rec, "the Session that took a Task while the agent was being paused", "task", d.Task.Key)
-			continue
+			log.Info("the agent had "+why+" while it waited for a Task; releasing it unworked", "task", d.Task.Key)
+			if err := rec.Release(context.WithoutCancel(ctx), d.Task.Key, note); err != nil {
+				log.Warn("releasing a Task taken while the agent's settings changed", "task", d.Task.Key, "err", err)
+			}
+			r.closeSession(ctx, rec, "the Session that took a Task while the agent's settings changed", "task", d.Task.Key)
+			continue // the settings read next ends a loop above the count
 		}
 		if !newSession(a, rec, d, set).run(ctx) {
 			// The same failure would meet the next Task: pause before taking one.
