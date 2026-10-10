@@ -55,28 +55,31 @@ func connectorsText(name map[string]string, ks []core.Connector) string {
 	return strings.Join(connectors, " · ")
 }
 
-// defaultWorkflowText is the two Workflows a default Project starts with (sample-workflows-plan.md):
-// Implementation, the default Workflow of model-v2-plan.md, then Bug triage, whose Triage leads
-// into Implementation's Build along feature.
-const defaultWorkflowText = "Implementation: Backlog · Plan (breakdown) · Build (engineer) · Review (review) · Retro (retro) · Skill review (skill-review) / " +
-	"Bug triage: Triage (triage) · Fix (engineer) · Code review (review) · Verify (qa) | " +
+// defaultWorkflowText is the three Workflows a default Project starts with (sample-workflows-plan.md;
+// decisions.md, the Workflow page vertical, D1): Implementation, the default Workflow of
+// model-v2-plan.md, then Bug triage, whose Triage leads into Implementation's Build along feature,
+// then Retrospective, where a Parent's Retrospective is filed.
+const defaultWorkflowText = "Implementation: Backlog · Plan (breakdown) · Build (engineer) · Review (review) / " +
+	"Bug triage: Triage (triage) · Fix (engineer) · Code review (review) · Verify (qa) / " +
+	"Retrospective: Retro (retro) · Skill review (skill-review) | " +
 	"Plan -done-> Done · Build -pass-> Review · Review -pass-> Done · Review -needs changes-> Build · " +
-	"Retro -done-> Done · Retro -propose-> Skill review · Skill review -publish-> Done · Skill review -needs changes-> Retro · " +
 	"Triage -bug-> Fix · Triage -not a bug-> Done · Triage -feature-> Build · Fix -ready-> Code review · " +
-	"Code review -pass-> Verify · Code review -needs changes-> Fix · Verify -pass-> Done · Verify -fail-> Fix"
+	"Code review -pass-> Verify · Code review -needs changes-> Fix · Verify -pass-> Done · Verify -fail-> Fix · " +
+	"Retro -done-> Done · Retro -propose-> Skill review · Skill review -publish-> Done · Skill review -needs changes-> Retro"
 
 // defaultPlaces is where the canvas draws each Step of a default Project.
 var defaultPlaces = map[string][2]int64{
-	"Backlog": {0, 0}, "Plan": {0, 128}, "Build": {0, 256}, "Review": {448, 256}, "Retro": {0, 384}, "Skill review": {448, 384},
+	"Backlog": {0, 0}, "Plan": {0, 128}, "Build": {0, 256}, "Review": {448, 256},
 	"Triage": {0, 0}, "Fix": {448, 0}, "Code review": {896, 0}, "Verify": {1344, 0},
+	"Retro": {0, 0}, "Skill review": {448, 0},
 }
 
-// checkDefaultPlaces fails unless w is a default Project's two Workflows, Implementation then Bug
-// triage, each Step at its place and numbered from 1 within its Workflow.
+// checkDefaultPlaces fails unless w is a default Project's three Workflows, Implementation, Bug
+// triage then Retrospective, each Step at its place and numbered from 1 within its Workflow.
 func checkDefaultPlaces(t *testing.T, w core.Workflows) {
 	t.Helper()
-	if wfs := w.Workflows; len(wfs) != 2 || wfs[0].Name != core.WorkflowImplementation || wfs[0].Position != 1 ||
-		wfs[1].Name != core.WorkflowBugTriage || wfs[1].Position != 2 {
+	if wfs := w.Workflows; len(wfs) != 3 || wfs[0].Name != core.WorkflowImplementation || wfs[0].Position != 1 ||
+		wfs[1].Name != core.WorkflowBugTriage || wfs[1].Position != 2 || wfs[2].Name != core.WorkflowRetrospective || wfs[2].Position != 3 {
 		t.Fatalf("a default Project's Workflows: %+v", wfs)
 	}
 	next := map[string]int64{}
@@ -102,7 +105,7 @@ func (f *fixture) workflowText(project string) string {
 	return workflowText(skills, w.Workflows)
 }
 
-// A new Project starts with the default Workflows, Implementation and Bug triage, laid out
+// A new Project starts with the default Workflows, Implementation, Bug triage and Retrospective, laid out
 // compact, a Task filed without a Step starting at Build, unless its creator picks Empty (one
 // Workflow, Work: Backlog → Done) or a copy of another Project's, places and all; the default's
 // engineer, review, triage and qa Skills are made when an Organisation lacks them. It starts
@@ -679,8 +682,8 @@ func (f *fixture) workflowIDs(project string) map[string]string {
 	return out
 }
 
-// A Project's Steps are grouped into named Workflows (ADR 0019): a new Project has two,
-// Implementation and Bug triage, the first six Steps Implementation's.
+// A Project's Steps are grouped into named Workflows (ADR 0019): a new Project has three,
+// Implementation, Bug triage and Retrospective, four Steps, four, then two.
 // The Workflows' positions order the Project's Steps before the Steps' own, so a filed Task's
 // default entry and the builtin Steps follow the Workflows' order; two Steps of different
 // Workflows may share a position; a Connector may lead into a Step of another Workflow, and
@@ -695,12 +698,12 @@ func TestWorkflowsHaveNamesAndOrder(t *testing.T) {
 			t.Fatal(err)
 		}
 		wfs := web.Workflows.Workflows
-		if len(wfs) != 2 || wfs[0].Name != core.WorkflowImplementation || wfs[0].Position != 1 || wfs[1].Name != core.WorkflowBugTriage ||
-			wfs[1].Position != 2 {
+		if len(wfs) != 3 || wfs[0].Name != core.WorkflowImplementation || wfs[0].Position != 1 || wfs[1].Name != core.WorkflowBugTriage ||
+			wfs[1].Position != 2 || wfs[2].Name != core.WorkflowRetrospective || wfs[2].Position != 3 {
 			t.Fatalf("a new Project's Workflows: %+v", wfs)
 		}
 		for i, s := range web.Steps {
-			if in := wfs[min(i/6, 1)].ID; s.WorkflowID != in {
+			if in := wfs[min(i/4, 2)].ID; s.WorkflowID != in {
 				t.Fatalf("Step %s is in Workflow %s, want %s", s.Name, s.WorkflowID, in)
 			}
 		}

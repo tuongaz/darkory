@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -374,6 +375,29 @@ func TestAuthorCannotPublishTheirProposal(t *testing.T) {
 		wantCode(t, err, core.CodeForbidden)
 		if v := r.version("qa-acme"); v != 1 || r.checkActivity() != before {
 			t.Fatalf("the author published version %d", v)
+		}
+	})
+}
+
+// On the default Workflows a Parent's Retrospective is filed at Retrospective › Retro, the
+// Project's first Step carrying retro, and listed on the Retrospective board; the ended Parent
+// stays on Implementation's, where its Build Subtask ended (decisions.md, the Workflow page
+// vertical, D1).
+func TestRetrospectiveIsOnItsOwnWorkflow(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		r := newRetroFixture(t, st)
+		ids := r.workflowIDs("WEB")
+		retro := r.get(r.retrospective.Key)
+		if retro.Step == nil || retro.Step.Name != "Retro" || retro.Step.WorkflowID != ids[core.WorkflowRetrospective] ||
+			retro.Task.WorkflowID == nil || *retro.Task.WorkflowID != ids[core.WorkflowRetrospective] {
+			t.Fatalf("the Retrospective at %+v, listed in %v; Workflows %v", retro.Step, retro.Task.WorkflowID, ids)
+		}
+		if got := r.filterKeys(core.TaskFilter{Project: ptrStr("WEB"), Workflow: ptrStr(core.WorkflowRetrospective)}); !slices.Equal(got, []string{r.retrospective.Key}) {
+			t.Fatalf("the Retrospective board lists %v", got)
+		}
+		if got := r.filterKeys(core.TaskFilter{Project: ptrStr("WEB"), Workflow: ptrStr(core.WorkflowImplementation)}); slices.Contains(got, r.retrospective.Key) ||
+			!slices.Contains(got, r.ended.Key) {
+			t.Fatalf("the Implementation board lists %v", got)
 		}
 	})
 }

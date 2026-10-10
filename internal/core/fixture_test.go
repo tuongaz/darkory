@@ -63,9 +63,9 @@ func (f *fixture) skillID(name string) string {
 }
 
 // project creates a Project on the default Workflows and returns its id: Implementation —
-// Backlog (hold), Plan (breakdown), Build (engineer), Review (review), Retro (retro), Skill review
-// (skill-review) — then Bug triage — Triage (triage), Fix (engineer), Code review (review),
-// Verify (qa).
+// Backlog (hold), Plan (breakdown), Build (engineer), Review (review) — then Bug triage — Triage
+// (triage), Fix (engineer), Code review (review), Verify (qa) — then Retrospective — Retro
+// (retro), Skill review (skill-review).
 func (f *fixture) project(key string) string {
 	f.t.Helper()
 	p, err := f.svc.CreateProject(f.t.Context(), f.admin, core.NewProject{Key: key, Name: "Project " + key}, core.Idem{})
