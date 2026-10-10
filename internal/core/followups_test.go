@@ -538,3 +538,34 @@ func TestGitHubHostForms(t *testing.T) {
 		t.Errorf("another number's address: %v", err)
 	}
 }
+
+// An owner or repository segment of . or .. is refused: a browser would resolve the address to
+// another page than the one written. An owner is letters, digits and hyphens, starting with a
+// letter or digit; a repository may carry dots. A port on github.com is never GitHub's own address.
+func TestPullRequestAddressSegments(t *testing.T) {
+	t.Setenv("GH_HOST", "")
+	for _, c := range []struct {
+		addr string
+		ok   bool
+	}{
+		{"https://github.com/acme/web/pull/7", true},
+		{"https://github.com/acme/a.b/pull/7", true},
+		{"https://github.com/acme-co/web_2-x/pull/7", true},
+		{"https://github.com/../web/pull/7", false},
+		{"https://github.com/./web/pull/7", false},
+		{"https://github.com/acme/../pull/7", false},
+		{"https://github.com/acme/./pull/7", false},
+		{"https://github.com/acme/%2e%2e/pull/7", false},
+		{"https://github.com/ac.me/web/pull/7", false},
+		{"https://github.com/ac_me/web/pull/7", false},
+		{"https://github.com/-acme/web/pull/7", false},
+		{"https://github.com:443/acme/web/pull/7", false},
+	} {
+		t.Run(c.addr, func(t *testing.T) {
+			err := core.PullRequest{Number: 7, URL: c.addr, State: core.PullRequestOpen}.Validate()
+			if (err == nil) != c.ok {
+				t.Errorf("%s: %v", c.addr, err)
+			}
+		})
+	}
+}

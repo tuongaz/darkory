@@ -800,8 +800,11 @@ func GitHubHost() string {
 	return strings.ToLower(strings.TrimRight(h, "/"))
 }
 
-// pullPath is the path of a pull request's own page on GitHub: /<owner>/<repo>/pull/<number>.
-var pullPath = regexp.MustCompile(`^/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/pull/([1-9][0-9]*)$`)
+// pullPath is the path of a pull request's own page on GitHub: /<owner>/<repo>/pull/<number>. An
+// owner is letters, digits and hyphens, starting with a letter or digit, as GitHub names them; a
+// repository is letters, digits, dots, hyphens and underscores, never . or .. (Validate checks
+// that), since a browser would resolve those to another page than the one written.
+var pullPath = regexp.MustCompile(`^/[A-Za-z0-9][A-Za-z0-9-]*/([A-Za-z0-9._-]+)/pull/([1-9][0-9]*)$`)
 
 // Validate refuses a pull request with no number, a state other than open or merged, or an
 // address that is not the https address of that pull request's own page on GitHub (GitHubHost),
@@ -819,7 +822,7 @@ func (pr PullRequest) Validate() error {
 		return refuse(CodeInvalid, "the pull request's address is not on GitHub: an https address on %s, at most 2000 characters", GitHubHost())
 	}
 	m := pullPath.FindStringSubmatch(u.EscapedPath())
-	if m == nil || m[1] != strconv.FormatInt(pr.Number, 10) || strings.ContainsAny(pr.URL, "?#") {
+	if m == nil || m[1] == "." || m[1] == ".." || m[2] != strconv.FormatInt(pr.Number, 10) || strings.ContainsAny(pr.URL, "?#") {
 		return refuse(CodeInvalid, "the address is not pull request #%d's: https://%s/<owner>/<repo>/pull/%d, with no query or fragment",
 			pr.Number, GitHubHost(), pr.Number)
 	}
