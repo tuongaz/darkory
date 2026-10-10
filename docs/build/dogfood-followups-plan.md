@@ -87,6 +87,8 @@ EvidenceKind:
 4. CLI verbs with their tests in `internal/cli`; `darkory prime` and the MCP tools unchanged except `attach --kind`.
 5. `make check`; commit.
 
+The Runner's `PullRequest` is a stub until Task 2 lands, so Task 1 and Task 2 ship in one pull request, never apart: with the stub attached, every agent's `merged` write would be refused.
+
 Rules that must hold: every write under the Organisation's counter as today (ADR 0011); `recordByCaller` for the Activity entries; the Task read adds the three columns to every SELECT that builds a `Task` (`tasksWhere`); `convert.go` maps them.
 
 ## Task 2: the Runner
