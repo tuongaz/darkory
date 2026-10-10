@@ -867,10 +867,10 @@ func (s *session) shutdown(ctx context.Context) {
 	s.attachLog(bctx)
 }
 
-// attachLog attaches the session's log as Evidence on the Task. When another Member holds the Task
-// by now, as the next holder may as soon as the agent advanced it, the record takes Evidence from
-// that holder alone (plan invariant 6), so the log waits on disk and the runner attaches it the
-// moment the Task is free (attachPending). It is named for the Task, the agent and the time the
+// attachLog attaches the session's log to the Task as a log, the Claim's and not the Task's
+// Evidence. When another Member holds the Task by now, as the next holder may as soon as the agent
+// advanced it, the record takes attachments from that holder alone (plan invariant 6), so the log
+// waits on disk and the runner attaches it the moment the Task is free (attachPending). It is named for the Task, the agent and the time the
 // session began (UTC), so the builder's and the reviewer's logs of one Task tell apart.
 func (s *session) attachLog(ctx context.Context) {
 	b, err := readTail(s.logPath, maxLog)
@@ -881,7 +881,7 @@ func (s *session) attachLog(ctx context.Context) {
 		return
 	}
 	name := SessionLogName(s.key, s.a.name(), s.started)
-	err = s.rec.Attach(ctx, s.key, name, b)
+	err = s.rec.Attach(ctx, s.key, name, client.EvidenceKindLog, b)
 	switch {
 	case err == nil:
 		s.log.Info("attached the Shift's log", "evidence", name, "bytes", len(b))

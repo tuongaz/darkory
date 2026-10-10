@@ -101,7 +101,7 @@ func (r *Runner) attachKeptOnce(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		err = a.rec.Attach(ctx, k.Task, k.Name, content)
+		err = a.rec.Attach(ctx, k.Task, k.Name, client.EvidenceKindLog, content)
 		switch {
 		case err == nil:
 			os.Remove(strings.TrimSuffix(meta, ".json"))

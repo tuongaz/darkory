@@ -41,6 +41,9 @@ const (
 	ModePullRequest = "pull_request"
 )
 
+// maxShifts is the most Shifts the runner runs for one agent at once.
+const maxShifts = 8
+
 // AgentSettings say how the runner starts an agent Member's sessions (D12).
 type AgentSettings struct {
 	// Command and Args are the command template; empty is Claude Code (DefaultCommand, DefaultArgs).
@@ -57,6 +60,8 @@ type AgentSettings struct {
 	// ProgressFile is the file another command writes as it works, a template like Command;
 	// empty for Claude Code, whose transcript the runner finds itself.
 	ProgressFile string
+	// Shifts is how many Shifts the runner runs for the agent at once, 1 to 8.
+	Shifts int
 }
 
 // ParentInfo is what the runner reads of a Subtask's Parent: the whole the Subtask is part of.
@@ -101,8 +106,11 @@ type Record interface {
 	// Nudged records that the Runner nudged the agent holding task, nudge 1 or 2.
 	Nudged(ctx context.Context, task string, nudge int) error
 	File(ctx context.Context, body client.FileTaskBody) (*client.Task, error)
-	// Attach attaches content as Evidence to task: refused not_holder while another Member holds it.
-	Attach(ctx context.Context, task, filename string, content []byte) error
+	// Attach attaches content to task as Evidence of kind: refused not_holder while another Member
+	// holds it.
+	Attach(ctx context.Context, task, filename string, kind client.EvidenceKind, content []byte) error
+	// SetPullRequest records on task the pull request its branch lands through, as GitHub has it.
+	SetPullRequest(ctx context.Context, task string, pr client.PullRequest) error
 	// Activity reads one connection of the Activity stream from after, calling each for every
 	// entry, and returns the last sequence number seen.
 	Activity(ctx context.Context, after int64, each func(client.Activity)) (int64, error)
@@ -156,7 +164,8 @@ func (r *conn) Agent(ctx context.Context, member string) (AgentSettings, bool, e
 	if res.JSON200.Member.Kind != client.Agent || a == nil {
 		return AgentSettings{}, false, nil
 	}
-	set := AgentSettings{Command: a.Command, Args: a.Args, Model: a.Model, Env: a.Env, Unattended: a.Unattended, Paused: a.Paused}
+	set := AgentSettings{Command: a.Command, Args: a.Args, Model: a.Model, Env: a.Env, Unattended: a.Unattended, Paused: a.Paused,
+		Shifts: min(max(a.Shifts, 1), maxShifts)}
 	if a.ProgressFile != nil {
 		set.ProgressFile = *a.ProgressFile
 	}
@@ -307,9 +316,15 @@ func (r *conn) File(ctx context.Context, body client.FileTaskBody) (*client.Task
 	return &res.JSON201.Task, nil
 }
 
-func (r *conn) Attach(ctx context.Context, task, filename string, content []byte) error {
-	_, _, err := r.c.Attach(ctx, task, filename, contentType(filename, content), client.EvidenceKindEvidence, content)
+func (r *conn) Attach(ctx context.Context, task, filename string, kind client.EvidenceKind, content []byte) error {
+	_, _, err := r.c.Attach(ctx, task, filename, contentType(filename, content), kind, content)
 	return err
+}
+
+func (r *conn) SetPullRequest(ctx context.Context, task string, pr client.PullRequest) error {
+	res, err := r.c.SetTaskPullRequestWithResponse(ctx, task, &client.SetTaskPullRequestParams{},
+		client.SetTaskPullRequestBody{Number: pr.Number, URL: pr.URL, State: pr.State})
+	return remote.Check(res, err, http.StatusOK)
 }
 
 // contentType is plain text for the runner's logs and records, whatever escapes they carry.

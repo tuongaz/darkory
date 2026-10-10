@@ -585,6 +585,40 @@ func TestRunnerStartsNoSessionForAnAgentPausedWhileWaiting(t *testing.T) {
 	}
 }
 
+// A Shift's log is attached as a log, the Claim's and not the Task's Evidence; what the agent
+// attached itself stays Evidence.
+func TestRunnerAttachesTheShiftsLogAsALog(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(buildOnly)
+	f.agent("builder", "advance", "engineer")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Fix the typo")
+	f.run("builder")
+
+	eventually(t, 30*time.Second, "the Shift's log on WEB-1", func() bool {
+		return sessionLogs(evidenceNames(f.task("WEB-1").Evidence), "WEB-1", "builder") == 1
+	})
+	logs, other := 0, 0
+	for _, e := range f.task("WEB-1").Evidence {
+		switch {
+		case sessionLogs([]string{e.Filename}, "WEB-1", "builder") == 1:
+			if e.Kind != client.EvidenceKindLog {
+				t.Fatalf("the Shift's log %s is of kind %q", e.Filename, e.Kind)
+			}
+			logs++
+		case e.Kind != client.EvidenceKindEvidence:
+			t.Fatalf("the agent's own %s is of kind %q", e.Filename, e.Kind)
+		default:
+			other++
+		}
+	}
+	if logs != 1 || other == 0 {
+		t.Fatalf("%d logs and %d Evidence on WEB-1", logs, other)
+	}
+	if !strings.Contains(f.log.String(), `msg="attached the Shift's log"`) {
+		t.Fatalf("the log does not say it attached the Shift's log:\n%s", f.log)
+	}
+}
+
 // A Task with no Parent works on a branch from main, and its advance into Done merges it into
 // main; no Parent's branch is made.
 func TestRunnerMergesATaskStandingAlone(t *testing.T) {
@@ -672,7 +706,8 @@ func TestRunnerAttachesALogKeptBeforeItStarted(t *testing.T) {
 
 	eventually(t, 10*time.Second, "the kept log on WEB-1", func() bool {
 		d := f.task("WEB-1")
-		return len(d.Evidence) == 1 && d.Evidence[0].Filename == name && d.Evidence[0].AttachedBy == f.ids["builder"]
+		return len(d.Evidence) == 1 && d.Evidence[0].Filename == name && d.Evidence[0].AttachedBy == f.ids["builder"] &&
+			d.Evidence[0].Kind == client.EvidenceKindLog
 	})
 	eventually(t, 5*time.Second, "the kept log's files gone", func() bool {
 		_, err := os.Stat(dir)
