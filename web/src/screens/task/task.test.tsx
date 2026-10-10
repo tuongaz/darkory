@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Activity, Member, Task, TaskDetail } from "@/api/client";
 import { mergeBase } from "./pullRequest";
 import { mockApi, refuse, type Call, type Handler } from "@/test/api";
@@ -592,6 +592,23 @@ describe("Evidence in a Task's record", () => {
     await waitFor(() => expect(within(row).queryByRole("figure")).toBeNull());
     expect(within(row).getByRole("link", { name: /triage-log\.md/ })).toHaveAttribute("href", "/v1/evidence/e-log/content");
     expect(api.calls.filter((c) => c.path === "/v1/evidence/e-log/content")).toHaveLength(1);
+  });
+
+  it("fades a text box out only when its lines run past the box", async () => {
+    for (const [height, faded] of [
+      [300, true],
+      [40, false],
+    ] as const) {
+      const spy = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(height);
+      const d = detail(copy, { claims: [claim], evidence: [evidence("e-log", "triage-log.md", "text/markdown", 3_700, 12)] });
+      mockApi(taskRoutes({ "GET /v1/tasks/:task": d, "GET /v1/evidence/:id/content": () => new Response("# Triage log") }));
+      const { unmount } = renderApp("/tasks/WEB-1");
+      const box = await screen.findByRole("figure", { name: "triage-log.md" });
+      await within(box).findByText("# Triage log");
+      await waitFor(() => expect(!!box.querySelector("[data-fade]")).toBe(faded));
+      unmount();
+      spy.mockRestore();
+    }
   });
 
   it("keeps a text box empty and short while its file loads", async () => {

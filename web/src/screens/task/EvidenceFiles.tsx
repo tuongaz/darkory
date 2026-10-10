@@ -1,9 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLayoutEffect, useRef, useState } from "react";
 import { PaperclipIcon } from "lucide-react";
 import { evidenceURL, type Evidence } from "@/api/client";
 import { sizeText } from "./format";
 
 const images = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+/** How tall a text box grows before its lines fade out. */
+const boxHeight = 112;
 /** A text file at most this size shows its first lines; a bigger one is a plain row. */
 const textLimit = 20_000;
 
@@ -95,6 +98,12 @@ function TextBox({ file, plain }: { file: Evidence; plain: boolean }) {
     staleTime: Infinity,
     retry: false,
   });
+  // The fade says there is more: drawn only when the lines run past the box.
+  const pre = useRef<HTMLPreElement>(null);
+  const [overflows, setOverflows] = useState(false);
+  useLayoutEffect(() => {
+    if (pre.current) setOverflows(pre.current.scrollHeight > boxHeight);
+  }, [text.data]);
   // A single Evidence's row names its file already.
   if (text.isError) return plain ? <FileLink file={file} /> : null;
   return (
@@ -111,8 +120,10 @@ function TextBox({ file, plain }: { file: Evidence; plain: boolean }) {
         <div aria-busy="true" className="h-7" />
       ) : (
         <div className="relative max-h-[112px] overflow-hidden">
-          <pre className="px-2.5 py-2 font-mono text-[11.5px] leading-[1.45] whitespace-pre text-foreground">{text.data}</pre>
-          <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-b from-transparent to-card" />
+          <pre ref={pre} className="px-2.5 py-2 font-mono text-[11.5px] leading-[1.45] whitespace-pre text-foreground">
+            {text.data}
+          </pre>
+          {overflows && <span aria-hidden data-fade className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-b from-transparent to-card" />}
         </div>
       )}
     </figure>
