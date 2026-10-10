@@ -118,9 +118,8 @@ test("a question the agent aims at the human lands in the Inbox, live, with its 
   await expect(page).toHaveURL(`${base()}/inbox?task=${key}`);
   await expect(page.getByRole("dialog", { name: new RegExp(key) })).toBeVisible();
 
-  // Answer claims it; it moves to My work, held by me.
-  await page.goto(`${base()}/inbox`);
-  await page.getByRole("button", { name: `Answer ${key}` }).click();
+  // Claimed, it moves to My work, held by me.
+  await v1(admin, "POST", `/v1/tasks/${key}/claim`, {});
   await page.goto(`${base()}/my-work`);
   await expect(page.getByRole("region", { name: "Held by you" }).locator(`[data-task="${key}"]`)).toBeVisible();
   // The question joined the Parent beside the Task it blocks (scenario 5), so it owns three.
@@ -134,6 +133,38 @@ test("a question the agent aims at the human lands in the Inbox, live, with its 
   await expect(subtasks.getByRole("link", { name: /Stripe keys for staging\?/ })).toBeVisible();
   await expect(subtasks.getByRole("link", { name: /Build the cart page/ })).toContainText("Blocked");
   await shot(page, "question-beside-its-task");
+  expect(errors).toEqual([]);
+});
+
+test("Answer is one act: the dialog shows the question, claims it, writes the answer as its Note and ends it", async ({ page }) => {
+  const errors = consoleErrors(page);
+  const blocked = (await v1<TaskDetail>(admin, "POST", "/v1/tasks", { project: "INB", title: "Cannot delete a Workflow in a Project" })).task;
+  await v1(agent, "POST", `/v1/tasks/${blocked.key}/claim`, { heartbeat_timeout_seconds: 900 });
+  const title = "Should an admin also be able to delete a Workflow from its own page, and should a non-admin be told who can delete?";
+  const asked = (await v1<TaskDetail>(agent, "POST", "/v1/tasks", { title, description: "Today only the list row has it (`decision 633`).", aim: "ada", blocks: blocked.key })).task;
+  await v1(agent, "POST", `/v1/tasks/${blocked.key}/release`, {});
+
+  await signIn(page, admin, "ada");
+  const row = page.getByRole("region", { name: "Needs you" }).locator(`[data-task="${asked.key}"]`);
+  await row.getByRole("button", { name: `Answer ${asked.key}` }).click();
+  const dialog = page.getByRole("dialog", { name: `Answer ${asked.key}` });
+  await expect(dialog).toContainText(title);
+  await expect(dialog.locator("code", { hasText: "decision 633" })).toBeVisible();
+  await expect(dialog).toContainText(`From inbox-builder · blocks ${blocked.key} Cannot delete a Workflow in a Project`);
+  await expect(dialog).toContainText(`Answers and ends ${asked.key}`);
+  await expect(dialog.getByRole("button", { name: "Answer" })).toBeDisabled();
+  await dialog.getByRole("textbox", { name: "Your answer" }).fill("Yes from its page; no line for a non-admin.");
+  await shot(page, "answer-dialog");
+  await dialog.getByRole("button", { name: "Answer" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(row).toHaveCount(0);
+
+  // The answer is the question's Note, and the question is Done: the Task it blocked is free.
+  const done = await v1<{ task: { state: string }; notes: { body: string }[] }>(admin, "GET", `/v1/tasks/${asked.key}`);
+  expect(done.task.state).toBe("done");
+  expect(done.notes.map((n) => n.body)).toContain("Yes from its page; no line for a non-admin.");
+  const freed = await v1<{ task: { blocked: boolean } }>(admin, "GET", `/v1/tasks/${blocked.key}`);
+  expect(freed.task.blocked).toBe(false);
   expect(errors).toEqual([]);
 });
 
