@@ -182,6 +182,17 @@ describe("a Project's Agents", () => {
     expect(within(peek).getByRole("list", { name: "Waiting for builder" })).toHaveTextContent("WEB-4");
   });
 
+  it("gives an admin one Nudge and one Stop per Shift in the row's ⋯, each named by its Task", async () => {
+    const second = task(5, { title: "Search", claim: claim("k-5", builder.id, { expires_at: minutes(12), heartbeat_timeout_seconds: 600 }) });
+    agentsApi({ sessions: [session("running"), session("running", { task_id: "k-5", session_id: "sess-2", tmux: "dk-WEB-5" })], tasks: [second] });
+    renderApp("/projects/WEB/agents");
+    const row = await waitFor(() => tableRow("builder"));
+    await userEvent.click(within(row).getByRole("button", { name: "More for builder" }));
+    const items = (await screen.findAllByRole("menuitem")).map((i) => i.textContent);
+    expect(items).toEqual(expect.arrayContaining(["Nudge WEB-3", "Stop WEB-3", "Nudge WEB-5", "Stop WEB-5"]));
+    expect(items).not.toContain("Nudge");
+  });
+
   it("of a Project with no agent, points an admin at the Project's Members", async () => {
     recordApi({ tasks: [], extra: { "GET /v1/projects/:project": { project: web, members: [ada] } } });
     renderApp("/projects/WEB/agents");

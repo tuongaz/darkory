@@ -53,7 +53,7 @@ const actionIcons: Record<string, ReactNode> = {
 export function AgentMenuItems({ actions, run }: { actions: AgentAction[]; run: (a: AgentAction) => void }) {
   return actions.map((a) => (
     <DropdownMenuItem key={a.label} onSelect={() => run(a)} variant={"session" in a && a.session === "stop" ? "destructive" : undefined}>
-      {actionIcons[a.label] ?? <RotateCcwIcon />}
+      {"session" in a ? a.session === "nudge" ? <BellRingIcon /> : <SquareIcon /> : (actionIcons[a.label] ?? <RotateCcwIcon />)}
       {a.label}
     </DropdownMenuItem>
   ));
@@ -181,7 +181,7 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
   }
 
   const held = agentRows([agent], open.data ?? [], now)[0]?.held ?? [];
-  // The ⋯ menu's Nudge and Stop name one Shift: the one on the Task first held, else the first; each Shift's own section has its acts.
+  // The Shift on the Task first held, else the first: the one the agent's mark shows.
   const runnerSession = runnerSessions.find((s) => s.task_id === held[0]?.id) ?? runnerSessions[0];
   const queue = queueOf({ agent, held, open: open.data ?? [], workflow, projectId: project.id, now, history: history.entries, members });
   const claims = withLive(claimsSince(history.entries, id, startOfDay(now)), held, now);
@@ -189,8 +189,14 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
   const set = agent.agent?.model;
   const model = live?.model_label ?? set;
   const manager = agent.manager_id ? members.get(agent.manager_id) : undefined;
-  const sessionTask = runnerSession && (tasks.get(runnerSession.task_id) ?? held.find((t) => t.id === runnerSession.task_id));
-  const actions = agentActions({ agent, held, me: me.member, members, session: runnerSession, sessionKey: sessionTask?.key, project });
+  const actions = agentActions({
+    agent,
+    held,
+    me: me.member,
+    members,
+    shifts: runnerSessions.map((rs) => ({ session: rs, taskKey: (tasks.get(rs.task_id) ?? held.find((t) => t.id === rs.task_id))?.key })),
+    project,
+  });
   const entries = history.complete ? count(history.entries.length, "entry", "entries") : `${activityLimit}+ entries`;
   const takes = takesOf(workflow, id);
   const working = live ? workingOf("agent", runnerSession?.state) : runnerSession?.state === "ending" ? "ending" : undefined;
