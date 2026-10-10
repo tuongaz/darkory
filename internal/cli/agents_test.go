@@ -31,7 +31,7 @@ func (o *oneSession) Nudge(task string) error {
 	return nil
 }
 func (o *oneSession) Stop(string) error { return nil }
-func (o *oneSession) PullRequest(context.Context, string, int64) (runnerapi.PullRequest, error) {
+func (o *oneSession) PullRequest(context.Context, string, int64, string) (runnerapi.PullRequest, error) {
 	return runnerapi.PullRequest{}, runnerapi.ErrNoPullRequest
 }
 func (o *oneSession) Merge(ctx context.Context, task string, number int64) error {

@@ -273,7 +273,7 @@ func (s *Server) mergedOnGitHub(ctx context.Context, c *auth.Caller, ref string,
 	key := d.Task.Key
 	rctx, cancel := context.WithTimeout(ctx, s.runnerTimeout)
 	defer cancel()
-	pr, err := run.PullRequest(rctx, shortid.Of(d.Task.ID).String(), body.Number) // the Runner has ids as the API writes them
+	pr, err := run.PullRequest(rctx, shortid.Of(d.Task.ID).String(), body.Number, body.URL) // the Runner has ids as the API writes them
 	switch {
 	case err != nil && rctx.Err() == context.DeadlineExceeded:
 		return &core.Error{Code: core.CodeConflict, Message: fmt.Sprintf("the Runner did not answer in %s", inSeconds(s.runnerTimeout))}
@@ -287,6 +287,8 @@ func (s *Server) mergedOnGitHub(ctx context.Context, c *auth.Caller, ref string,
 		return &core.Error{Code: core.CodeInvalid, Message: fmt.Sprintf("pull request #%d's branch %s is not %s's", body.Number, pr.Head, key)}
 	case pr.Number != body.Number || !sameAddress(pr.URL, body.URL):
 		return &core.Error{Code: core.CodeInvalid, Message: fmt.Sprintf("pull request #%d on GitHub is %s, not %s", body.Number, pr.URL, body.URL)}
+	case !pr.Landing:
+		return &core.Error{Code: core.CodeConflict, Message: fmt.Sprintf("pull request #%d is not %s's landing", body.Number, key)}
 	}
 	return nil
 }

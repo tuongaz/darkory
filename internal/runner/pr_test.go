@@ -378,6 +378,24 @@ func TestRunnerMerge(t *testing.T) {
 		})
 	}
 
+	// Two Workspaces each with a #7 of the Task's branch: the one the record's address names.
+	t.Run("the record's address", func(t *testing.T) {
+		rec := mergeFixture()
+		api := Workspace{ID: "w-api", Name: "api", Path: "/src/api", Mode: ModePullRequest, DefaultBranch: "main"}
+		rec.wss["t-3"] = append([]Workspace{api}, rec.wss["t-3"]...)
+		rec.tasks[0].Task.PullRequest = &client.PullRequest{Number: 7, URL: "https://github.com/acme/web/pull/7", State: client.PullRequestOpen}
+		gh := byRepo{"/src/api": {}, "/src/web": {}}
+		gh["/src/api"].open(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: "https://github.com/acme/api/pull/7", HeadRefOid: "a"})
+		gh["/src/web"].open(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: "https://github.com/acme/web/pull/7", HeadRefOid: "w"})
+		r := mergeRunner(t, rec, gh)
+		if err := r.Merge(t.Context(), "t-3", 7); err != nil {
+			t.Fatal(err)
+		}
+		if len(gh["/src/api"].merges) != 0 || !slices.Equal(gh["/src/web"].merges, []int64{7}) {
+			t.Fatalf("merged api %v, web %v", gh["/src/api"].merges, gh["/src/web"].merges)
+		}
+	})
+
 	// A number no Workspace of the Task has: no pull request.
 	r := mergeRunner(t, mergeFixture(), &recordingGitHub{})
 	if err := r.Merge(t.Context(), "t-3", 8); !errors.Is(err, runnerapi.ErrNoPullRequest) {
@@ -400,36 +418,48 @@ func TestRunnerPullRequest(t *testing.T) {
 	r := mergeRunner(t, rec, gh)
 	ctx := t.Context()
 
-	pr, err := r.PullRequest(ctx, "t-3", 7)
+	pr, err := r.PullRequest(ctx, "t-3", 7, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := runnerapi.PullRequest{Number: 7, URL: "https://github.com/acme/web/pull/7", State: "merged", Head: "dark-3-fix-the-cart", Base: "main"}
+	want := runnerapi.PullRequest{Number: 7, URL: "https://github.com/acme/web/pull/7", State: "merged", Head: "dark-3-fix-the-cart", Base: "main",
+		Landing: true}
 	if pr != want {
 		t.Fatalf("PullRequest: %+v, want %+v", pr, want)
 	}
 	for state, lower := range map[string]string{PROpen: "open", PRClosed: "closed"} {
 		gh["/src/web"].set(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: state})
-		if pr, err := r.PullRequest(ctx, "t-3", 7); err != nil || pr.State != lower {
+		if pr, err := r.PullRequest(ctx, "t-3", 7, ""); err != nil || pr.State != lower {
 			t.Fatalf("PullRequest of a %s one: %+v, %v", state, pr, err)
 		}
 	}
 	// A fork's #7 on a branch named for the Task is not the Task's: the other Workspace's is found.
 	gh["/src/web"].set(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PRMerged, IsCrossRepository: true})
-	if pr, err := r.PullRequest(ctx, "t-3", 7); err != nil || pr.Head != "chore/bump" {
+	if pr, err := r.PullRequest(ctx, "t-3", 7, ""); err != nil || pr.Head != "chore/bump" {
 		t.Fatalf("PullRequest with a fork's #7: %+v, %v", pr, err)
 	}
 	// Only another branch's #7 in a pull_request Workspace (the plain one's is not looked at): that
 	// one, for the server to refuse by its head.
 	gh["/src/web"].prs = nil
-	if pr, err := r.PullRequest(ctx, "t-3", 7); err != nil || pr.Head != "chore/bump" {
+	if pr, err := r.PullRequest(ctx, "t-3", 7, ""); err != nil || pr.Head != "chore/bump" {
 		t.Fatalf("PullRequest with only another branch's #7: %+v, %v", pr, err)
 	}
 	gh["/src/api"].set(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PROpen, IsCrossRepository: true})
-	if _, err := r.PullRequest(ctx, "t-3", 7); !errors.Is(err, runnerapi.ErrNoPullRequest) {
+	if _, err := r.PullRequest(ctx, "t-3", 7, ""); !errors.Is(err, runnerapi.ErrNoPullRequest) {
 		t.Fatalf("PullRequest with only a fork's #7: %v", err)
 	}
-	if _, err := r.PullRequest(ctx, "t-3", 9); !errors.Is(err, runnerapi.ErrNoPullRequest) {
+	// Of two Workspaces with a #7 of the Task's branch, the address picks one; a landing says so.
+	gh["/src/api"].set(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "develop", State: PROpen, URL: "https://github.com/acme/api/pull/7"})
+	gh["/src/web"].set(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", State: PROpen, URL: "https://github.com/acme/web/pull/7"})
+	for url, want := range map[string]runnerapi.PullRequest{
+		"https://github.com/acme/api/pull/7": {Number: 7, URL: "https://github.com/acme/api/pull/7", State: "open", Head: "dark-3-fix-the-cart", Base: "develop"},
+		"https://github.com/acme/web/pull/7": {Number: 7, URL: "https://github.com/acme/web/pull/7", State: "open", Head: "dark-3-fix-the-cart", Base: "main", Landing: true},
+	} {
+		if pr, err := r.PullRequest(ctx, "t-3", 7, url); err != nil || pr != want {
+			t.Fatalf("PullRequest at %s: %+v, %v; want %+v", url, pr, err, want)
+		}
+	}
+	if _, err := r.PullRequest(ctx, "t-3", 9, ""); !errors.Is(err, runnerapi.ErrNoPullRequest) {
 		t.Fatalf("PullRequest of a missing one: %v", err)
 	}
 }
@@ -565,7 +595,7 @@ func TestPollerWriteCallsBackIntoTheRunner(t *testing.T) {
 	r := pollRunner(t, rec, gh)
 	var checked []string
 	rec.setHook = func(task string, pr client.PullRequest) error {
-		got, err := r.PullRequest(context.Background(), task, pr.Number)
+		got, err := r.PullRequest(context.Background(), task, pr.Number, pr.URL)
 		if err != nil {
 			return err
 		}

@@ -485,7 +485,7 @@ var errNotStarted = errors.New("the Runner is starting; try again in a moment")
 // refuses when the head moved meanwhile. GitHub's refusal is the error, as gh said it. ctx bounds
 // it all; gh runs under it.
 func (r *Runner) Merge(ctx context.Context, taskID string, number int64) error {
-	d, ws, pr, err := r.findPullRequest(ctx, taskID, number)
+	d, ws, pr, err := r.findPullRequest(ctx, taskID, number, "", true)
 	if err != nil {
 		return err
 	}
@@ -521,12 +521,13 @@ func ownBase(ctx context.Context, d *client.TaskDetail, ws Workspace) string {
 // pull_request mode. The server calls it while a write of the Runner's own may wait on its
 // answer, so it takes no lock: it reads the record and runs gh, nothing more. ctx bounds it; gh
 // runs under it.
-func (r *Runner) PullRequest(ctx context.Context, taskID string, number int64) (runnerapi.PullRequest, error) {
-	_, _, pr, err := r.findPullRequest(ctx, taskID, number)
+func (r *Runner) PullRequest(ctx context.Context, taskID string, number int64, url string) (runnerapi.PullRequest, error) {
+	d, ws, pr, err := r.findPullRequest(ctx, taskID, number, url, false)
 	if err != nil {
 		return runnerapi.PullRequest{}, err
 	}
-	return runnerapi.PullRequest{Number: pr.Number, URL: pr.URL, State: strings.ToLower(pr.State), Head: pr.HeadRefName, Base: pr.BaseRefName}, nil
+	return runnerapi.PullRequest{Number: pr.Number, URL: pr.URL, State: strings.ToLower(pr.State), Head: pr.HeadRefName, Base: pr.BaseRefName,
+		Landing: r.notLanding(ctx, d, ws, pr) == ""}, nil
 }
 
 // ghMissing says gh found no pull request of that number in the repository.
@@ -535,10 +536,11 @@ func ghMissing(err error) bool {
 }
 
 // findPullRequest reads pull request number in each Workspace of the Task in pull_request mode:
-// the first whose head is a branch of the Task, else the first that has the number at all. One
-// from a fork is never the Task's, whatever its branch is called. It is ErrNoPullRequest when
-// none has it, or gh's error when it could not tell.
-func (r *Runner) findPullRequest(ctx context.Context, taskID string, number int64) (*client.TaskDetail, Workspace, PullRequest, error) {
+// the one whose address is url, when url is given (with recorded, the address the Task's record
+// carries) and a Workspace has it; else the first whose head is a branch of the Task; else the
+// first that has the number at all. One from a fork is never the Task's, whatever its branch is
+// called. It is ErrNoPullRequest when none has it, or gh's error when it could not tell.
+func (r *Runner) findPullRequest(ctx context.Context, taskID string, number int64, url string, recorded bool) (*client.TaskDetail, Workspace, PullRequest, error) {
 	select {
 	case <-r.ready:
 	default:
@@ -552,10 +554,13 @@ func (r *Runner) findPullRequest(ctx context.Context, taskID string, number int6
 	if err != nil {
 		return nil, Workspace{}, PullRequest{}, err
 	}
+	if recorded && d.Task.PullRequest != nil {
+		url = d.Task.PullRequest.URL
+	}
 	var (
-		first   *PullRequest
-		firstWS Workspace
-		failed  error
+		first, tasks     *PullRequest
+		firstWS, tasksWS Workspace
+		failed           error
 	)
 	for _, ws := range wss {
 		if ws.Mode != ModePullRequest {
@@ -572,13 +577,17 @@ func (r *Runner) findPullRequest(ctx context.Context, taskID string, number int6
 			r.log.Info("a pull request from a fork is not a Task's", "task", d.Task.Key, "workspace", ws.Name, "pr", number,
 				"fork", pr.HeadRepositoryOwner.Login)
 			continue
-		case branch.IsTasks(pr.HeadRefName, d.Task.Key):
+		case url != "" && pr.URL == url:
 			return d, ws, pr, nil
+		case branch.IsTasks(pr.HeadRefName, d.Task.Key) && tasks == nil:
+			tasks, tasksWS = &pr, ws
 		case first == nil:
 			first, firstWS = &pr, ws
 		}
 	}
 	switch {
+	case tasks != nil:
+		return d, tasksWS, *tasks, nil
 	case first != nil:
 		return d, firstWS, *first, nil
 	case failed != nil:

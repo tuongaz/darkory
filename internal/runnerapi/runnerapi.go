@@ -62,6 +62,10 @@ type PullRequest struct {
 	State string
 	// Head and Base are its branches: the one it merges, and the one it merges into.
 	Head, Base string
+	// Landing says it is how the Task's branch lands: its head is the Task's branch, its base is
+	// that branch's own base (the Parent's branch for a Subtask, else the Workspace's default
+	// branch), and it is not from a fork.
+	Landing bool
 }
 
 // ErrNoPullRequest is what Merge returns when GitHub has no such pull request open, and what
@@ -93,9 +97,10 @@ type Runner interface {
 	// server shows as it is. ctx bounds the act; the Runner's gh runs under it.
 	Merge(ctx context.Context, taskID string, number int64) error
 	// PullRequest reads the Task's pull request number on GitHub, in the Task's Workspaces in
-	// pull_request mode, as the Runner's gh sees it. It returns ErrNoPullRequest when none of them
-	// has it. ctx bounds the act; the Runner's gh runs under it.
-	PullRequest(ctx context.Context, taskID string, number int64) (PullRequest, error)
+	// pull_request mode, as the Runner's gh sees it: the one whose address is url when url is
+	// given and a Workspace has it. It returns ErrNoPullRequest when none of them has it. ctx
+	// bounds the act; the Runner's gh runs under it.
+	PullRequest(ctx context.Context, taskID string, number int64, url string) (PullRequest, error)
 	// Attach bridges conn to the Task's terminal until either side ends or ctx is done, and
 	// closes conn. Binary messages carry the terminal's bytes both ways; a text message
 	// {"cols": n, "rows": n} resizes the view. With readonly, what the client sends is ignored.

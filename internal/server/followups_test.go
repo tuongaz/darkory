@@ -316,9 +316,10 @@ func TestAgentMergedWriteIsCheckedOnGitHub(t *testing.T) {
 
 		var asked []string
 		var ghErr error
-		github := runnerapi.PullRequest{Number: 7, URL: "https://github.com/acme/web/pull/7", State: "open", Head: "web-2-checkout", Base: "main"}
-		h.srv.AttachRunner(&fakeRunner{pullRequest: func(_ context.Context, task string, number int64) (runnerapi.PullRequest, error) {
-			asked = append(asked, fmt.Sprintf("%s #%d", task, number))
+		github := runnerapi.PullRequest{Number: 7, URL: "https://github.com/acme/web/pull/7", State: "open", Head: "web-2-checkout", Base: "main",
+			Landing: true}
+		h.srv.AttachRunner(&fakeRunner{pullRequest: func(_ context.Context, task string, number int64, url string) (runnerapi.PullRequest, error) {
+			asked = append(asked, fmt.Sprintf("%s #%d %s", task, number, url))
 			if ghErr != nil {
 				return runnerapi.PullRequest{}, ghErr
 			}
@@ -334,7 +335,7 @@ func TestAgentMergedWriteIsCheckedOnGitHub(t *testing.T) {
 		if res.StatusCode() != http.StatusConflict || !strings.Contains(res.JSONDefault.Message, "GitHub has #7 open, not merged") {
 			t.Fatalf("merged while GitHub has it open: %s", res.Body)
 		}
-		if len(asked) != 1 || asked[0] != task.ID+" #7" {
+		if len(asked) != 1 || asked[0] != task.ID+" #7 https://github.com/acme/web/pull/7" {
 			t.Fatalf("the Runner was asked %v", asked)
 		}
 		// Merged, on another Task's branch.
@@ -377,6 +378,13 @@ func TestAgentMergedWriteIsCheckedOnGitHub(t *testing.T) {
 		if res.StatusCode() != http.StatusBadRequest || !strings.Contains(res.JSONDefault.Message, "pull request #7's branch web-20-x is not WEB-2's") {
 			t.Fatalf("WEB-20's branch: %s", res.Body)
 		}
+		// Merged on the Task's branch, but not its landing: into another base, or from a fork.
+		github.Head, github.State, github.Landing = "web-2-checkout", "merged", false
+		res = write(bob, task, client.PullRequestMerged)
+		if res.StatusCode() != http.StatusConflict || !strings.Contains(res.JSONDefault.Message, "pull request #7 is not WEB-2's landing") {
+			t.Fatalf("not the landing: %s", res.Body)
+		}
+		github.Landing = true
 		// Merged, on the Task's branch: a renamed Task's branch still starts with its key, in any
 		// case; GitHub's host is compared without regard to case.
 		github.Head, github.URL = "WEB-2-old-title", "https://GitHub.com/acme/web/pull/7"
@@ -384,7 +392,7 @@ func TestAgentMergedWriteIsCheckedOnGitHub(t *testing.T) {
 			t.Fatalf("merged on the Task's branch: %s", res.Body)
 		}
 		// From here GitHub is not asked: a write the record already carries, and a bad address.
-		h.srv.AttachRunner(&fakeRunner{pullRequest: func(task string, number int64) (runnerapi.PullRequest, error) {
+		h.srv.AttachRunner(&fakeRunner{pullRequest: func(_ context.Context, task string, number int64, _ string) (runnerapi.PullRequest, error) {
 			t.Errorf("the Runner was asked for %s #%d", task, number)
 			return runnerapi.PullRequest{}, errors.New("not asked")
 		}})
