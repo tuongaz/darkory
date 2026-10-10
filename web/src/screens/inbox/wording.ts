@@ -79,7 +79,7 @@ const kinds: Record<ActivityKind, KindWords> = {
   "project.member_removed": { group: "Project", label: "Member removed", verb: "removed" },
   "skill.created": { group: "Skill", label: "Created", verb: "created the Skill" },
   "skill.version_published": { group: "Skill", label: "Version published", verb: "published" },
-  "skill.changed": { group: "Skill", label: "Changed", verb: "changed" },
+  "skill.changed": { group: "Skill", label: "Moved", verb: "moved" },
   "member.created": { group: "Member", label: "Created", verb: "created the Member" },
   "member.updated": { group: "Member", label: "Updated", verb: "updated the Member" },
   "member.manager_set": { group: "Member", label: "Reporting line set", verb: "set the Reporting line of" },
@@ -346,7 +346,7 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
     }
     case "skill.changed": {
       const id = text(p, "project_id");
-      s.details.push(id ? (l.projects.get(id)?.key ?? "a Project") : "Organisation");
+      s.after.push(`to ${id ? (l.projects.get(id)?.key ?? "a Project") : "the Organisation"}`);
       break;
     }
     case "skill.version_published":

@@ -54,15 +54,15 @@ describe("what an entry says", () => {
     expect(words(entry(1, "project.member_added", web.id, { actor_id: ada.id, payload: { member_id: bob.id } }))).toBe("ada added bob to Web");
   });
 
-  it("words a pull request opened and merged, and a Skill's Project changed", () => {
+  it("words a pull request opened and merged, and a Skill moved to a Project or the Organisation", () => {
     expect(words(entry(1, "task.pull_request_opened", cart.id, { actor_id: builder.id, payload: { number: 7, url: "https://github.com/o/r/pull/7" } }))).toBe(
       "builder opened #7 on WEB-3 Build the cart",
     );
     expect(words(entry(1, "task.pull_request_merged", cart.id, { actor_id: ada.id, payload: { number: 7, url: "https://github.com/o/r/pull/7" } }))).toBe(
       "ada merged #7 on WEB-3 Build the cart",
     );
-    expect(words(entry(1, "skill.changed", engineer.id, { actor_id: ada.id, payload: { project_id: web.id } }))).toBe(`ada changed ${engineer.name} · WEB`);
-    expect(words(entry(1, "skill.changed", engineer.id, { actor_id: ada.id, payload: { project_id: null } }))).toBe(`ada changed ${engineer.name} · Organisation`);
+    expect(words(entry(1, "skill.changed", engineer.id, { actor_id: ada.id, payload: { project_id: web.id } }))).toBe(`ada moved ${engineer.name} to WEB`);
+    expect(words(entry(1, "skill.changed", engineer.id, { actor_id: ada.id, payload: { project_id: null } }))).toBe(`ada moved ${engineer.name} to the Organisation`);
   });
 
   it("says Darkory filed its own Subtasks, at their Step, and names a deleted Step plainly", () => {
