@@ -9,6 +9,9 @@
 //           same story without the busy Build, so Build reads DARK-21 held and DARK-23 waiting.
 //   NEWS    Newsletter on Editorial (Draft · Edit · Legal, a hold · Publish), NEWS-39 … NEWS-42.
 //   ACME    Platform: 12 Steps, 20 Connectors; counts per Step and who holds, no named Tasks.
+//   OWN     The owner's own MAIN shape (web/src/components/workflowLine/fixtures.ts MAIN): Backlog ·
+//           Plan · Build · QA · Review · Acceptance · Retro · Skill review, QA's and Acceptance's
+//           loops back to Build; no frame draws it, so a few Tasks at its Steps to read it by.
 //
 //   DARKORY_URL=http://127.0.0.1:51616 DARKORY_TOKEN=dk_... node scripts/seed-fixture.mjs
 //
@@ -60,7 +63,7 @@ async function v1(method, path, body, { token = adminToken, session = "seed-fixt
 }
 
 // ------------------------------------------------------------------ the guard
-const ours = ["MAIN", "DARK", "DARKG1", "NEWS", "ACME"];
+const ours = ["MAIN", "DARK", "DARKG1", "NEWS", "ACME", "OWN"];
 const me = (await v1("GET", "/v1/me")).member;
 const projectsBefore = (await v1("GET", "/v1/projects")).items ?? [];
 const foreign = projectsBefore.filter((p) => !ours.includes(p.key)).map((p) => p.key);
@@ -114,11 +117,13 @@ for (const [fid, kind] of Object.entries(fixture.projects.ACME.memberKinds)) {
   await ensureMember(fid, { name: fid, kind, skills: acmeSkills[fid] ?? [] });
 }
 
+// A Member keeps one live token of a name: each run names its own.
+const runId = Date.now().toString(36);
 /** A Member's token, issued once per run, for moves made as them. */
 async function tokenOf(fid) {
   const p = people[fid];
   if (fid === "tuongaz") return adminToken;
-  p.token ??= (await v1("POST", `/v1/members/${p.id}/tokens`, { name: "seed-fixture" })).secret;
+  p.token ??= (await v1("POST", `/v1/members/${p.id}/tokens`, { name: `seed-fixture-${runId}` })).secret;
   return p.token;
 }
 /** `as(fid)`: the /v1 calls a Member makes in their own Session. */
@@ -134,7 +139,7 @@ function as(fid) {
 }
 
 // ------------------------------------------------------------------ Projects and Workflows
-const hues = { DARK: 8, DARKG1: 8, NEWS: 1, ACME: 4 }; // Blue, Orange, Green: the fixture's --mark-dark 250°, --mark-news 60°, --mark-acme 150°
+const hues = { DARK: 8, DARKG1: 8, NEWS: 1, ACME: 4, OWN: 6 }; // Blue, Orange, Green: the fixture's --mark-dark 250°, --mark-news 60°, --mark-acme 150°
 
 /** Makes the Project when missing, with the fixture's Members in it; returns whether it has no Tasks yet. */
 async function ensureProject(key, name, members, workflow) {
@@ -321,8 +326,40 @@ if (acmeFresh) {
   }
 } else say("ACME has Tasks; none filed");
 
+// ------------------------------------------------------------------ OWN, the owner's MAIN shape
+const steps8 = [["Backlog"], ["Plan", "breakdown"], ["Build", "engineer"], ["QA", "qa"], ["Review", "review"], ["Acceptance", "acceptance"], ["Retro", "retro"], ["Skill review", "skill-review"]];
+const ways8 = [
+  ["Plan", "done", null], ["Build", "pass", "QA"], ["Build", "no UI change", "Review"], ["QA", "pass", "Review"], ["QA", "fail", "Build"],
+  ["Review", "pass", null], ["Review", "needs changes", "Build"], ["Review", "needs QA", "QA"], ["Acceptance", "pass", null], ["Acceptance", "fail", "Build"],
+  ["Retro", "done", null], ["Retro", "propose", "Skill review"], ["Skill review", "publish", null], ["Skill review", "needs changes", "Retro"],
+];
+const ownFresh = await ensureProject("OWN", "Owner's shape", D.members, "empty");
+await setWorkflows("OWN", {
+  workflows: [{ name: "Implementation", position: 1, steps: steps8.map(([name, skill], i) => ({ name, skill, position: i + 1 })), connectors: ways8.map(([from, name, to]) => ({ from, name, to })) }],
+});
+if (ownFresh) {
+  const t = as("tuongaz");
+  const file = async (title, step) => {
+    const key = await t.file({ project: "OWN", title, step });
+    (made.OWN ??= []).push(key);
+    return key;
+  };
+  // One went the whole way today: Build, QA, Review, Done.
+  const shipped = await file("Inbox: mark all read", "Build");
+  for (const [who, outcome] of [["builder", "pass"], ["tester", "pass"], ["reviewer", "pass"]]) {
+    await as(who).claim(shipped);
+    await as(who).advance(shipped, outcome);
+  }
+  await file("Settings: an Organisation's logo", "Backlog");
+  await as("builder").claim(await file("Runner: resume a Shift after a restart", "Build"));
+  for (const title of ["Tasks list: sort by age", "Board: collapse a Step", "Peek: copy a Task's link"]) await file(title, "Build");
+  await as("tester").claim(await file("Activity: filter by Member", "QA"));
+  await file("Inbox: snooze a question", "Review");
+  await file("Acceptance: Workflow page, vertical", "Acceptance");
+} else say("OWN has Tasks; none filed");
+
 // ------------------------------------------------------------------ the report
-for (const key of ["DARK", "DARKG1", "NEWS", "ACME"]) {
+for (const key of ["DARK", "DARKG1", "NEWS", "ACME", "OWN"]) {
   const wf = await v1("GET", `/v1/projects/${key}/workflow`);
   const byWf = Object.fromEntries(wf.workflows.map((w) => [w.id, w.name]));
   const steps = wf.steps.map((s) => `${byWf[s.workflow_id]} › ${s.name} ${s.tasks - s.working}w ${s.working}h`).join(" · ");

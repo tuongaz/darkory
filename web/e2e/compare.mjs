@@ -54,6 +54,7 @@ const darkG1 = await workflow("DARKG1", "Implementation");
 const bugs = await workflow("DARK", "Bug triage");
 const acme = await workflow("ACME", "Platform");
 const news = await workflow("NEWS", "Editorial");
+const own = await workflow("OWN", "Implementation");
 
 /** Each frame: its mockup (vf-N.png), the size, how to reach it. */
 const screens = [
@@ -64,10 +65,8 @@ const screens = [
     name: "vf-4",
     size: "desktop",
     go: dark,
-    // TODO(Task 7): the count pill "N waiting ›" at Build, a control that opens the Step's list in
-    // place; fill in its selector once the new line exists, e.g.
-    // page.getByRole("button", { name: /^13 waiting/ }).click().
-    act: async () => {},
+    // Build's count, a control that opens the Step's list in place.
+    act: async (page) => page.getByRole("button", { name: "Build: 13 Tasks waiting" }).click(),
   },
   { name: "vf-5", size: "desktop", go: acme },
   { name: "vf-6", size: "desktop", go: news },
@@ -75,19 +74,46 @@ const screens = [
     name: "vf-7",
     size: "desktop",
     go: dark,
-    // The shipped line's held chip; check the selector against the new line's chip.
-    act: async (page) => page.locator('button[data-task="DARK-21"]').first().click(),
+    // DARK-21's held chip; the strip "DARK-21's way" comes above the line.
+    act: async (page) => {
+      await page.locator('button[data-task="DARK-21"]').first().click();
+      await page.getByText("DARK-21's way").waitFor();
+      // The Connector hover, as vf-7 draws it on Review's needs changes.
+      await page.locator("[data-return]", { hasText: "needs changes" }).first().hover();
+    },
   },
   { name: "vf-8", size: "desktop", go: "/projects/DARK/workflows" },
   {
     name: "vf-9",
     size: "desktop",
     go: `${dark}/edit`,
-    // TODO(Task 7): QA added after Review, unsaved ("3 changes"): + Step, name QA, Skill qa, its
-    // outcome fail → Build. Fill in once the editor draws on the line (Task 5).
-    act: async () => {},
+    // QA added after Review, unsaved: Review's pass → QA; QA pass → Done, fail → Build.
+    act: async (page) => {
+      await page.getByRole("button", { name: "More for Review" }).click();
+      await page.getByRole("menuitem", { name: "Add Step after Review" }).click();
+      await page.getByRole("textbox", { name: "Name of the new Step" }).fill("QA");
+      await page.getByRole("combobox", { name: "Skill of QA" }).click();
+      await page.getByPlaceholder("Find or name a Skill").fill("qa");
+      await page.getByRole("option", { name: /^qa/ }).click();
+      const lead = async (outcome, from, to) => {
+        await page.getByRole("combobox", { name: `Where ${outcome} out of ${from} leads` }).click();
+        await page.getByRole("option", { name: to, exact: true }).click();
+      };
+      await lead("pass", "Review", "QA");
+      for (const [outcome, to] of [["pass", "Done"], ["fail", "Build"]]) {
+        await page.getByRole("button", { name: "Add an outcome out of QA" }).click();
+        await page.getByRole("textbox", { name: "Outcome out of QA" }).fill(outcome);
+        await lead(outcome, "QA", to);
+      }
+      await page.mouse.move(0, 0);
+    },
   },
   { name: "vf-10", size: "phone", go: dark },
+  // No frame: the owner's own MAIN shape (8 Steps, QA's and Acceptance's loops), read for breakage.
+  { name: "own-page", size: "desktop", go: own },
+  { name: "own-list", size: "desktop", go: "/projects/OWN/workflows" },
+  { name: "own-page-phone", size: "phone", go: own },
+  { name: "own-list-phone", size: "phone", go: "/projects/OWN/workflows" },
 ];
 
 const sizes = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } };
@@ -121,7 +147,7 @@ for (const size of ["desktop", "phone"]) {
   await ctx.close();
 }
 await browser.close();
-shots.sort((a, b) => Number(a.name.slice(3)) - Number(b.name.slice(3)));
+shots.sort((a, b) => screens.indexOf(screens.find((x) => x.name === a.name)) - screens.indexOf(screens.find((x) => x.name === b.name)));
 
 const notesFile = join(here, "compare.notes.json");
 const NOTES = existsSync(notesFile) ? JSON.parse(readFileSync(notesFile, "utf8")) : {};
@@ -143,7 +169,7 @@ ${shots
     (s) => `<h2>${esc(s.name)}</h2>
 <div class="pair ${s.size}">
   <figure><img src="${esc(s.name)}.png"><figcaption>Real, ${esc(s.size)}</figcaption></figure>
-  ${s.mock ? `<figure><img src="mock-${esc(s.mock)}"><figcaption>Mockup</figcaption></figure>` : `<figure><figcaption>No mockup at ${esc(join(mockups, `${s.name}.png`))}.</figcaption></figure>`}
+  ${s.mock ? `<figure><img src="mock-${esc(s.mock)}"><figcaption>Mockup</figcaption></figure>` : `<figure><figcaption>No frame draws this one.</figcaption></figure>`}
 </div>
 ${s.errors.length ? `<p class="err">Console errors: ${esc(s.errors.join(" | "))}</p>` : ""}
 ${NOTES[s.name]?.length ? `<ul>${NOTES[s.name].map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}`,

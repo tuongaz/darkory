@@ -1,27 +1,69 @@
 {
   "vf-1": [
     "Seed: Build reads 13 waiting where vf-1 has 1: DARK is the busy afternoon (vf-4's state), since one Install holds one DARK; DARKG1 carries the 1 waiting (DARK-23).",
-    "Seed: DARK-22 is a plain Subtask of DARK-20 at Plan titled 'Break down: …', not the Breakdown kind: a Breakdown takes the key after its Parent's, so it would read DARK-21."
+    "Seed: DARK-22 is a plain Subtask of DARK-20 at Plan titled 'Break down: …', not the Breakdown kind: a Breakdown takes the key after its Parent's, so it would read DARK-21.",
+    "Seed: medians are the seed's seconds (1s), Plan has none (no Task has left it yet), ages read 1m–2m; the fixture's clock cannot be set.",
+    "Decided (Task 1, log row 4): Plan's mark reads '● done → Done' where vf-1 draws '● Done': every mark reads outcome → target, as vf-2's own quiet '● done → Done' does.",
+    "Decided (plan, Tasks at a Step): a blocked held chip keeps the red 'blocked by DARK-27' line on the vf-4 chip, not vf-1's red-filled chip with a 'blocked' pill.",
+    "Left for the lead: row 1 keeps the shipped Filter · Edit · Delete (Delete spelled, off on a last Workflow with its reason); vf-1 draws Filter · Edit · an unlabelled ⋯.",
+    "Shipped: Needs you and What's happening sit under the line at 1440; the frame draws them as a cut line."
   ],
   "vf-2": [
+    "Fixed 4e74ad1: the quiet row says each Step's Skill, median and takers (Retro ⌖ retro · RT), its marks without their fill, as vf-2.",
     "Seed: the Project is DARKG1 'Darkory g1' (today's seed) with the same story under DARKG1-n keys; vf-2 draws it as Darkory."
   ],
-  "vf-3": [],
-  "vf-4": [],
+  "vf-3": [
+    "Decided (Task 1, log row 2): the '↗ Retrospective › Retro' chip at Done shows on Bug triage too (vf-3 was drawn on g1, where Implementation holds Retro).",
+    "Shipped: row 2 has no Blocking tab while nothing in the scope is blocked; vf-3 draws it."
+  ],
+  "vf-4": [
+    "Decided (Task 2, log row 1): the list is oldest first; the seed filed DARK-28 first, so it heads the list as in vf-4, for the other reason. Ages are the seed's (1m each)."
+  ],
   "vf-5": [
-    "Seed: ACME's Tasks carry made-up titles (the fixture names none); Plan's and Acceptance's are plain Tasks filed at those Steps."
+    "Seed: ACME's Tasks carry made-up titles (the fixture names none); Plan's and Acceptance's are plain Tasks filed at those Steps.",
+    "Decided (plan, Tasks at a Step: one rule on every line): a held Task is a chip (holder · key · age); vf-5 draws 'TR 1 working' because the fixture names no ACME Task. Build's two chips and its count wrap in the 300px column.",
+    "Seed: the 403 is /v1/projects/ACME/seen: the seeding admin is not a Member of ACME.",
+    "Shipped: a Project of one Workflow names it in the crumb as text (Platform), with no picker chip; Delete is off with 'The last Workflow stays'."
   ],
   "vf-6": [
-    "Seed: What's happening lists NEWS-1 … NEWS-36 dropped under the fixture's six: the seed files and drops them so NEWS-37 … NEWS-42 take the fixture's keys (likewise DARK-1 … 11, 23 to 25)."
+    "Seed: What's happening lists NEWS-1 … NEWS-36 dropped under the fixture's six: the seed files and drops them so NEWS-37 … NEWS-42 take the fixture's keys (likewise DARK-1 … 11, 23 to 25).",
+    "Seed: Legal shows a median (1s) because the seed moved Tasks through it; the fixture's Legal has none.",
+    "Seed: the 403 is /v1/projects/NEWS/seen: the seeding admin is not a Member of NEWS."
   ],
   "vf-7": [
-    "Seed: Build's count reads 13 waiting where vf-7 has 1 (see vf-1)."
+    "Fixed 4e74ad1: the station the selected Task is at is ringed (vf-7's Build).",
+    "Seed: Build's count reads 13 waiting where vf-7 has 1 (see vf-1).",
+    "Decided (plan, vf-7: 'the Connector hover is the shipped popover'): the hover is the line's one-sentence tip, 'Review → Build: when the holder says needs changes', not vf-7's two-line card; the hovered label is not outlined."
   ],
   "vf-8": [
-    "Seed: Implementation's Build reads 13 waiting where vf-8 has 1 (see vf-1)."
+    "Seed: Implementation's Build reads 13 waiting where vf-8 has 1 (see vf-1), so its head reads 19 Tasks.",
+    "Decided (Task 4, log rows 1 and 4): Edit and ⋯ in each head; no scope chip or Filter on row 2.",
+    "Left for the lead: in a column (and on a phone, vf-10) the frame stacks a Step as name + its return '↩ needs changes', then Skill · median · takers, then chips, and puts 'N today' under Done; the build keeps the wide row's order (name · facts, chips, then marks with '↩ needs changes → Build' on their own line, Task 1 log row 4 for the target).",
+    "Shipped: Retrospective's Done reads '0 today'; vf-8 draws a bare Done."
   ],
-  "vf-9": [],
+  "vf-9": [
+    "Fixed b86cb58 and 8e95b12: the Skill select carries the tag glyph (⌖ qa ⌄) and a name field is as wide as its name.",
+    "Decided (plan, Editing: 'the Changes chip's count … stays'): 4 changes, the draft model's count: QA added, Review · pass re-pointed to QA, QA · pass → Done added, QA · fail → Build added; vf-9's 3 was drawn without the model.",
+    "Decided (Task 5, log rows 1, 2, 3, 5, 7): the rail's outcome edited as fields under its station (pass → Review ⌄ ×, with 'Done undo' on a re-pointed one), the main-way dot beside each outcome of a Step with two or more, each Step's ⋯, Hold ⌄ for a Step without a Skill, the Workflow's name as a field above the line.",
+    "Shipped: while editing, the crumb names the Workflow as text, not vf-9's picker chip."
+  ],
   "vf-10": [
-    "Seed: Build reads 13 waiting where vf-10 has 1 (see vf-1)."
+    "Seed: Build reads 13 waiting where vf-10 has 1 (see vf-1).",
+    "Fixed 16d396f: the scope chip reads 'All' on a phone where it read 'All …'; vf-10 draws no scope chip, and row 2 keeps it.",
+    "Left for the lead: Needs you sits above the line on a phone (Live.tsx: 'A phone reads it top to bottom: Needs you, the line, What's happening'); vf-10 draws both panels under the line, and the plan says 'the panels under the line as today'.",
+    "Left for the lead: the narrow Step composition (see vf-8)."
+  ],
+  "own-page": [
+    "The owner's MAIN shape (OWN, seeded): Build's, QA's and Review's tracks nest without a crossing; Acceptance stands in When a Parent ends as its own station, pass → Done and fail → Build as marks (Task 1, log row 3); no console error.",
+    "Fixed 4f6b31d (found on a live pickup, shot separately as own-live.png): a pickup's 'tester picked up · now' tag lay over the count beside its chip; it now stands in the row's flow and the next chip wraps."
+  ],
+  "own-list": [
+    "One column, as wide as the page; its line is the page's own. Nothing overlaps or is cut."
+  ],
+  "own-page-phone": [
+    "Every Step's facts fit beside its name at 390; '⇢ Build' wraps under Backlog; the three tracks stay beside the rail. Nothing is cut."
+  ],
+  "own-list-phone": [
+    "The head reads grip · Implementation · 8 Tasks · Edit · ⋯ on one line; '+ Workflow' is its icon on row 2. Nothing is cut."
   ]
 }
