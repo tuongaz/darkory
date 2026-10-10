@@ -9,7 +9,7 @@ const now = Date.parse("2026-10-08T10:42:05Z");
 const ago = (m: number) => new Date(now - m * 60_000).toISOString();
 
 // The retro agent the Runner starts, paused: the only taker at Retro.
-const retroAgent: Member = { id: "m-retro", name: "retro", kind: "agent", admin: false, created_at: ago(9000), agent: { command: "claude", args: [], model: "m", env: {}, unattended: true, paused: true } };
+const retroAgent: Member = { id: "m-retro", name: "retro", kind: "agent", admin: false, created_at: ago(9000), agent: { command: "claude", args: [], model: "m", env: {}, unattended: true, paused: true, shifts: 1 } };
 const members = new Map([ada, bob, builder, retroAgent].map((m) => [m.id, m]));
 
 function wf(): Workflows {

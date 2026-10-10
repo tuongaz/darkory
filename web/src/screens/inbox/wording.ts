@@ -67,6 +67,8 @@ const kinds: Record<ActivityKind, KindWords> = {
   "task.ranked": { group: "Task", label: "Ranked", verb: "ranked" },
   "task.owner_passed": { group: "Task", label: "Ownership passed", verb: "passed the ownership of" },
   "task.labels_set": { group: "Task", label: "Labels set", verb: "set the Labels of" },
+  "task.pull_request_opened": { group: "Task", label: "Pull request opened", verb: "opened a pull request on" },
+  "task.pull_request_merged": { group: "Task", label: "Pull request merged", verb: "merged a pull request on" },
   "workflow.changed": { group: "Workflow", label: "Changed", verb: "changed" },
   "label.created": { group: "Label", label: "Created", verb: "created the Label" },
   "label.changed": { group: "Label", label: "Changed", verb: "changed the Label" },
@@ -77,6 +79,7 @@ const kinds: Record<ActivityKind, KindWords> = {
   "project.member_removed": { group: "Project", label: "Member removed", verb: "removed" },
   "skill.created": { group: "Skill", label: "Created", verb: "created the Skill" },
   "skill.version_published": { group: "Skill", label: "Version published", verb: "published" },
+  "skill.changed": { group: "Skill", label: "Changed", verb: "changed" },
   "member.created": { group: "Member", label: "Created", verb: "created the Member" },
   "member.updated": { group: "Member", label: "Updated", verb: "updated the Member" },
   "member.manager_set": { group: "Member", label: "Reporting line set", verb: "set the Reporting line of" },
@@ -287,6 +290,12 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
     case "task.skill_proposed":
       s.verb = `proposed ${skill(text(p, "skill_id")) ?? "a Skill"} v${(number(p, "based_on_version") ?? 0) + 1} on`;
       break;
+    case "task.pull_request_opened":
+    case "task.pull_request_merged": {
+      const n = number(p, "number");
+      if (n !== undefined) s.verb = `${e.kind === "task.pull_request_opened" ? "opened" : "merged"} #${n} on`;
+      break;
+    }
     case "task.ranked":
       s.details.push(`Rank #${text(p, "from")} → #${text(p, "to")}`);
       break;
@@ -333,6 +342,11 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
       const project = s.subject?.type === "text" ? s.subject.text : "a Project";
       s.subject = { type: "text", text: member(text(p, "member_id")) };
       s.after.push(`${e.kind === "project.member_added" ? "to" : "from"} ${project}`);
+      break;
+    }
+    case "skill.changed": {
+      const id = text(p, "project_id");
+      s.details.push(id ? (l.projects.get(id)?.key ?? "a Project") : "Organisation");
       break;
     }
     case "skill.version_published":

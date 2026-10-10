@@ -275,7 +275,7 @@ describe("Settings › a Member", () => {
 });
 
 describe("Settings › Agents", () => {
-  const runner: Member = { ...builder, agent: { command: "claude", args: [], model: "claude-sonnet-5-5", env: {}, unattended: true, paused: false } };
+  const runner: Member = { ...builder, agent: { command: "claude", args: [], model: "claude-sonnet-5-5", env: {}, unattended: true, paused: false, shifts: 1 } };
   const paused: Member = { id: "m-qa", name: "qa", kind: "agent", admin: false, created_at: at, agent: { ...runner.agent!, model: "claude-opus-5-5", paused: true } };
   const own: Member = { id: "m-bot", name: "bot", kind: "agent", admin: false, created_at: at };
 

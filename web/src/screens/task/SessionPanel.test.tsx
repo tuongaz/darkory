@@ -26,7 +26,7 @@ vi.mock("@xterm/addon-fit", () => ({
 const minutes = (m: number) => new Date(Date.now() + m * 60_000).toISOString();
 
 // The Runner starts sessions only for agents with agent settings.
-const agent: Member = { ...builder, agent: { command: "claude", args: [], model: "claude-sonnet-5-5", env: {}, unattended: true, paused: false } };
+const agent: Member = { ...builder, agent: { command: "claude", args: [], model: "claude-sonnet-5-5", env: {}, unattended: true, paused: false, shifts: 1 } };
 const claim: Claim = { id: "c-1", task_id: "k-3", holder_id: agent.id, session_id: "sess-builder", skill_id: engineer.id, started_at: minutes(-5), expires_at: minutes(5), heartbeat_timeout_seconds: 300 };
 const session: RunnerSession = {
   task_id: "k-3",

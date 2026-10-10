@@ -15,6 +15,7 @@ const settings: AgentSettings = {
   env: { HTTP_PROXY: "http://proxy:3128" },
   unattended: true,
   paused: false,
+  shifts: 1,
 };
 const runBuilder: Member = { ...builder, agent: settings };
 const pausedReviewer: Member = { id: "m-reviewer", name: "reviewer", kind: "agent", admin: false, created_at: at, agent: { ...settings, model: "claude-opus-5-5", paused: true } };
