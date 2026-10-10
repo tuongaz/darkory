@@ -146,7 +146,7 @@ function RowActs({
         </ActButton>
       </span>
       <span role="cell" className={more}>
-        <MoreMenu label={`More for ${name}`} size="icon-xs">
+        <MoreMenu label={`More for ${name}`} size="icon-xs" className="group-focus-within/row:text-foreground group-hover/row:text-foreground">
           <DropdownMenuItem asChild>
             <Link to={edit}>Edit</Link>
           </DropdownMenuItem>

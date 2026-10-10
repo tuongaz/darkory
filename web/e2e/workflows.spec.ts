@@ -582,7 +582,12 @@ test("11 · Workflows opens on a list of the five with their figures", async ({ 
 test("11b · a row's acts are muted at rest and full contrast while the row is hovered or focused; nothing moves", async ({ browser }) => {
   const { page, errors, ctx } = await open(browser, "/projects/ACC/workflows");
   const row = workflowsTable(page).getByRole("row", { name: "Bugs" });
-  const acts = [row.getByRole("button", { name: "Move Bugs later" }), row.getByRole("link", { name: "Edit Bugs" }), row.getByRole("button", { name: "Delete Bugs" })];
+  const acts = [
+    row.getByRole("button", { name: "Move Bugs later" }),
+    row.getByRole("link", { name: "Edit Bugs" }),
+    row.getByRole("button", { name: "Delete Bugs" }),
+    row.getByRole("button", { name: "More for Bugs" }),
+  ];
   await expect(acts[2]).toBeVisible();
   const look = () => Promise.all(acts.map((a) => a.evaluate((el) => ({ color: getComputedStyle(el).color, box: el.getBoundingClientRect().toJSON() as DOMRect }))));
   await page.mouse.move(0, 0);
@@ -601,8 +606,7 @@ test("11b · a row's acts are muted at rest and full contrast while the row is h
   await row.getByRole("link", { name: "Bugs", exact: true }).focus();
   await expect.poll(async () => (await look())[2].color).toBe(hovered[2].color);
   // The ⋯ stands after them.
-  const more = (await row.getByRole("button", { name: "More for Bugs" }).boundingBox())!;
-  expect(more.x).toBeGreaterThan(rest[2].box.x);
+  expect(rest[3].box.x).toBeGreaterThan(rest[2].box.x);
   expect(errors).toEqual([]);
   await ctx.close();
 });

@@ -320,6 +320,7 @@ describe("the Workflows page of a Project of several", () => {
     }
     // The ⋯ is the row's last cell, shown at every width, not only on a phone.
     const more = within(row).getByRole("button", { name: "More for Bugs" });
+    expect(more).toHaveClass("text-muted-foreground", "group-hover/row:text-foreground", "group-focus-within/row:text-foreground");
     const cell = more.closest('[role="cell"]')!;
     expect(within(row).getAllByRole("cell").at(-1)).toBe(cell);
     expect(cell.className).not.toMatch(/(^|\s)(sm:)?hidden(\s|$)/);
