@@ -179,3 +179,38 @@ describe("a Project's Activity", () => {
     expect(screen.queryByRole("button", { name: "Load older" })).not.toBeInTheDocument();
   });
 });
+
+describe("a Claim folded in the Activity", () => {
+  it("says the Claim's end with what it carried, links its files, and counts entries and rows", async () => {
+    const trail = [
+      entry(14, "task.evidence_attached", cart.id, { actor_id: builder.id, at: minutes(0), payload: { evidence_id: "e-log", filename: "shift-WEB-3-builder-101600.log", size: 56_800, kind: "log" } }),
+      entry(13, "task.released", cart.id, { actor_id: builder.id, at: minutes(-1), payload: { claim_id: "c" } }),
+      entry(12, "task.evidence_attached", cart.id, { actor_id: builder.id, at: minutes(-2), payload: { evidence_id: "e-wc", filename: "wc.log", size: 753, kind: "evidence" } }),
+      entry(11, "task.note_added", cart.id, { actor_id: builder.id, at: minutes(-3), payload: {} }),
+      entry(10, "task.claimed", cart.id, { actor_id: builder.id, at: minutes(-4), payload: { claim_id: "c", skill_id: engineer.id } }),
+    ];
+    recordApi({ tasks: [cart], activity: trail });
+    renderApp("/projects/WEB/activity");
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    const released = rows()[0];
+    expect(released).toHaveTextContent("builder released WEB-3 Build the cart · a Note");
+    expect(within(released).getByRole("link", { name: /wc\.log/ })).toHaveAttribute("href", "/v1/evidence/e-wc/content");
+    expect(within(released).getByRole("link", { name: /Shift log/ })).toHaveTextContent("Shift log · 55 KB");
+    expect(screen.getByRole("contentinfo")).toHaveTextContent("5 entries · 2 rows");
+  });
+
+  it("folds the entries the Kind filter kept, not those it left out", async () => {
+    recordApi({
+      tasks: [cart],
+      activity: [
+        entry(3, "task.released", cart.id, { actor_id: builder.id, at: minutes(-1), payload: { claim_id: "c" } }),
+        entry(2, "task.note_added", cart.id, { actor_id: builder.id, at: minutes(-2), payload: {} }),
+        entry(1, "task.claimed", cart.id, { actor_id: builder.id, at: minutes(-3), payload: { claim_id: "c" } }),
+      ],
+    });
+    renderApp("/projects/WEB/activity?kind=task.note_added");
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(rows()[0]).toHaveTextContent("builder added a Note to WEB-3");
+    expect(screen.getByRole("contentinfo")).toHaveTextContent(/^1 entry$/);
+  });
+});
