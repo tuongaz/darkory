@@ -59,7 +59,8 @@ export function MyWorkPage() {
                     task={t}
                     project={project(t)}
                     stands={<StandsAt task={t} steps={steps} me={id} />}
-                    marks={claim && <HeartbeatMeter claim={claim} variant="compact" className="text-xs" />}
+                    // A Claim with no expiry is said once, by when it was claimed.
+                    marks={claim?.expires_at && <HeartbeatMeter claim={claim} variant="compact" className="text-xs" />}
                     by={skill && <Pill tone="outline">{skill}</Pill>}
                     when={claim?.started_at}
                     whenWhat="Claimed"

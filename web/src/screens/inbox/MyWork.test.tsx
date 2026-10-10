@@ -35,7 +35,9 @@ describe("My work", () => {
     // Held 2 minutes, far from its lapse: the hold's age; a Claim with no expiry says the same.
     expect(row(holding, "WEB-3")).toHaveTextContent("working 2m");
     expect(row(holding, "WEB-3")).toHaveTextContent("Build");
-    expect(row(holding, "WEB-4")).toHaveTextContent("working 2m");
+    // With no expiry the hold is said once, by when I claimed it.
+    expect(row(holding, "WEB-4")).not.toHaveTextContent("working");
+    expect(within(row(holding, "WEB-4")).getByTitle(/^Claimed /)).toBeInTheDocument();
     expect(holding).not.toHaveTextContent("No expiry");
     expect(row(holding, "WEB-4")).toHaveTextContent("Review");
 
