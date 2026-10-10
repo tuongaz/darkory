@@ -15,9 +15,10 @@ import { ActButton } from "@/screens/workflow/panels/NeedCard";
 import { consequence, type NeedItem } from "@/screens/workflow/panels/needs";
 import { ageText } from "@/lib/time";
 import { useNeeds } from "@/screens/workflow/panels/useNeeds";
-import { takeableCap } from "./derive";
-import { AnswerButton, ClaimButton, GroupHeader, KindPill, StandsAt, TaskRow } from "./parts";
-import { useStepNames } from "./queries";
+import { PullRequestChip } from "@/components/PullRequestChip";
+import { awaitingMerge, takeableCap } from "./derive";
+import { AnswerButton, ClaimButton, GroupHeader, KindPill, MergeAct, StandsAt, TaskRow } from "./parts";
+import { useAwaitingMerge, useStepNames } from "./queries";
 import { liveClaim } from "@/work";
 
 /**
@@ -37,18 +38,21 @@ export function InboxPage() {
   const needs = useNeeds();
   const now = useNow();
   const takeable = useTakeable();
+  const landing = useAwaitingMerge(id);
   const [allTakeable, setAllTakeable] = useState(false);
 
-  const failed = [takeable].find((q) => q.isError)?.error ?? needs.error;
-  const loading = takeable.isPending || needs.loading;
+  const failed = [takeable, landing].find((q) => q.isError)?.error ?? needs.error;
+  const loading = takeable.isPending || landing.isPending || needs.loading;
 
   // Across Projects, a hold or a paused agent's wait is listed only where nobody else could move it;
   // a question I have claimed to answer is in My work, held by me.
   const items = needs.items.filter((i) => ((i.act !== "move" && i.act !== "resume") || i.onlyMe) && !(i.act === "answer" && liveClaim(i.task, now)?.holder_id === id));
+  const merges = awaitingMerge(landing.data ?? [], id);
   const listed = new Set(items.map((i) => i.task.id));
   const take = (takeable.data ?? []).filter((t) => !listed.has(t.id));
   const takeShown = allTakeable ? take : take.slice(0, takeableCap);
-  const nothing = items.length + take.length === 0;
+  const needCount = items.length + merges.length;
+  const nothing = needCount + take.length === 0;
   const project = (t: Task) => dir.projects.get(t.project_id);
 
   return (
@@ -74,15 +78,27 @@ export function InboxPage() {
               </Button>
             }
           >
-            No questions for you, no decisions waiting, nothing you can take.
+            No questions for you, no decisions or merges waiting, nothing you can take.
           </EmptyState>
         ) : (
           <>
-            {items.length > 0 && (
+            {needCount > 0 && (
               <section aria-label="Needs you">
-                <GroupHeader title="Needs you" count={items.length} />
+                <GroupHeader title="Needs you" count={needCount} />
                 {items.map((item, i) => (
                   <NeedRow key={item.task.id} item={item} project={project(item.task)} steps={steps} me={id} primary={i === 0} />
+                ))}
+                {merges.map((m, i) => (
+                  <TaskRow
+                    key={m.task.id}
+                    task={m.task}
+                    project={project(m.task)}
+                    marks={<PullRequestChip pr={m.pr} className="relative z-10" />}
+                    by="Awaits your merge"
+                    when={m.task.ended_at}
+                    whenWhat="Done"
+                    action={<MergeAct task={m.task} primary={items.length === 0 && i === 0} />}
+                  />
                 ))}
               </section>
             )}
@@ -111,7 +127,7 @@ export function InboxPage() {
                       by={skill && <Pill tone="outline">{skill}</Pill>}
                       when={t.waiting_since}
                       whenWhat="Waiting since"
-                      action={<ClaimButton task={t} primary={items.length === 0 && i === 0} />}
+                      action={<ClaimButton task={t} primary={needCount === 0 && i === 0} />}
                     />
                   );
                 })}

@@ -1,9 +1,10 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import type { TaskDetail } from "@/api/client";
+import type { Task, TaskDetail } from "@/api/client";
 import { ada, bob, builder, engineer, ops, parentTask, step, subtask, task } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
+import { refuse } from "@/test/api";
 import { awaitingComplete, lapsesOn, staleProposals, takeableNow } from "./derive";
 import { claim, entry, minutes, recordApi } from "./testing";
 
@@ -135,6 +136,64 @@ describe("the Inbox", () => {
     renderApp("/inbox");
     const take = await section("Takeable by you");
     expect(within(take).getByRole("link", { name: "Build the cart" })).toHaveAttribute("href", "/inbox?task=WEB-4");
+  });
+
+  describe("the merge row", () => {
+    const url = "https://github.com/o/r/pull/7";
+    const doneAt = minutes(-8);
+    const landed = (n: number, state: "open" | "merged", extra: Partial<Task> = {}) =>
+      task(n, { title: `Landed ${n}`, state: "done", step_id: undefined, ended_at: doneAt, pull_request: { number: 7, url, state }, ...extra });
+    const runner = (on: boolean) => ({ "GET /v1/runner/sessions": { items: [], runner: on } });
+
+    it("lists my Done Task whose pull request is open, not one merged nor someone else's; without a Runner its act is the link", async () => {
+      recordApi({ tasks: [landed(1, "open"), landed(2, "merged"), landed(3, "open", { owner_id: bob.id })], extra: runner(false) });
+      renderApp("/inbox");
+      const needs = await section("Needs you");
+      await waitFor(() => expect([...needs.querySelectorAll("[data-task]")].map((r) => r.getAttribute("data-task"))).toEqual(["WEB-1"]));
+      const r = row(needs, "WEB-1");
+      expect(r).toHaveTextContent("Landed 1");
+      expect(r).toHaveTextContent("Awaits your merge");
+      expect(within(r).getByRole("link", { name: "#7 open" })).toHaveAttribute("href", url);
+      const open = within(r).getByRole("link", { name: "Open #7" });
+      expect(open).toHaveAttribute("href", url);
+      expect(open).toHaveAttribute("rel", "noreferrer noopener");
+      expect(within(r).queryByRole("button", { name: /Merge/ })).not.toBeInTheDocument();
+      expect(within(r).getByRole("time")).toHaveAttribute("datetime", doneAt);
+    });
+
+    it("merges through the Runner after the confirm, and the row leaves once it is merged", async () => {
+      const t = landed(1, "open");
+      const { calls } = recordApi({
+        tasks: [t],
+        extra: {
+          ...runner(true),
+          "POST /v1/tasks/:task/pull-request/merge": () => {
+            t.pull_request = { ...t.pull_request!, state: "merged" };
+            return t;
+          },
+        },
+      });
+      renderApp("/inbox");
+      const needs = await section("Needs you");
+      await userEvent.click(await within(needs).findByRole("button", { name: "Merge WEB-1" }));
+      const dialog = await screen.findByRole("dialog", { name: "Merge #7 into main" });
+      await userEvent.click(within(dialog).getByRole("button", { name: "Merge" }));
+      await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/v1/tasks/k-1/pull-request/merge")).toBe(true));
+      expect(await screen.findByRole("heading", { name: "Nothing needs you" })).toBeInTheDocument();
+    });
+
+    it("says GitHub's refusal in a toast", async () => {
+      recordApi({
+        tasks: [landed(1, "open")],
+        extra: { ...runner(true), "POST /v1/tasks/:task/pull-request/merge": refuse(409, "conflict", "Pull request #7 is not mergeable: checks failing") },
+      });
+      renderApp("/inbox");
+      const needs = await section("Needs you");
+      await userEvent.click(await within(needs).findByRole("button", { name: "Merge WEB-1" }));
+      const dialog = await screen.findByRole("dialog", { name: "Merge #7 into main" });
+      await userEvent.click(within(dialog).getByRole("button", { name: "Merge" }));
+      expect(await screen.findByText("Pull request #7 is not mergeable: checks failing")).toBeInTheDocument();
+    });
   });
 
   it("says so when nothing needs me", async () => {

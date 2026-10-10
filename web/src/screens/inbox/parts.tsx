@@ -1,8 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, type ReactNode } from "react";
+import { GitMergeIcon } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, type To } from "react-router";
 import { api, call, type Project, type Task } from "@/api/client";
-import { useDirectory, useLabels, useRunnerSessions } from "@/api/queries";
+import { useDirectory, useLabels, useRunnerSessions, useTask } from "@/api/queries";
 import { usePeekLink } from "@/app/peek";
 import { useSelectedTask } from "@/app/selection";
 import { useNow } from "@/clock";
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { cn } from "@/lib/utils";
 import { kindLabel, taskWorkGlyph } from "@/work";
+import { MergeDialog } from "@/screens/task/dialogs";
 import { startOfDay } from "./derive";
 import type { StepName } from "./queries";
 import { refusalToast } from "./toast";
@@ -236,4 +238,41 @@ export function OpenButton({ task, label = "Open" }: { task: Task; label?: strin
       </Link>
     </Button>
   );
+}
+
+/**
+ * The act on a Done Task whose pull request is open. With a Runner attached to the server, Merge:
+ * the confirm names the branch it lands on, the Runner merges on GitHub, and a refusal is a toast
+ * in GitHub's words. Without one, the act is the pull request itself, opened on GitHub.
+ */
+export function MergeAct({ task, primary }: { task: Task; primary?: boolean }) {
+  const runner = useRunnerSessions().data?.runner;
+  const [open, setOpen] = useState(false);
+  const pr = task.pull_request;
+  if (!pr) return null;
+  if (!runner) {
+    return (
+      <Button asChild size="xs" variant={primary ? "default" : "outline"} className="relative z-10">
+        <a href={pr.url} target="_blank" rel="noreferrer noopener">
+          Open #{pr.number}
+        </a>
+      </Button>
+    );
+  }
+  return (
+    <>
+      <Button size="xs" variant={primary ? "default" : "outline"} className="relative z-10" aria-label={`Merge ${task.key}`} onClick={() => setOpen(true)}>
+        <GitMergeIcon />
+        Merge
+      </Button>
+      {open && <InboxMergeDialog taskKey={task.key} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+/** The Task page's Merge confirm, over the Inbox: it reads the Task's record for the branch it lands on. */
+function InboxMergeDialog({ taskKey, onClose }: { taskKey: string; onClose: () => void }) {
+  const detail = useTask(taskKey).data;
+  if (!detail) return null;
+  return <MergeDialog detail={detail} open onOpenChange={(o) => !o && onClose()} onRefused={refusalToast} />;
 }

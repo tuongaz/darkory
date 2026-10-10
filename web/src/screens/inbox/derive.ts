@@ -1,4 +1,4 @@
-import type { Activity, Member, RunnerSessionState, Skill, Task, TaskDetail, Workflows } from "@/api/client";
+import type { Activity, Member, PullRequest, RunnerSessionState, Skill, Task, TaskDetail, Workflows } from "@/api/client";
 import { stepTitle } from "@/components/workflowLine/model";
 import { stepsInOrder } from "@/screens/board/derive";
 import { liveClaim } from "@/work";
@@ -41,7 +41,20 @@ export type Decision =
   /** A Parent whose Subtasks have all ended: its Owner completes or drops it. */
   | { kind: "complete"; task: Task; acceptance?: "done" | "dropped" }
   /** A Retrospective carrying a proposal written against a Skill version no longer current. */
-  | { kind: "stale"; task: Task; skill: string; basedOn: number; current: number };
+  | { kind: "stale"; task: Task; skill: string; basedOn: number; current: number }
+  /** A Done Task whose pull request is open: its Owner merges it. */
+  | { kind: "merge"; task: Task; pr: PullRequest };
+
+/**
+ * The Done Tasks `me` owns whose pull request the Runner read open on GitHub, oldest Done first:
+ * the work is finished and lands once its Owner merges it.
+ */
+export function awaitingMerge(tasks: readonly Task[], me: string): Extract<Decision, { kind: "merge" }>[] {
+  return tasks
+    .filter((t) => t.state === "done" && t.owner_id === me && t.pull_request?.state === "open")
+    .sort((a, b) => Date.parse(a.ended_at ?? "") - Date.parse(b.ended_at ?? ""))
+    .map((task) => ({ kind: "merge" as const, task, pr: task.pull_request! }));
+}
 
 /**
  * The open Parents among `owned` whose every Subtask has ended and which wait for their Owner's

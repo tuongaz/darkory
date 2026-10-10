@@ -314,7 +314,7 @@ export function StopSessionDialog({ detail, session, open, onOpenChange }: Dialo
  * Runner signs in with. A refusal (checks failing, a conflict, a head or base that is not the
  * Task's) stays here in GitHub's words.
  */
-export function MergeDialog({ detail, open, onOpenChange }: DialogProps) {
+export function MergeDialog({ detail, open, onOpenChange, onRefused }: DialogProps & { onRefused?: (err: unknown) => void }) {
   const { task } = detail;
   const pr = task.pull_request;
   const { project } = useTaskWorkflow(task.project_id);
@@ -323,6 +323,12 @@ export function MergeDialog({ detail, open, onOpenChange }: DialogProps) {
   const merge = useMutation({
     mutationFn: () => call(api.POST("/v1/tasks/{task}/pull-request/merge", { params: { path: { task: task.id } } })),
     onSuccess: done(`#${pr?.number} merged`, onOpenChange),
+    // Where the dialog was opened from a list (the Inbox), the refusal is a toast and the dialog closes.
+    onError: (err) => {
+      if (!onRefused) return;
+      onRefused(err);
+      onOpenChange(false);
+    },
   });
   if (!pr) return null;
   return (
@@ -334,7 +340,7 @@ export function MergeDialog({ detail, open, onOpenChange }: DialogProps) {
       submitLabel="Merge"
       onSubmit={() => merge.mutate()}
       pending={merge.isPending}
-      error={merge.error}
+      error={onRefused ? undefined : merge.error}
     >
       <Consequences>
         <Consequence mark={<GitMergeIcon />}>
