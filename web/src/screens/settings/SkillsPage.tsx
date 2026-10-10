@@ -11,6 +11,7 @@ import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { Property, PropertiesRail } from "@/components/PropertiesRail";
+import { Markdown } from "@/components/Markdown";
 import { Loaded } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -361,7 +362,7 @@ function ProposalNote({ retroNotes, author, since }: { retroNotes: { author_id: 
     <div className="flex min-h-10 items-center gap-2 border-t px-3 py-2">
       <MessageSquareIcon className="size-3.5 flex-none text-muted-foreground" />
       <span className="text-muted-foreground">Note</span>
-      <span className="min-w-0">{note.body}</span>
+      <Markdown text={note.body} className="min-w-0" />
     </div>
   );
 }

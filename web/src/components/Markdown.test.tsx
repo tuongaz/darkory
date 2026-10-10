@@ -55,10 +55,12 @@ describe("Markdown", () => {
     expect([...el.querySelectorAll("p")].map((p) => p.textContent)).toEqual(["Hi alert(1)bold", "after"]);
   });
 
-  it("renders a heading as a paragraph", () => {
-    const el = md("# Plan\n## Steps\nDo it");
+  it("renders a heading as a semibold paragraph", () => {
+    const el = md("# Plan\n## Goal\nDo it");
     expect(el.querySelector("h1, h2, h3, h4, h5, h6")).toBeNull();
-    expect([...el.querySelectorAll("p")].map((p) => p.textContent)).toEqual(["Plan", "Steps", "Do it"]);
+    const ps = [...el.querySelectorAll("p")];
+    expect(ps.map((p) => p.textContent)).toEqual(["Plan", "Goal", "Do it"]);
+    expect(ps.map((p) => p.classList.contains("font-semibold"))).toEqual([true, true, false]);
   });
 
   it("renders a table as its text, with no table", () => {
@@ -95,5 +97,40 @@ describe("Markdown", () => {
     const el = md("# H\n\n- `a`\n\n```\nb\n```\n\n[l](https://x.y) ![i](https://x.y/i.png) | t |\n| - |\n| 1 |");
     expect(document.querySelectorAll("style")).toHaveLength(0);
     expect(el.querySelectorAll("[style]")).toHaveLength(0);
+  });
+
+  it("renders a task list's items ticked or not, with no input and no leading space", () => {
+    const el = md("- [x] tests pass\n- [ ] docs\n- plain");
+    expect(el.querySelector("input")).toBeNull();
+    const items = [...el.querySelectorAll("li")];
+    expect(items.map((li) => li.getAttribute("data-task"))).toEqual(["done", "open", null]);
+    expect(items[0].querySelector('[role="img"]')).toHaveAttribute("aria-label", "Checked");
+    expect(items[1].querySelector('[role="img"]')).toHaveAttribute("aria-label", "Unchecked");
+    expect(items[2].querySelector('[role="img"]')).toBeNull();
+    expect(items.map((li) => li.textContent)).toEqual(["tests pass", "docs", "plain"]);
+  });
+
+  it("ticks a loose task list's items too", () => {
+    const items = [...md("- [x] one\n\n- [ ] two").querySelectorAll("li")];
+    expect(items.map((li) => li.getAttribute("data-task"))).toEqual(["done", "open"]);
+    expect(items.map((li) => li.textContent?.trim())).toEqual(["one", "two"]);
+  });
+
+  it("renders an http address that is not absolute as its text", () => {
+    const el = md("[a](http:/v1/tasks) [b](http:foo) [c](//example.com/x)");
+    expect(el.querySelector("a")).toBeNull();
+    expect(el).toHaveTextContent("a b c");
+  });
+
+  it("links the address it checked, written out in full", () => {
+    expect(md("[a]( HTTPS://Example.COM )").querySelector("a")).toHaveAttribute("href", "https://example.com/");
+  });
+
+  it("renders a footnote as its text with no id on any element", () => {
+    const el = md("text[^1]\n\n[^1]: the note");
+    expect(el.querySelectorAll("[id]")).toHaveLength(0);
+    expect(el.querySelector("a")).toBeNull();
+    expect(el).toHaveTextContent("the note");
+    expect(el.textContent).not.toContain("↩");
   });
 });

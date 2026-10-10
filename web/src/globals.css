@@ -416,6 +416,16 @@
   .prose-dk strong {
     @apply font-semibold;
   }
+  /* A task list's item: its box, ticked or not, where the bullet would be. */
+  .prose-dk li[data-task] {
+    @apply relative list-none;
+  }
+  .prose-dk .task-box {
+    @apply absolute top-[0.2em] -left-5 size-3.5 text-muted-foreground;
+  }
+  .prose-dk li[data-task="done"] > .task-box {
+    @apply text-foreground;
+  }
 
   /* A Member's mark (MemberAvatar): a tinted disc, or its Avatar, round. A human's has a neutral
      hairline round it. An agent's face sits inside a thick ring in the AI gradient with a clear
