@@ -44,7 +44,7 @@ export function ChangesChip({ editor }: { editor: DraftEditor }) {
           <button
             type="button"
             aria-label={`${n} ${n === 1 ? "change" : "changes"}: list them`}
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-ring bg-background px-2.5 text-xs font-medium whitespace-nowrap text-ring outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent"
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-ring bg-background px-2.5 text-xs font-medium whitespace-nowrap outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent"
           >
             {n} {n === 1 ? "change" : "changes"}
             <ChevronDownIcon aria-hidden className="size-3" />

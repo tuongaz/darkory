@@ -554,6 +554,12 @@ describe("a Workflow's editor", () => {
         "PATCH /v1/members/m-new/agent",
       ]);
       expect(puts).toHaveLength(0);
+      // Done closes the token; Escape then closes who takes Build, and another Step's opens alone.
+      await userEvent.click(screen.getByRole("button", { name: "Done" }));
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("region", { name: "Taken by" })).toBeNull());
+      await takers("Review");
+      expect(screen.getAllByRole("region", { name: "Taken by" })).toHaveLength(1);
     });
 
     it("gives Members a Skill created on Save, in the same PUT, and none to a hold", async () => {
