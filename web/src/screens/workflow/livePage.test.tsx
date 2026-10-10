@@ -217,6 +217,19 @@ describe("the Workflow page", () => {
     expect(screen.getByRole("toolbar", { name: /Filter/ })).toBeInTheDocument();
   });
 
+  it("links a Step's list to the Tasks list at the Step under the scope and the Filter in force, one pill per field", async () => {
+    const subs = [8, 9, 10, 11, 12, 13].map((n) => task(n, { parent_id: "k-7", rank: undefined, ...blockedBy(14) }));
+    serve([task(7, { step_id: undefined, title: "Emoji reactions", subtask_counts: { open: 6, working: 0, done: 0, dropped: 0 } }), ...subs, task(14)]);
+    // The Filter's own Parent pill gives way to the scope's; a pill the list cannot read is left out.
+    const filters = ["blocked:is:true", "parent:in:k-7,k-99", "nonsense:is:x"].map((f) => `filter.tasks=${encodeURIComponent(f)}`).join("&");
+    renderApp(`/projects/WEB/workflows/wf-work?scope=k-7&${filters}`);
+    const list = await listAt("Build");
+    expect(keys(list)).toHaveLength(5);
+    const href = within(list).getByRole("link", { name: "1 more Task" }).getAttribute("href")!;
+    expect(href.startsWith("/projects/WEB/tasks?")).toBe(true);
+    expect(new URLSearchParams(href.split("?")[1]).getAll("filter.tasks")).toEqual([`step:is:${step.build}`, "parent:is:k-7", "blocked:is:true"]);
+  });
+
   it("the scope menu lists All Tasks, the Parents with open Subtasks and No Parent, and narrows on a pick", async () => {
     serve([task(7, { step_id: undefined, title: "Emoji reactions", subtask_counts: { open: 1, working: 0, done: 0, dropped: 0 } }), task(8, { parent_id: "k-7", rank: undefined }), task(10)]);
     renderApp("/projects/WEB/workflows/wf-work");

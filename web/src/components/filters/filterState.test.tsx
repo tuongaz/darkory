@@ -3,7 +3,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import { describe, expect, it } from "vitest";
-import { parseFilter, serializeFilter, useFilterState } from "./filterState";
+import { parseFilter, serializeFilter, stepFilterSearch, useFilterState } from "./filterState";
 
 function Probe({ entity = "tasks" }: { entity?: string }) {
   const location = useLocation();
@@ -130,3 +130,25 @@ describe("the wire format", () => {
     expect(parseFilter("q:contains:a+b")).toEqual({ field: "q", op: "contains", values: ["a+b"] });
   });
 });
+
+describe("stepFilterSearch", () => {
+  const read = (search: string) => new URLSearchParams(search).getAll("filter.tasks").map(parseFilter);
+  it("names the Step, first", () => {
+    expect(stepFilterSearch("st-build")).toBe(`filter.tasks=${encodeURIComponent("step:is:st-build")}`);
+  });
+
+  it("carries the other pills, one per field, the first of each winning, and drops any other Step", () => {
+    const search = stepFilterSearch("st-build", [
+      { field: "parent", op: "is", values: ["k-7"] },
+      { field: "step", op: "in", values: ["st-qa", "st-review"] },
+      { field: "blocked", op: "is", values: ["true"] },
+      { field: "parent", op: "is", values: ["k-9"] },
+    ]);
+    expect(read(search)).toEqual([
+      { field: "step", op: "is", values: ["st-build"] },
+      { field: "parent", op: "is", values: ["k-7"] },
+      { field: "blocked", op: "is", values: ["true"] },
+    ]);
+  });
+});
+

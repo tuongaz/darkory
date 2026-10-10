@@ -5,7 +5,7 @@ import { useLiveEntries } from "@/api/live";
 import { useMembers } from "@/api/queries";
 import { projectPath } from "@/app/currentProject";
 import { peekParam } from "@/app/peek";
-import { stepFilterSearch, useFilterState } from "@/components/filters/filterState";
+import { stepFilterSearch, type FilterPill } from "@/components/filters/filterState";
 import { Refusal } from "@/components/Refusal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,7 @@ export function LiveWorkflow({
   scope,
   onView,
   filter,
+  pills,
 }: {
   project: Project;
   /** The Workflow drawn, of a Project of several (`usePickedWorkflow`); the first when unsaid. */
@@ -43,6 +44,8 @@ export function LiveWorkflow({
   onView?: (v: LineView) => void;
   /** The Filter bar's test: Tasks it leaves out leave the line, counted into their Step's "+N". */
   filter?: (task: Task) => boolean;
+  /** The Filter's pills `filter` applies: what a Step's list link carries on to the Tasks list. */
+  pills?: readonly FilterPill[];
 }) {
   const { data, error } = useLineData(project.key, workflowId, scope, filter);
   // Of a Project of several Workflows the page is the drawn one's: its panels list its Tasks.
@@ -100,7 +103,7 @@ export function LiveWorkflow({
     // cut: when it and its Loops list leave the panels less than their 280px, the page scrolls.
     <div className="flex min-h-0 flex-1 flex-col overflow-auto lg:grid lg:grid-rows-[auto_minmax(280px,1fr)]">
       <div className="order-2 flex-none px-2 pt-2 sm:px-5 lg:order-none lg:px-5">
-        <LiveLine project={project} data={data} now={now} selected={selected} onSelect={setSelected} ringed={ringed} onOpenTask={openTask} />
+        <LiveLine project={project} data={data} now={now} selected={selected} onSelect={setSelected} ringed={ringed} onOpenTask={openTask} pills={pills} />
       </div>
       {/* One tree whether quiet or not, so neither panel remounts when What's happening folds. */}
       <div className={cn("contents lg:grid lg:min-h-0 lg:border-t", quiet ? "lg:grid-cols-1 lg:grid-rows-[auto_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)_440px]")}>
@@ -120,6 +123,7 @@ function LiveLine({
   onSelect,
   ringed,
   onOpenTask,
+  pills,
 }: {
   project: Project;
   data: LineData;
@@ -128,6 +132,7 @@ function LiveLine({
   onSelect: (id: string | null) => void;
   ringed: string | null;
   onOpenTask: (key: string) => void;
+  pills?: readonly FilterPill[];
 }) {
   const members = useMembers();
   const reduced = useReducedMotion();
@@ -137,7 +142,6 @@ function LiveLine({
     return { projectId: project.id, workflow: data.facts, drawn: data.drawnSteps, task: (id) => tasks.get(id), member: (id) => byId.get(id) };
   }, [project.id, data.facts, data.drawnSteps, data.records, members.data]);
   const flow = useLiveFlow(ctx, reduced);
-  const filter = useFilterState("tasks");
   const announced = useAnnouncement(ctx);
   const recordOf = useMemo(() => new Map<string, Task>(data.records.map((t) => [t.id, t])), [data.records]);
   const actionFor = (first: Chain["first"]) => {
@@ -147,8 +151,9 @@ function LiveLine({
     return first.kind === "answer" ? <AnswerButton task={task} /> : <ClaimButton task={task} />;
   };
   const s = data.scoped;
-  // A Step's list links to the Tasks list at the Step, under the scope and Filter its count was made under.
-  const narrowed = [...scopePills(data.scope), ...filter.pills];
+  // A Step's list links to the Tasks list at the Step, under the scope and Filter its count was made
+  // under: one pill per field, the scope's Parent over a Filter's.
+  const narrowed = [...scopePills(data.scope), ...(pills ?? [])];
   return (
     <>
       <WorkflowLine

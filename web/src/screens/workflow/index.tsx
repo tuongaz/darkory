@@ -185,7 +185,7 @@ export function WorkflowPage() {
       />
       <Content className="flex flex-col overflow-hidden">
         {view === "line" && <FilterChipRow {...filter.bar} />}
-        <LiveWorkflow project={project} workflowId={shown?.id} view={view} scope={scope} onView={setView} filter={filter.matches} />
+        <LiveWorkflow project={project} workflowId={shown?.id} view={view} scope={scope} onView={setView} filter={filter.matches} pills={filter.pills} />
       </Content>
       {deleting && acts.graph && (
         <DeleteWorkflowDialog
