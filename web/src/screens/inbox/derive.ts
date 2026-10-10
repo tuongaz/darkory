@@ -2,6 +2,7 @@ import type { Activity, Member, PullRequest, RunnerSessionState, Skill, Task, Ta
 import { stepTitle } from "@/components/workflowLine/model";
 import { stepsInOrder } from "@/screens/board/derive";
 import { allShiftsBusy, liveClaim } from "@/work";
+import { everyTakerBusy, stepTakers, waitsAtStep } from "@/screens/task/takers";
 
 // The rules the four screens read, apart from rendering, so the tests can hold them to the plan.
 
@@ -332,11 +333,19 @@ export function count(n: number, one: string, many = `${one}s`): string {
  * The Steps a Member takes in a Project, in its order, as the Agents page names them: `Bugs ›
  * Investigate` when the Project has two or more Workflows, else the Step's name.
  */
+export function takesOf(workflow: Pick<Workflows, "workflows" | "steps"> | undefined, memberId: string): string[] {
+  if (!workflow) return [];
+  return stepsInOrder(workflow)
+    .filter((s) => s.takers.some((t) => t.id === memberId))
+    .map((s) => stepTitle(s, workflow.workflows));
+}
+
 /**
- * What waits for a busy agent in a Project: while it holds as many Tasks as it has Shifts (its
- * settings' `shifts`, 1 unless set), the open Tasks of the Project nobody holds and nothing blocks,
- * at a Step whose takers include it (its Skill there), not aimed at someone else and not Parents.
- * The longest waiting at its Step comes first.
+ * What waits for a busy agent in a Project: the open Tasks of the Project that wait at their Step
+ * (`waitsAtStep`), not Parents, where the agent is among the Step's takers (`stepTakers`: never a
+ * Task it held under another Skill, as the claims in `history` say) and every taker holds as many
+ * other Tasks as it runs Shifts: the Task page's "waits for" says the same. The longest waiting at
+ * its Step comes first.
  */
 export function queueOf({
   agent,
@@ -345,6 +354,8 @@ export function queueOf({
   workflow,
   projectId,
   now,
+  history = [],
+  members = new Map([[agent.id, agent]]),
 }: {
   agent: Member;
   held: readonly Task[];
@@ -352,28 +363,28 @@ export function queueOf({
   workflow: Pick<Workflows, "steps"> | undefined;
   projectId: string;
   now: number;
+  /** Activity that carries `task.claimed` entries: the Skills each Member held each Task under. */
+  history?: readonly Activity[];
+  /** The Members by id, for each taker's Shifts; the agent alone when not given. */
+  members?: Map<string, Pick<Member, "agent">>;
 }): Task[] {
   if (!workflow || !allShiftsBusy(agent, held.length)) return [];
-  const takes = new Set(workflow.steps.filter((s) => s.takers.some((t) => t.id === agent.id)).map((s) => s.id));
+  const heldUnder = new Map<string, string[]>();
+  for (const e of history) {
+    const skill = str(e.payload, "skill_id");
+    if (e.kind === "task.claimed" && e.actor_id && skill) {
+      const k = `${e.subject_id} ${e.actor_id}`;
+      heldUnder.set(k, [...(heldUnder.get(k) ?? []), skill]);
+    }
+  }
+  const stepOf = new Map(workflow.steps.map((s) => [s.id, s]));
   const since = (t: Task) => Date.parse(t.step_since ?? t.waiting_since);
   return open
-    .filter(
-      (t) =>
-        t.project_id === projectId &&
-        t.state === "open" &&
-        !t.subtask_counts &&
-        !t.blocked &&
-        !liveClaim(t, now) &&
-        !!t.step_id &&
-        takes.has(t.step_id) &&
-        (!t.aimed_at_id || t.aimed_at_id === agent.id),
-    )
+    .filter((t) => {
+      const step = t.step_id ? stepOf.get(t.step_id) : undefined;
+      if (t.project_id !== projectId || !waitsAtStep(t, step, now)) return false;
+      const takers = stepTakers(t, step, (id) => heldUnder.get(`${t.id} ${id}`) ?? []);
+      return takers.includes(agent.id) && everyTakerBusy(takers, t, open, members, now);
+    })
     .sort((a, b) => since(a) - since(b));
-}
-
-export function takesOf(workflow: Pick<Workflows, "workflows" | "steps"> | undefined, memberId: string): string[] {
-  if (!workflow) return [];
-  return stepsInOrder(workflow)
-    .filter((s) => s.takers.some((t) => t.id === memberId))
-    .map((s) => stepTitle(s, workflow.workflows));
 }

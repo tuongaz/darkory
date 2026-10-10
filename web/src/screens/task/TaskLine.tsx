@@ -7,6 +7,8 @@ import { useNow } from "@/clock";
 import { useLineData, WorkflowLine } from "@/components/workflowLine";
 import { branchSkills } from "@/components/workflowLine/model";
 import { workflowScopePath } from "./format";
+import { useTaskWorkflow } from "./queries";
+import { useWaitsFor } from "./useWaitsFor";
 
 /**
  * One worked Task's way through its Workflow (r2-scope F3): the line with its token alone, the
@@ -19,6 +21,8 @@ export function TaskLine({ detail }: { detail: TaskDetail }) {
   const { data } = useLineData(task.project_id, task.workflow_id, task.key);
   const project = findProject(useProjects().data ?? [], task.project_id);
   const now = useNow();
+  // The strip says it for a screen reader; the line draws it under the token for the eye.
+  const waits = useWaitsFor(detail, useTaskWorkflow(task.project_id).steps);
   if (!data?.trace || data.trace.stays.length === 0) return null;
   const onBranch = data.trace.stays.some((s) => branchSkills.includes(data.facts.steps.find((x) => x.id === s.stepId)?.skill?.name ?? ""));
   return (
@@ -29,7 +33,7 @@ export function TaskLine({ detail }: { detail: TaskDetail }) {
         tasks={data.scoped.drawn}
         all={data.all}
         hidden={data.scoped.hidden}
-        trace={data.trace}
+        trace={waits ? { ...data.trace, waitsFor: waits } : data.trace}
         compactHeads
         density="tokens"
         verticalBelow={440}

@@ -157,7 +157,7 @@ export function AgentsPage() {
                       project={project}
                       detail={detailOf.get(row.agent.id)}
                       runnerSessions={shiftsOf(row.agent.id)}
-                      queue={queueOf({ agent: row.agent, held: row.held, open: open.data ?? [], workflow, projectId: project.id, now })}
+                      queue={queueOf({ agent: row.agent, held: row.held, open: open.data ?? [], workflow, projectId: project.id, now, history: history.entries, members })}
                       takes={takesOf(workflow, row.agent.id)}
                       history={history.entries}
                       selected={selected === row.agent.name}
@@ -240,8 +240,7 @@ function AgentTableRow({
   const idle = !claim;
   const runnerSession = runnerSessions[0];
   const taskOf = (s: RunnerSession) => tasks.get(s.task_id) ?? held.find((t) => t.id === s.task_id);
-  const sessionTask = runnerSession && taskOf(runnerSession);
-  const actions = agentActions({ agent, held, me, members, session: runnerSession, sessionKey: sessionTask?.key, project });
+  const actions = agentActions({ agent, held, me, members, shifts: runnerSessions.map((rs) => ({ session: rs, taskKey: taskOf(rs)?.key })), project });
   const { run, dialog } = useAgentActions(agent);
   const lapses = lapsesIn24h(history, agent.id, now);
   // Why an idle agent holds nothing, said once: deactivated, paused, or how its last Claim here ended.

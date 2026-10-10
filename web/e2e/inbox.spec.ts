@@ -71,6 +71,9 @@ let agent: APIRequestContext;
 let cart: Task;
 let discount: Task;
 let checkout: Task;
+/** PRQ's Done Task whose pull request #7 waits for ada's merge, from the merge row's test on. */
+let merging: Task;
+const prURL = "https://github.com/o/r/pull/7";
 
 test.beforeAll(async () => {
   admin = await as(process.env.DARKORY_E2E_ADMIN_TOKEN!, "e2e-inbox-ada");
@@ -278,31 +281,24 @@ test("my Done Task whose pull request is open waits in Needs you for my merge; w
   // PRQ lands its branches through pull requests: its default Workspace is in pull_request mode.
   await v1(admin, "POST", "/v1/workspaces", { name: "prq-repo", path: "/srv/prq", mode: "pull_request", default_branch: "main" });
   await v1(admin, "POST", "/v1/projects", { key: "PRQ", name: "Pull requests", members: ["ada", "inbox-builder"], default_workspace: "prq-repo" });
-  const filed = (await v1<TaskDetail>(admin, "POST", "/v1/tasks", { project: "PRQ", title: "A sidebar trigger on desktop" })).task;
+  const filed = (merging = (await v1<TaskDetail>(admin, "POST", "/v1/tasks", { project: "PRQ", title: "A sidebar trigger on desktop" })).task);
   // The agent builds it; at Review nobody in PRQ has review, so its Owner, ada, takes it into Done.
   await v1(agent, "POST", `/v1/tasks/${filed.id}/claim`, {});
   await v1(agent, "POST", `/v1/tasks/${filed.id}/advance`, { outcome: "pass" });
   await v1(admin, "POST", `/v1/tasks/${filed.id}/claim`, {});
   await v1(admin, "POST", `/v1/tasks/${filed.id}/advance`, { outcome: "pass" });
-  const url = "https://github.com/o/r/pull/7";
-  await v1(admin, "PUT", `/v1/tasks/${filed.id}/pull-request`, { number: 7, url, state: "open" });
+  await v1(admin, "PUT", `/v1/tasks/${filed.id}/pull-request`, { number: 7, url: prURL, state: "open" });
 
   await signIn(page, admin, "ada");
   const row = page.getByRole("region", { name: "Needs you" }).locator(`[data-task="${filed.key}"]`);
   await expect(row).toContainText("A sidebar trigger on desktop");
   await expect(row).toContainText("Awaits your merge");
-  await expect(row.getByRole("link", { name: "#7 open" })).toHaveAttribute("href", url);
+  await expect(row.getByRole("link", { name: "#7 open" }).first()).toHaveAttribute("href", prURL);
   // --runner=off: nothing beside the server merges, so the act is the pull request on GitHub.
-  await expect(row.getByRole("link", { name: "Open #7" })).toHaveAttribute("href", url);
+  await expect(row.getByRole("link", { name: "Open #7" })).toHaveAttribute("href", prURL);
   await expect(row.getByRole("button", { name: /Merge/ })).toHaveCount(0);
   await shot(page, "merge-row");
 
-  // Merged on GitHub: the row leaves.
-  await v1(admin, "PUT", `/v1/tasks/${filed.id}/pull-request`, { number: 7, url, state: "merged" });
-  await page.reload();
-  const loaded = page.getByRole("region", { name: "Needs you" }).or(page.getByRole("region", { name: "Takeable by you" })).or(page.getByRole("heading", { name: "Nothing needs you" }));
-  await expect(loaded.first()).toBeVisible();
-  await expect(page.locator(`[data-task="${filed.key}"]`)).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -320,12 +316,30 @@ test("Inbox, My work, Agents and Activity fit a phone without a sideways scroll"
   for (const { path, ready } of screens) {
     await page.goto(`${base()}${path}`);
     await expect(ready()).toBeVisible();
+    if (path === "/inbox") {
+      // The merge row's second line: the chip, the why with the Done time; the act at the row's end.
+      const row = page.locator(`[data-task="${merging.key}"]`);
+      const line = row.locator("[data-phone-line]");
+      await expect(line.getByRole("link", { name: "#7 open" })).toBeVisible();
+      await expect(line).toContainText(/Awaits your merge\s*·\s*\d{2}:\d{2}/);
+      await expect(row.getByRole("link", { name: "Open #7" })).toBeVisible();
+    }
     const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
     expect(widths.scroll, path).toBe(widths.client);
     await shot(page, `phone${path.replaceAll("/", "-")}`);
   }
   expect(errors).toEqual([]);
   await context.close();
+});
+
+test("a merged pull request takes its row out of Needs you", async ({ page }) => {
+  const errors = consoleErrors(page);
+  await v1(admin, "PUT", `/v1/tasks/${merging.id}/pull-request`, { number: 7, url: prURL, state: "merged" });
+  await signIn(page, admin, "ada");
+  const loaded = page.getByRole("region", { name: "Needs you" }).or(page.getByRole("region", { name: "Takeable by you" })).or(page.getByRole("heading", { name: "Nothing needs you" }));
+  await expect(loaded.first()).toBeVisible();
+  await expect(page.locator(`[data-task="${merging.key}"]`)).toHaveCount(0);
+  expect(errors).toEqual([]);
 });
 
 test("a Project's Agents table fits a 1280px laptop beside the sidebar, with no sideways scroll", async ({ browser }) => {

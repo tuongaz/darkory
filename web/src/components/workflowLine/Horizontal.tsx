@@ -92,11 +92,11 @@ export function HorizontalLine(props: HorizontalProps) {
       const n = columns.get(id)?.length ?? 0;
       // At bead density a Done Subtask is a green bead in Done's column, three to a row.
       const shown = density === "beads" ? Math.ceil((n + done) / 3) * 18 : Math.min(n, COLUMN_CAP) * (TOKEN_H + TOKEN_GAP) + (n > COLUMN_CAP ? 24 : 0) + done * (TOKEN_H + TOKEN_GAP);
-      const extra = (props.hidden?.get(id) ? 24 : 0) + (traceStays.has(id) ? TOKEN_H + 22 : 0) + (traceAt === id ? 18 : 0);
+      const extra = (props.hidden?.get(id) ? 24 : 0) + (traceStays.has(id) ? TOKEN_H + 22 : 0) + (traceAt === id ? 18 : 0) + (traceAt === id && trace?.waitsFor ? 18 : 0);
       max = Math.max(max, shown + extra);
     }
     return Math.max(0, max - TOKEN_GAP);
-  }, [t.main, columns, density, props.hidden, props.fold, traceStays, traceAt, doneTokens.length]);
+  }, [t.main, columns, density, props.hidden, props.fold, traceStays, traceAt, trace?.waitsFor, doneTokens.length]);
 
   // A branch Step's name line, roughly: its name, Skill, marks, up to two tokens, its ghost.
   const ghosts = props.ghosts;
@@ -423,6 +423,11 @@ export function HorizontalLine(props: HorizontalProps) {
             {token(task)}
             {trace?.current === id && trace.stays.at(-1)?.waited !== undefined && trace.stays.at(-1)!.waited > 60_000 && (
               <span className="text-[11px] text-muted-foreground">waited {spanText(trace.stays.at(-1)!.waited)}</span>
+            )}
+            {trace?.current === id && trace.waitsFor && (
+              <span aria-hidden className="text-[11px] whitespace-nowrap text-muted-foreground">
+                {trace.waitsFor}
+              </span>
             )}
           </Fragment>
         ))}

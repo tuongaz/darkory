@@ -268,14 +268,19 @@ function TextSetting({
 /** The most Shifts the Runner runs for one agent at once (`AgentSettings.shifts`). */
 const maxShifts = 8;
 
-/** How many Shifts the Runner runs for the agent at once: saved when left or on Enter; out of 1..8 it is put back. */
+/**
+ * How many Shifts the Runner runs for the agent at once: saved when left or on Enter. A count
+ * outside 1..8 is kept as typed and said, as /v1 would refuse it; Esc puts the saved one back.
+ */
 function ShiftsSetting({ member, saved }: { member: Member; saved: number }) {
   const [value, setValue] = useState(String(saved));
+  const [problem, setProblem] = useState<string>();
   const save = useMutation({ mutationFn: (shifts: number) => setAgentSettings(member.id, { shifts }) });
   const commit = () => {
     const n = Number(value.trim());
-    if (!Number.isInteger(n) || n < 1 || n > maxShifts || n === saved) return setValue(String(saved));
-    save.mutate(n);
+    if (!Number.isInteger(n) || n < 1 || n > maxShifts) return setProblem(`Shifts are 1 to ${maxShifts}.`);
+    setProblem(undefined);
+    if (n !== saved) save.mutate(n);
   };
   return (
     <SettingsRow label="Shifts" htmlFor="agent-shifts" info="Each Shift runs in its own Session and holds its own Claim.">
@@ -288,15 +293,19 @@ function ShiftsSetting({ member, saved }: { member: Member; saved: number }) {
         step={1}
         className="w-16 flex-none font-mono text-xs tabular-nums md:text-xs"
         value={value}
+        aria-invalid={!!problem || undefined}
         onChange={(e) => setValue(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
-          if (e.key === "Escape") setValue(String(saved));
+          if (e.key === "Escape") {
+            setValue(String(saved));
+            setProblem(undefined);
+          }
         }}
       />
       <span className="text-muted-foreground">at once</span>
-      <Refusal error={save.error} />
+      <Refusal error={problem ? new ApiError(0, "invalid", problem) : save.error} />
     </SettingsRow>
   );
 }

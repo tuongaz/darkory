@@ -5,7 +5,8 @@ import { liveClaimOf } from "../board/testData";
 import { taskActions } from "./actions";
 import { taskRecord } from "./record";
 import { graphSteps, graphSubtasks } from "./graph";
-import { takersOf } from "./takers";
+import { takersOf, waitsFor } from "./takers";
+import { sizeText } from "./format";
 
 const members = new Map([ada, bob, builder].map((m) => [m.id, m]));
 const now = Date.now();
@@ -96,6 +97,9 @@ describe("the actions by role", () => {
     expect(taskActions({ ...ctx, me: ada.id, runner: false, detail: out(done) }).primary).toBeUndefined();
     expect(taskActions({ ...ctx, me: bob.id, runner: true, detail: out(done) }).primary).toBeUndefined();
     expect(taskActions({ ...ctx, me: ada.id, runner: true, detail: out({ ...done, pull_request: { ...pr, state: "merged" } }) }).primary).toBeUndefined();
+    // A Dropped Task's pull request is its Owner's to close on GitHub, not to merge.
+    expect(taskActions({ ...ctx, me: ada.id, runner: true, detail: out({ ...done, state: "dropped" }) }).primary).toBeUndefined();
+    expect(taskActions({ ...ctx, me: ada.id, runner: true, detail: out({ ...done, state: "dropped" }) }).menu).not.toContain("merge");
 
     const takeable = taskActions({ ...ctx, me: ada.id, runner: true, takeable: new Set(["k-1"]), detail: out(task(1, { pull_request: pr })) });
     expect(takeable.primary).toEqual({ kind: "merge" });
@@ -262,5 +266,42 @@ describe("Evidence in the record", () => {
     const notes = [{ id: "n-1", task_id: "k-1", author_id: builder.id, body: "x", created_at: iso(6.5) }];
     const evidence = [file("e1", builder.id, 3), file("e2", builder.id, 5), file("e3", ada.id, 5.5), file("e4", builder.id, 6), file("e5", builder.id, 7)];
     expect(rows(taskRecord(detail(t, { claims, notes, evidence })))).toEqual([["e1"], ["e2"], ["e3"], ["e4"], ["e5"]]);
+  });
+});
+
+describe("whom a Task waits for at its Step", () => {
+  const now = Date.now();
+  const at = (min: number) => new Date(now + min * 60_000).toISOString();
+  const wf = workflow();
+  const build = wf.steps.find((s) => s.id === step.build)!;
+  const qa = { ...builder, id: "m-qa", name: "qa" };
+  const both = { ...build, takers: [builder, qa].map((m) => ({ id: m.id, name: m.name, kind: m.kind })) };
+  const waiting = task(7, { step_id: step.build });
+  const holds = (n: number, who: string, extra: Parameters<typeof liveClaimOf>[2] = {}) => task(n, { claim: liveClaimOf({ ...builder, id: who }, `k-${n}`, extra) });
+  const members = new Map([builder, qa].map((m) => [m.id, m]));
+
+  it("names the busy taker whose Shift ends soonest, else the one holding longest", () => {
+    const open = [holds(1, builder.id, { expires_at: at(9) }), holds(2, qa.id, { expires_at: at(3) })];
+    expect(waitsFor({ task: waiting, claims: [] }, both, open, members, now)).toBe(qa.id);
+    const untimed = [holds(1, builder.id, { expires_at: undefined, started_at: at(-30) }), holds(2, qa.id, { expires_at: undefined, started_at: at(-5) })];
+    expect(waitsFor({ task: waiting, claims: [] }, both, untimed, members, now)).toBe(builder.id);
+  });
+
+  it("names no one while a taker is free, when the Step has no taker, or the Task is blocked or held", () => {
+    const open = [holds(1, builder.id, { expires_at: at(9) })];
+    expect(waitsFor({ task: waiting, claims: [] }, both, open, members, now)).toBeUndefined();
+    expect(waitsFor({ task: waiting, claims: [] }, { ...build, takers: [] }, open, members, now)).toBeUndefined();
+    expect(waitsFor({ task: { ...waiting, blocked: true }, claims: [] }, build, open, members, now)).toBeUndefined();
+    expect(waitsFor({ task: waiting, claims: [] }, build, open, members, now)).toBe(builder.id);
+  });
+});
+
+describe("a file's size", () => {
+  it("reads in decimal units, one decimal below 100", () => {
+    expect(sizeText(753)).toBe("753 B");
+    expect(sizeText(56_800)).toBe("56.8 kB");
+    expect(sizeText(228_900)).toBe("229 kB");
+    expect(sizeText(1_200_000)).toBe("1.2 MB");
+    expect(sizeText(340_000_000)).toBe("340 MB");
   });
 });

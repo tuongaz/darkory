@@ -17,7 +17,7 @@ import { ageText } from "@/lib/time";
 import { useNeeds } from "@/screens/workflow/panels/useNeeds";
 import { PullRequestChip } from "@/components/PullRequestChip";
 import { awaitingMerge, takeableCap } from "./derive";
-import { AnswerButton, ClaimButton, GroupHeader, KindPill, MergeAct, StandsAt, TaskRow } from "./parts";
+import { AnswerButton, ClaimButton, GroupHeader, KindPill, MergeAct, ShortTime, StandsAt, TaskRow } from "./parts";
 import { useAwaitingMerge, useStepNames } from "./queries";
 import { liveClaim } from "@/work";
 
@@ -94,6 +94,16 @@ export function InboxPage() {
                     task={m.task}
                     project={project(m.task)}
                     marks={<PullRequestChip pr={m.pr} className="relative z-10" />}
+                    phone={
+                      <>
+                        <PullRequestChip pr={m.pr} className="relative z-10" />
+                        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                          Awaits your merge
+                          <span aria-hidden>·</span>
+                          <ShortTime at={m.task.ended_at} what="Done" />
+                        </span>
+                      </>
+                    }
                     by="Awaits your merge"
                     when={m.task.ended_at}
                     whenWhat="Done"

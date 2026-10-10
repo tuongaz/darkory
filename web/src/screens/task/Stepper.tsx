@@ -25,17 +25,6 @@ const leftWords = (left: Stay["left"]) => {
   }
 };
 
-/** The note under a worked Task's line, where the line is what the eye reads (the strip says it for a screen reader). */
-export function WaitsForNote({ detail, steps }: { detail: TaskDetail; steps: readonly WorkflowStep[] }) {
-  const words = useWaitsFor(detail, steps);
-  if (!words) return null;
-  return (
-    <p aria-hidden className="text-xs text-muted-foreground">
-      {words}
-    </p>
-  );
-}
-
 export function Stepper({ detail, path, steps }: { detail: TaskDetail; path: readonly Activity[]; steps: readonly WorkflowStep[] }) {
   const now = useNow();
   const { workflows } = useTaskWorkflow(detail.task.project_id);

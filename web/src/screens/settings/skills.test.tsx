@@ -102,7 +102,7 @@ describe("Settings › Skills", () => {
 
   it("a refusal to move a company Skill says why under its Project", async () => {
     const user = userEvent.setup();
-    mockApi(routes({ "PATCH /v1/skills/:skill": refuse(400, "invalid", "WEB's Workflow carries web-engineer at Build") }));
+    const api = mockApi(routes({ "PATCH /v1/skills/:skill": refuse(400, "invalid", "WEB's Workflow carries web-engineer at Build") }));
     renderApp("/settings/organisation/skills/web-engineer");
     const about2 = await screen.findByRole("complementary", { name: "About the Skill" });
     const select2 = await within(about2).findByRole("combobox", { name: "Project" });
@@ -110,6 +110,8 @@ describe("Settings › Skills", () => {
     await user.click(select2);
     await user.click(await screen.findByRole("option", { name: "Organisation" }));
     expect(await within(about2).findByText(/WEB's Workflow carries web-engineer at Build/)).toBeInTheDocument();
+    // The Organisation is sent as "".
+    expect(api.calls.find((c) => c.method === "PATCH")).toMatchObject({ path: "/v1/skills/web-engineer", body: { project: "" } });
   });
 
   it("a generic Skill's page names no Project", async () => {

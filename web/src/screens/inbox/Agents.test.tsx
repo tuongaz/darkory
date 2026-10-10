@@ -7,6 +7,7 @@ import type { Member, RunnerSession, Workflows } from "@/api/client";
 import { ada, bob, builder, engineer, ops, step, task, web, workflow, workflowsFixture } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { agentRows, claimHolder, claimsSince, queueOf } from "./derive";
+import { waitsFor } from "@/screens/task/takers";
 import { claim, entry, memberDetail, minutes, recordApi } from "./testing";
 
 const planner: Member = { id: "m-planner", name: "planner", kind: "agent", admin: false, created_at: minutes(-1000) };
@@ -98,6 +99,38 @@ describe("the queue behind a busy agent", () => {
     const two = { ...agentBuilder, agent: { ...agentBuilder.agent!, shifts: 2 } };
     expect(queueOf({ agent: two, held: [holding], open, workflow: wf, projectId: web.id, now })).toEqual([]);
   });
+
+  it("agrees with the Task's strip: listed only while every taker of its Step is busy", () => {
+    const qa: Member = { ...agentBuilder, id: "m-qa", name: "qa" };
+    const takers = [agentBuilder, qa].map((m) => ({ id: m.id, name: m.name, kind: m.kind }));
+    const shared = workflow(web, { build: { takers } });
+    const build = shared.steps.find((s) => s.id === step.build)!;
+    const members = new Map([agentBuilder, qa].map((m) => [m.id, m]));
+    const cart = waiting(4);
+    const qaHolds = task(5, { claim: claim("k-5", qa.id, { expires_at: minutes(20) }) });
+    for (const [open, listed] of [
+      [[holding, cart], false],
+      [[holding, cart, qaHolds], true],
+    ] as const) {
+      const q = queueOf({ agent: agentBuilder, held: [holding], open, workflow: shared, projectId: web.id, now, members });
+      const strip = waitsFor({ task: cart, claims: [] }, build, open, members, now);
+      expect(q.map((t) => t.key)).toEqual(listed ? ["WEB-4"] : []);
+      expect(strip !== undefined).toBe(listed);
+    }
+  });
+
+  it("leaves out a Task the agent held under another Skill: no one judges their own work", () => {
+    // builder takes Build and Review; it built WEB-4, which now waits at Review.
+    const both = workflow(web, { review: { takers: [{ id: builder.id, name: builder.name, kind: builder.kind }] } });
+    const built = waiting(4, { step_id: step.review });
+    const fresh = waiting(9, { step_id: step.review });
+    const history = [
+      entry(1, "task.claimed", built.id, { actor_id: builder.id, payload: { claim_id: "c-1", skill_id: engineer.id } }),
+      entry(2, "task.claimed", fresh.id, { actor_id: bob.id, payload: { claim_id: "c-2", skill_id: engineer.id } }),
+    ];
+    const q = queueOf({ agent: agentBuilder, held: [holding], open: [holding, built, fresh], workflow: both, projectId: web.id, now, history });
+    expect(q.map((t) => t.key)).toEqual(["WEB-9"]);
+  });
 });
 
 const tableRow = (name: string) => screen.getByRole("link", { name }).closest("tr")!;
@@ -147,6 +180,17 @@ describe("a Project's Agents", () => {
     const peek = await screen.findByRole("dialog", { name: "Agent builder" });
     expect(within(peek).getAllByRole("region", { name: /^Shift/ })).toHaveLength(2);
     expect(within(peek).getByRole("list", { name: "Waiting for builder" })).toHaveTextContent("WEB-4");
+  });
+
+  it("gives an admin one Nudge and one Stop per Shift in the row's ⋯, each named by its Task", async () => {
+    const second = task(5, { title: "Search", claim: claim("k-5", builder.id, { expires_at: minutes(12), heartbeat_timeout_seconds: 600 }) });
+    agentsApi({ sessions: [session("running"), session("running", { task_id: "k-5", session_id: "sess-2", tmux: "dk-WEB-5" })], tasks: [second] });
+    renderApp("/projects/WEB/agents");
+    const row = await waitFor(() => tableRow("builder"));
+    await userEvent.click(within(row).getByRole("button", { name: "More for builder" }));
+    const items = (await screen.findAllByRole("menuitem")).map((i) => i.textContent);
+    expect(items).toEqual(expect.arrayContaining(["Nudge WEB-3", "Stop WEB-3", "Nudge WEB-5", "Stop WEB-5"]));
+    expect(items).not.toContain("Nudge");
   });
 
   it("of a Project with no agent, points an admin at the Project's Members", async () => {

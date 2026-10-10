@@ -45,7 +45,7 @@ describe("Activity folds a Claim", () => {
       [14, [11, 12, 13, 16]],
       [10, []],
     ]);
-    expect(said(rows)[1]).toBe("builder released WEB-2 Cannot delete a Workflow in a Project · asked WEB-4 · a Note · wc.log 753 B · Shift log · 55 KB");
+    expect(said(rows)[1]).toBe("builder released WEB-2 Cannot delete a Workflow in a Project · asked WEB-4 · a Note · wc.log 753 B · Shift log · 56.8 kB");
     expect(said(rows)[2]).toBe("builder claimed WEB-2 Cannot delete a Workflow in a Project · engineer · claude-sonnet-5-5");
   });
 
@@ -117,7 +117,7 @@ describe("Activity folds a Claim", () => {
       [1, []],
     ]);
     const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(at(1)));
-    expect(said(rows)[0]).toBe(`builder · Shift log · 55 KB on WEB-2 Cannot delete a Workflow in a Project · the Shift that ended ${clock}`);
+    expect(said(rows)[0]).toBe(`builder · Shift log · 56.8 kB on WEB-2 Cannot delete a Workflow in a Project · the Shift that ended ${clock}`);
   });
 
   it("folds nothing when a filter left only one kind", () => {

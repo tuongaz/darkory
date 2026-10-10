@@ -5,7 +5,7 @@ import { sizeText } from "./format";
 
 const images = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 /** A text file at most this size shows its first lines; a bigger one is a plain row. */
-const textLimit = 20 * 1024;
+const textLimit = 20_000;
 
 const mediaType = (e: Evidence) => e.content_type.split(";")[0].trim().toLowerCase();
 const isImage = (e: Evidence) => images.has(mediaType(e));

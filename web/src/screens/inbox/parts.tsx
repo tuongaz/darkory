@@ -1,9 +1,9 @@
-import { useMutation } from "@tanstack/react-query";
-import { GitMergeIcon } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { GitMergeIcon, LoaderIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, type To } from "react-router";
-import { api, call, type Project, type Task } from "@/api/client";
-import { useDirectory, useLabels, useRunnerSessions, useTask } from "@/api/queries";
+import { api, call, type Project, type Task, type TaskDetail } from "@/api/client";
+import { keys, useDirectory, useLabels, useRunnerSessions } from "@/api/queries";
 import { usePeekLink } from "@/app/peek";
 import { useSelectedTask } from "@/app/selection";
 import { useNow } from "@/clock";
@@ -117,9 +117,12 @@ export function TaskRow({
   when,
   whenWhat,
   action,
+  phone,
 }: {
   task: Task;
   project: Project | undefined;
+  /** What a phone's second line says after the key, where the wide columns fold away. */
+  phone?: ReactNode;
   stands?: ReactNode;
   marks?: ReactNode;
   by?: ReactNode;
@@ -142,11 +145,12 @@ export function TaskRow({
       <span className="flex min-w-0 flex-col md:flex-row md:items-center md:gap-2">
         <RowLink to={peek(task.key)}>{task.title}</RowLink>
         {project && <LabelPills ids={task.labels} labels={labels} className="hidden md:flex" />}
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground md:hidden">
+        <span data-phone-line className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground md:hidden">
           {project && <ProjectMark project={project} />}
-          {task.key}
+          <span className="flex-none whitespace-nowrap">{task.key}</span>
           {stands && <span aria-hidden>·</span>}
           {stands}
+          {phone}
         </span>
       </span>
       <span className={cn(wide, "items-center gap-1.5")}>{marks}</span>
@@ -225,12 +229,21 @@ export function OpenButton({ task, label = "Open" }: { task: Task; label?: strin
 
 /**
  * The act on a Done Task whose pull request is open. With a Runner attached to the server, Merge:
- * the confirm names the branch it lands on, the Runner merges on GitHub, and a refusal is a toast
- * in GitHub's words. Without one, the act is the pull request itself, opened on GitHub.
+ * it reads the Task's record for the branch it lands on (pending meanwhile; a failed read is a
+ * toast), then the confirm names that branch, the Runner merges on GitHub, and a refusal is a
+ * toast in GitHub's words. Without one, the act is the pull request itself, opened on GitHub.
  */
 export function MergeAct({ task, primary }: { task: Task; primary?: boolean }) {
   const runner = useRunnerSessions().data?.runner;
-  const [open, setOpen] = useState(false);
+  const qc = useQueryClient();
+  const [loading, setLoading] = useState(false);
+  const [record, setRecord] = useState<TaskDetail>();
+  const read = () => {
+    setLoading(true);
+    qc.fetchQuery({ queryKey: keys.task(task.key), queryFn: () => call(api.GET("/v1/tasks/{task}", { params: { path: { task: task.key } } })) })
+      .then(setRecord, refusalToast)
+      .finally(() => setLoading(false));
+  };
   const pr = task.pull_request;
   if (!pr) return null;
   if (!runner) {
@@ -244,18 +257,19 @@ export function MergeAct({ task, primary }: { task: Task; primary?: boolean }) {
   }
   return (
     <>
-      <Button size="xs" variant={primary ? "default" : "outline"} className="relative z-10" aria-label={`Merge ${task.key}`} onClick={() => setOpen(true)}>
-        <GitMergeIcon />
+      <Button
+        size="xs"
+        variant={primary ? "default" : "outline"}
+        className="relative z-10"
+        aria-label={`Merge ${task.key}`}
+        aria-busy={loading || undefined}
+        disabled={loading}
+        onClick={read}
+      >
+        {loading ? <LoaderIcon aria-hidden className="animate-spin" /> : <GitMergeIcon />}
         Merge
       </Button>
-      {open && <InboxMergeDialog taskKey={task.key} onClose={() => setOpen(false)} />}
+      {record && <MergeDialog detail={record} open onOpenChange={(o) => !o && setRecord(undefined)} onRefused={refusalToast} />}
     </>
   );
-}
-
-/** The Task page's Merge confirm, over the Inbox: it reads the Task's record for the branch it lands on. */
-function InboxMergeDialog({ taskKey, onClose }: { taskKey: string; onClose: () => void }) {
-  const detail = useTask(taskKey).data;
-  if (!detail) return null;
-  return <MergeDialog detail={detail} open onOpenChange={(o) => !o && onClose()} onRefused={refusalToast} />;
 }
