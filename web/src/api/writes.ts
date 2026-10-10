@@ -43,7 +43,7 @@ export const clearManager = (member: string) => call(api.DELETE("/v1/members/{me
 
 export const createSkill = (body: Schemas["CreateSkillBody"]) => call(api.POST("/v1/skills", { body }));
 
-/** Sets the Project a company Skill belongs to (admin); `""` makes it the Organisation's. */
+/** Sets the Project an own Skill belongs to (admin); `""` makes it the Organisation's. */
 export const updateSkill = (skill: string, body: Schemas["UpdateSkillBody"]) =>
   call(api.PATCH("/v1/skills/{skill}", { params: { path: { skill } }, body }));
 
