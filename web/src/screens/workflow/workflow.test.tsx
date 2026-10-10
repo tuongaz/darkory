@@ -92,6 +92,8 @@ describe("a Workflow's editor", () => {
     const line = await openEditor();
     expect(onRail()).toEqual(["Build", "Review", "Done"]);
     expect(nameOf("Build")).toHaveValue("Build");
+    // A name's field is as wide as the name (vf-9), not a fixed box.
+    expect(nameOf("Build").style.width).toBe("calc(6ch + 16px)");
     expect(screen.getByRole("combobox", { name: "Skill of Build" })).toHaveTextContent("engineer");
     // A Skill reads as the line's tag, its glyph first (vf-9: ⌖ engineer ⌄); a hold has none.
     expect(screen.getByRole("combobox", { name: "Skill of Build" }).querySelector(".lucide-tag")).not.toBeNull();
