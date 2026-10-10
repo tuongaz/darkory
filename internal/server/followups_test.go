@@ -306,9 +306,15 @@ func TestAgentMergedWriteIsCheckedOnGitHub(t *testing.T) {
 			t.Fatalf("GitHub not reached: %s", res.Body)
 		}
 		ghErr = nil
-		// Merged, on the Task's branch: a renamed Task's branch still starts with its key; GitHub's
-		// host is compared without regard to case.
-		github.Head, github.URL = "web-2-old-title", "https://GitHub.com/acme/web/pull/7"
+		// Another Task's key that starts with this one's is not this Task's branch.
+		github.Head = "web-20-x"
+		res = write(bob, task, client.PullRequestMerged)
+		if res.StatusCode() != http.StatusBadRequest || !strings.Contains(res.JSONDefault.Message, "pull request #7's branch web-20-x is not WEB-2's") {
+			t.Fatalf("WEB-20's branch: %s", res.Body)
+		}
+		// Merged, on the Task's branch: a renamed Task's branch still starts with its key, in any
+		// case; GitHub's host is compared without regard to case.
+		github.Head, github.URL = "WEB-2-old-title", "https://GitHub.com/acme/web/pull/7"
 		if res := write(bob, task, client.PullRequestMerged); res.StatusCode() != http.StatusOK || res.JSON200.PullRequest.State != client.PullRequestMerged {
 			t.Fatalf("merged on the Task's branch: %s", res.Body)
 		}
