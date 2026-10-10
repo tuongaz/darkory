@@ -7,7 +7,7 @@ Management for a workforce that is a mix of agents and humans. The organisation 
 ### Organisation
 
 **Organisation**:
-The company running the workforce. It holds the Projects, Members, company Skills, and Reporting lines.
+The company running the workforce. It holds the Projects, Members, own Skills, and Reporting lines.
 _Avoid_: Tenant, account, workspace
 
 **Member**:
@@ -23,8 +23,8 @@ A body of work with the Members, agents and humans, who do it: its own key, Work
 _Avoid_: Team, workspace, board, space
 
 **Skill**:
-Something a Member is good at. A generic Skill (QA) is what a Member arrives with; a company Skill (QA at this company) builds on a generic one and adds the company's own knowledge, and belongs to one Project or, naming none, to the whole Organisation. The Skill a Step carries decides who can take the Tasks at it; a Step carries a company Skill of its own Project only.
-_Avoid_: Speciality, capability, tag, role, playbook
+Something a Member is good at. A generic Skill (QA) is what a Member arrives with; an own Skill (QA as this Project, or this Organisation, does it) builds on a generic one and adds what is its own, and belongs to one Project or, naming none, to the whole Organisation. The Skill a Step carries decides who can take the Tasks at it; a Step never carries another Project's own Skill.
+_Avoid_: Speciality, capability, tag, role, playbook, company Skill
 
 **Reporting line**:
 The relation between a Member and the Member who directs them. Either end can be a human or an agent, and it may cross Projects; a stuck Member escalates along it.
@@ -141,7 +141,7 @@ The Subtask Darkory files under a Parent when it ends, at the Project's Step tha
 _Avoid_: Retro meeting, post-mortem, review
 
 **Skill version**:
-One published revision of a company Skill. A change is proposed by a Retrospective against the current version, and published only when a Member with the skill-review Skill, from any Project and other than its author, completes the review while that version is still current; when no Member of the Organisation has skill-review, the Task's Owner may complete it instead, unless they wrote it. Every Claim records the version it worked under.
+One published revision of an own Skill. A change is proposed by a Retrospective against the current version, and published only when a Member with the skill-review Skill, from any Project and other than its author, completes the review while that version is still current; when no Member of the Organisation has skill-review, the Task's Owner may complete it instead, unless they wrote it. Every Claim records the version it worked under.
 _Avoid_: Revision, edit
 
 **Model label**:
