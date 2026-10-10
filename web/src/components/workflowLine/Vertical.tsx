@@ -711,6 +711,7 @@ export function VerticalLine({
         tone={tone}
         holdAt={() => false}
         isStart={() => false}
+        picked={(id) => way?.stepId === id}
         measureKey={[tasks, t, trace, open]}
       />
     </section>

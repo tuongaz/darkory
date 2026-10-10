@@ -384,6 +384,13 @@ describe("the selected Task's strip (vf-7)", () => {
     expect(dimmed(screen.getByRole("region", { name: "When a Parent ends" }))).toBe(false);
   });
 
+  it("rings the station of a Task selected on the quiet line, as on the main one", () => {
+    render(<Selecting tasks={[held(30, "acceptance", "tuongaz", 4)]} workflow={MAIN} initial="k-30" />);
+    const after = screen.getByRole("region", { name: "When a Parent ends" });
+    expect([...document.querySelectorAll("[data-picked]")].map((c) => c.getAttribute("data-picked"))).toEqual(["acceptance"]);
+    expect(after.querySelector('[data-picked="acceptance"]')).not.toBeNull();
+  });
+
   it("says a Task at a hold moves on by hand: Legal on the line to Publish, a parked Backlog to Build", async () => {
     const { unmount } = render(<Selecting tasks={[waiting(5, "legal", 3)]} workflow={NEWS} initial="k-5" />);
     expect(strip("DARK-5")).toHaveTextContent("next: by hand → Publish");
