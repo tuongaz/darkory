@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent, type ReactNode } from "react";
 import { TagIcon } from "lucide-react";
 import { InfoTip } from "@/components/InfoTip";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 import type { Ghost, Trace } from "./data";
 import { chipsAt, laneTracks, railOf, tracks as railTracks, type LaneTrack, type LineTopology } from "./layout";
 import { DONE_STATION, isHoldStep, PICKUP_MS, tokenTime, type LineConnector, type LineFacts, type LineStepFacts, type LineTask } from "./model";
-import { GhostToken, HiddenCount, Token } from "./Token";
+import { StepList } from "./StepList";
+import { Count, GhostToken, HiddenCount, Token } from "./Token";
 import {
   AFTER_BRANCH,
   AFTER_HINT,
@@ -41,6 +42,9 @@ import {
  * in a narrow card), the Steps carrying the branch's Skills a quiet line of their own under a
  * divider, "When a Parent ends".
  */
+
+/** The most held Tasks a Step draws as chips; the rest are in its count. */
+const HELD_CHIPS = 3;
 
 /** The rail's x: the centre of its 22px column. */
 const RAIL = 11;
@@ -138,6 +142,7 @@ export function VerticalLine({
   highlight,
   noBranch,
   footer,
+  stepHref,
 }: {
   topology: LineTopology;
   facts: LineFacts;
@@ -157,6 +162,7 @@ export function VerticalLine({
   highlight?: ReadonlySet<string>;
   noBranch?: boolean;
   footer?: ReactNode;
+  stepHref?: (stepId: string) => string;
 }) {
   const steps = useMemo(() => new Map(facts.steps.map((s) => [s.id, s])), [facts.steps]);
   const { lead, rail } = useMemo(() => railOf(t), [t]);
@@ -165,6 +171,21 @@ export function VerticalLine({
   // What a line or a word means, in a sentence, while the pointer is on it or it has the focus.
   const [tip, setTip] = useState<Tip | null>(null);
   const { hover, pool } = hints(useId(), setTip);
+
+  // The one Step whose list is open under its count: a second click or Escape closes it.
+  const [open, setOpen] = useState<string | null>(null);
+  const listId = useId();
+  const counts = useRef(new Map<string, HTMLButtonElement>());
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      counts.current.get(open)?.focus();
+      setOpen(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   const at = new Map<string, LineTask[]>();
   for (const task of tasks) if (task.stepId && !flow.transit.has(task.id)) at.set(task.stepId, [...(at.get(task.stepId) ?? []), task]);
@@ -321,7 +342,62 @@ export function VerticalLine({
     </>
   );
 
-  /** A Step's Tasks: its tokens, the faint count of those outside the scope, Subtasks still to come. */
+  /** A waiting Task standing as a chip for now: its live moment plays (it arrived, it pulses, a tag names it) or it is selected. */
+  const standing = (task: LineTask) =>
+    flow.arrived.has(task.id) || flow.pulses.has(task.id) || selected === task.id || (!!task.stepId && !!flow.callouts.get(task.stepId)?.some((c) => c.taskId === task.id));
+
+  /**
+   * A Step's Tasks at rest (vf-4): its held Tasks as chips, at most three, and a waiting one while
+   * its moment plays; one count for the rest, "N waiting", or "N more" when held Tasks are among
+   * them, which opens the Step's list in place; then the faint count of those outside the scope.
+   */
+  const atStep = (id: string) => {
+    const s = steps.get(id);
+    const list = at.get(id) ?? [];
+    const held = list.filter((x) => x.holder);
+    const chips = new Set([...held.slice(0, HELD_CHIPS), ...list.filter((x) => !x.holder && standing(x))].map((x) => x.id));
+    const rest = list.filter((x) => !chips.has(x.id));
+    const n = hidden?.get(id) ?? 0;
+    const hold = !!s && isHoldStep(s);
+    const text = `${rest.length} ${held.length > HELD_CHIPS ? "more" : "waiting"}`;
+    const shown = open === id && rest.length > 0;
+    const controls = `${listId}-${id}`;
+    return (
+      <>
+        {list.filter((x) => chips.has(x.id)).map(token)}
+        {rest.length > 0 && (
+          <Count
+            stepId={id}
+            stepName={name(id)}
+            text={text}
+            hold={hold}
+            open={shown}
+            controls={controls}
+            ringed={rest.some((x) => ringed?.has(x.id))}
+            onToggle={() => setOpen(shown ? null : id)}
+            buttonRef={(el) => {
+              if (el) counts.current.set(id, el);
+              else counts.current.delete(id);
+            }}
+          />
+        )}
+        {n > 0 && <HiddenCount n={n} />}
+        {shown && (
+          <StepList
+            id={controls}
+            title={`${name(id)} · ${text}`}
+            tasks={rest}
+            hold={hold}
+            now={now}
+            href={stepHref?.(id)}
+            onPick={(task) => (onSelect ? onSelect(task.id) : onOpenTask?.(task.key))}
+          />
+        )}
+      </>
+    );
+  };
+
+  /** A Step's Tasks: its chips and count, the faint count of those outside the scope, Subtasks still to come. */
   const tasksAt = (id: string) => {
     const list = at.get(id) ?? [];
     const n = hidden?.get(id) ?? 0;
@@ -355,12 +431,11 @@ export function VerticalLine({
     }
     return (
       <>
-        {list.map(token)}
+        {atStep(id)}
         {id === DONE_STATION && done?.map((d) => <Token key={d.id} task={{ id: d.id, key: d.key, title: d.title, kind: "work", blockers: [], done: true }} hold={false} now={now} />)}
         {g.map((x) => (
           <GhostToken key={x.label} text={x.text} label={x.label} />
         ))}
-        {n > 0 && <HiddenCount n={n} />}
       </>
     );
   };
@@ -422,6 +497,14 @@ export function VerticalLine({
             const hold = isHoldStep(s);
             const list = at.get(id) ?? [];
             const n = hidden?.get(id) ?? 0;
+            const tasksHere = trace ? (
+              <>
+                {trace.current === id && list.map(token)}
+                {n > 0 && <HiddenCount n={n} />}
+              </>
+            ) : (
+              atStep(id)
+            );
             return (
               <div key={id} data-side={id} data-head={s.name} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                 <span {...hover(hold ? holdHint(s.name) : undefined)} className="text-[13px] font-medium">
@@ -435,8 +518,7 @@ export function VerticalLine({
                   </InfoTip>
                 ) : null}
                 {!hold && facts1(s, true)}
-                {(!trace || trace.current === id) && list.map(token)}
-                {n > 0 && <HiddenCount n={n} />}
+                {tasksHere}
                 {entryChips(id)}
                 {sideMarks(id)}
               </div>
@@ -583,7 +665,7 @@ export function VerticalLine({
         tone={tone}
         holdAt={() => false}
         isStart={() => false}
-        measureKey={[tasks, t, trace]}
+        measureKey={[tasks, t, trace, open]}
       />
     </section>
   );
@@ -608,7 +690,7 @@ export function VerticalLine({
         visited={(id) => !!trace?.stays.some((x) => x.stepId === id)}
         travelling={flow.tokens}
         outcomeOf={(id) => facts.connectors.find((c) => c.id === id)?.name}
-        measureKey={[tasks, t, trace, done, ghosts, hidden]}
+        measureKey={[tasks, t, trace, done, ghosts, hidden, open]}
       />
       {branch}
       {footer}
@@ -837,7 +919,9 @@ function RailLine({
                 />
                 <div className="grid min-w-0 grid-cols-1 items-start gap-x-6 gap-y-1 @3xl:grid-cols-[minmax(0,300px)_minmax(0,300px)_minmax(0,1fr)]">
                   <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">{r.name}</div>
-                  <div className="flex min-w-0 flex-wrap items-center gap-1 empty:hidden @3xl:empty:flex">{r.tasks}</div>
+                  <div data-tasks className="flex min-w-0 flex-wrap items-center gap-1 empty:hidden @3xl:empty:flex">
+                    {r.tasks}
+                  </div>
                   <div className="flex min-w-0 flex-wrap items-center gap-1 empty:hidden">{r.marks}</div>
                 </div>
                 {s ? (

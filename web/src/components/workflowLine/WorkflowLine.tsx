@@ -44,6 +44,8 @@ export type WorkflowLineProps = {
   noBranch?: boolean;
   /** Under the line: what follows it on a phone. */
   footer?: ReactNode;
+  /** The Tasks list at a Step: where a Step's list links for the rest of its Tasks. */
+  stepHref?: (stepId: string) => string;
   label?: string;
   className?: string;
 };
@@ -113,6 +115,7 @@ export function WorkflowLine(props: WorkflowLineProps) {
         highlight={props.highlight}
         noBranch={props.noBranch}
         footer={props.footer}
+        stepHref={props.stepHref}
       />
     </div>
   );

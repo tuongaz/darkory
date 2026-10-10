@@ -236,3 +236,8 @@ export function blockedBy(t: LineTask): string | undefined {
   return t.blockers.length === 1 ? `by ${t.blockers[0].key}` : `by ${t.blockers.length}`;
 }
 
+/** "blocked by DARK-27", "blocked by 2": a chip's red words, held or not. */
+export function blockedWords(t: LineTask): string | undefined {
+  if (t.blockers.length === 0 || t.done) return undefined;
+  return t.blockers.length === 1 ? `blocked by ${t.blockers[0].key}` : `blocked by ${t.blockers.length}`;
+}
