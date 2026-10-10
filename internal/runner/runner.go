@@ -470,6 +470,12 @@ func (r *Runner) Merge(_ string, _ int64) error {
 	return runnerapi.ErrNoPullRequest
 }
 
+// PullRequest reads a Task's pull request on GitHub. Not yet: until the Runner reads pull requests
+// it finds none (docs/build/dogfood-followups-plan.md, Task 2).
+func (r *Runner) PullRequest(_ string, _ int64) (runnerapi.PullRequest, error) {
+	return runnerapi.PullRequest{}, runnerapi.ErrNoPullRequest
+}
+
 // Socket is the tmux server the runner's sessions run on, for `tmux -L`.
 func (r *Runner) Socket() string { return TmuxSocket(r.cfg.Data) }
 

@@ -151,6 +151,15 @@ type fakeRunner struct {
 	stopped  []string
 	// merge answers Merge, nil for ErrNoPullRequest.
 	merge func(task string, number int64) error
+	// pullRequest answers PullRequest; nil for ErrNoPullRequest.
+	pullRequest func(task string, number int64) (runnerapi.PullRequest, error)
+}
+
+func (f *fakeRunner) PullRequest(task string, number int64) (runnerapi.PullRequest, error) {
+	if f.pullRequest == nil {
+		return runnerapi.PullRequest{}, runnerapi.ErrNoPullRequest
+	}
+	return f.pullRequest(task, number)
 }
 
 func (f *fakeRunner) Merge(task string, number int64) error {

@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/branch"
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/runnerapi"
 	"github.com/tuongaz/darkory/internal/server/gen"
@@ -230,8 +232,47 @@ func (s *Server) PassOwnership(w http.ResponseWriter, r *http.Request, task gen.
 
 func (s *Server) SetTaskPullRequest(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.SetTaskPullRequestParams) {
 	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.SetTaskPullRequestBody, idem core.Idem) (core.Task, error) {
+		if err := s.mergedOnGitHub(r.Context(), c, task, body); err != nil {
+			return core.Task{}, err
+		}
 		return s.core.SetPullRequest(r.Context(), c, task, core.PullRequest{Number: body.Number, URL: body.URL, State: string(body.State)}, idem)
 	})
+}
+
+// mergedOnGitHub checks an agent's write of merged on GitHub, through the Runner beside this
+// server when one is attached: the pull request must be merged there, and its head branch must
+// start with the Task's branch prefix, as the Runner names a Task's branches. An agent writes as
+// the Runner's discovery does, so its word that a merge happened is not taken alone. A human's
+// write, a write of open, and a write with no Runner attached are not checked.
+func (s *Server) mergedOnGitHub(ctx context.Context, c *auth.Caller, ref string, body gen.SetTaskPullRequestBody) error {
+	run := s.theRunner()
+	if body.State != gen.PullRequestMerged || run == nil {
+		return nil
+	}
+	m, err := s.core.GetMember(ctx, c, c.MemberID)
+	if err != nil {
+		return err
+	}
+	if m.Member.Kind != "agent" {
+		return nil
+	}
+	d, err := s.core.GetTask(ctx, c, ref)
+	if err != nil {
+		return err
+	}
+	key := d.Task.Key
+	pr, err := run.PullRequest(shortid.Of(d.Task.ID).String(), body.Number) // the Runner has ids as the API writes them
+	switch {
+	case errors.Is(err, runnerapi.ErrNoPullRequest):
+		return &core.Error{Code: core.CodeConflict, Message: fmt.Sprintf("GitHub has no pull request #%d in %s's Workspaces", body.Number, key)}
+	case err != nil:
+		return &core.Error{Code: core.CodeConflict, Message: err.Error()}
+	case pr.State != core.PullRequestMerged:
+		return &core.Error{Code: core.CodeConflict, Message: fmt.Sprintf("GitHub has #%d %s, not merged", body.Number, pr.State)}
+	case !strings.HasPrefix(pr.Head, branch.Prefix(key)):
+		return &core.Error{Code: core.CodeInvalid, Message: fmt.Sprintf("pull request #%d's branch %s is not %s's", body.Number, pr.Head, key)}
+	}
+	return nil
 }
 
 // MergeTaskPullRequest asks the Runner beside this server to merge the Task's open pull request:

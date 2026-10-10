@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/runnerapi"
 	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
@@ -212,6 +213,76 @@ func TestMergeOneAtATime(t *testing.T) {
 		}
 		if merges.Load() != 1 || got[http.StatusOK] != 1 || got[http.StatusNotFound] != 1 {
 			t.Fatalf("%d merges, answers %v", merges.Load(), got)
+		}
+	})
+}
+
+// An agent's write of merged is checked on GitHub through the Runner when one is attached: the
+// pull request must be merged there, its head on the Task's branch. A human's write, a write of
+// open, and a write with no Runner attached are not checked.
+func TestAgentMergedWriteIsCheckedOnGitHub(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		h := newHarness(t, st)
+		ctx := t.Context()
+		ada := h.admin
+		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(ada.AddProjectMemberWithResponse(ctx, "WEB", "ada", &client.AddProjectMemberParams{})).want(t, http.StatusNoContent)
+		mode := client.WorkspaceModePullRequest
+		got(ada.CreateWorkspaceWithResponse(ctx, &client.CreateWorkspaceParams{}, client.CreateWorkspaceBody{Name: "web", Path: "/src/web", Mode: &mode})).
+			want(t, http.StatusCreated)
+		bob, _ := h.member("bob", client.Agent, "WEB")
+		file := func(title string) client.Task {
+			return got(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptrStr("WEB"), Title: title,
+				Workspaces: &[]string{"web"}})).want(t, http.StatusCreated).JSON201.Task
+		}
+		write := func(c *client.ClientWithResponses, task client.Task, state client.PullRequestState) *client.SetTaskPullRequestResponse {
+			res, err := c.SetTaskPullRequestWithResponse(ctx, task.Key, &client.SetTaskPullRequestParams{},
+				client.SetTaskPullRequestBody{Number: 7, URL: "https://github.com/acme/web/pull/7", State: state})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return res
+		}
+
+		// No Runner attached: not checked.
+		if res := write(bob, file("No Runner"), client.PullRequestMerged); res.StatusCode() != http.StatusOK {
+			t.Fatalf("no Runner: %s", res.Body)
+		}
+
+		var asked []string
+		github := runnerapi.PullRequest{Number: 7, URL: "https://github.com/acme/web/pull/7", State: "open", Head: "web-2-checkout", Base: "main"}
+		h.srv.AttachRunner(&fakeRunner{pullRequest: func(task string, number int64) (runnerapi.PullRequest, error) {
+			asked = append(asked, fmt.Sprintf("%s #%d", task, number))
+			return github, nil
+		}})
+		task := file("Checkout") // WEB-2
+		// open is not checked.
+		if res := write(bob, task, client.PullRequestOpen); res.StatusCode() != http.StatusOK || len(asked) != 0 {
+			t.Fatalf("open, asked %v: %s", asked, res.Body)
+		}
+		// GitHub has it open.
+		res := write(bob, task, client.PullRequestMerged)
+		if res.StatusCode() != http.StatusConflict || !strings.Contains(res.JSONDefault.Message, "GitHub has #7 open, not merged") {
+			t.Fatalf("merged while GitHub has it open: %s", res.Body)
+		}
+		if len(asked) != 1 || asked[0] != task.ID+" #7" {
+			t.Fatalf("the Runner was asked %v", asked)
+		}
+		// Merged, on another Task's branch.
+		github.State, github.Head = "merged", "web-9-other"
+		res = write(bob, task, client.PullRequestMerged)
+		if res.StatusCode() != http.StatusBadRequest || !strings.Contains(res.JSONDefault.Message, "pull request #7's branch web-9-other is not WEB-2's") {
+			t.Fatalf("another Task's branch: %s", res.Body)
+		}
+		// Merged, on the Task's branch: a renamed Task's branch still starts with its key.
+		github.Head = "web-2-old-title"
+		if res := write(bob, task, client.PullRequestMerged); res.StatusCode() != http.StatusOK || res.JSON200.PullRequest.State != client.PullRequestMerged {
+			t.Fatalf("merged on the Task's branch: %s", res.Body)
+		}
+		// A human's write is not checked.
+		asked = nil
+		if res := write(ada, file("Human"), client.PullRequestMerged); res.StatusCode() != http.StatusOK || len(asked) != 0 {
+			t.Fatalf("a human's write, asked %v: %s", asked, res.Body)
 		}
 	})
 }

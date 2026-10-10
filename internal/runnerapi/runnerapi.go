@@ -54,8 +54,18 @@ type Session struct {
 // the server answers it not_found.
 var ErrNoSession = errors.New("runnerapi: no Shift on this Task")
 
-// ErrNoPullRequest is what Merge returns when GitHub has no such pull request open; the server
-// answers it not_found.
+// PullRequest is a pull request as the Runner read it on GitHub.
+type PullRequest struct {
+	Number int64
+	URL    string
+	// State is open, merged or closed.
+	State string
+	// Head and Base are its branches: the one it merges, and the one it merges into.
+	Head, Base string
+}
+
+// ErrNoPullRequest is what Merge returns when GitHub has no such pull request open, and what
+// PullRequest returns when no Workspace of the Task has it; the server answers it not_found.
 var ErrNoPullRequest = errors.New("runnerapi: no open pull request for this Task")
 
 // ErrNotJoinable is what Attach returns for a session that runs without tmux; the server answers
@@ -82,6 +92,10 @@ type Runner interface {
 	// error is a refusal, a mismatch or GitHub's own, its message as the Runner read it, which the
 	// server shows as it is.
 	Merge(taskID string, number int64) error
+	// PullRequest reads the Task's pull request number on GitHub, in the Task's Workspaces in
+	// pull_request mode, as the Runner's gh sees it. It returns ErrNoPullRequest when none of them
+	// has it.
+	PullRequest(taskID string, number int64) (PullRequest, error)
 	// Attach bridges conn to the Task's terminal until either side ends or ctx is done, and
 	// closes conn. Binary messages carry the terminal's bytes both ways; a text message
 	// {"cols": n, "rows": n} resizes the view. With readonly, what the client sends is ignored.
