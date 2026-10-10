@@ -596,6 +596,12 @@ test("11 · Workflows opens on the five as lines side by side, each headed by it
   expect(boxes[3].x).toBe(boxes[0].x);
   expect(boxes[3].y).toBeGreaterThan(boxes[0].y);
   expect(await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth)).toBe(true);
+  // Every name reads whole at 1184, beside Edit spelled out.
+  for (const n of five) {
+    const name = column(page, n).getByRole("link", { name: n, exact: true });
+    expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth), n).toBe(true);
+    await expect(column(page, n).getByRole("link", { name: `Edit ${n}` })).toHaveText("Edit");
+  }
   // No chip: the list is every Workflow.
   await expect(chip(page)).toHaveCount(0);
   await shot(page, "list");
@@ -608,7 +614,7 @@ test("11 · Workflows opens on the five as lines side by side, each headed by it
   await ctx.close();
 });
 
-test("11b · a column's grip moves its Workflow from the keyboard, one write; hover moves nothing", async ({ browser }) => {
+test("11b · a column's grip moves its Workflow from the keyboard and by a drag, one write each; hover moves nothing", async ({ browser }) => {
   const { page, errors, ctx } = await open(browser, "/projects/ACC/workflows");
   await expect.poll(() => rowNames(page)).toEqual(five);
   const grip = column(page, "Features").getByRole("button", { name: /^Drag to order Features/ });
@@ -624,6 +630,29 @@ test("11b · a column's grip moves its Workflow from the keyboard, one write; ho
   await expect.poll(async () => (await readGraph()).workflows.map((w) => w.name)).toEqual(moved);
   await expect(grip).toBeFocused();
   await page.keyboard.press("ArrowRight");
+  await expect.poll(() => rowNames(page)).toEqual(five);
+  await expect.poll(async () => (await readGraph()).workflows.map((w) => w.name)).toEqual(five);
+
+  // Dragged by the pointer onto the third column, Triage lands third: one write, said "later".
+  const puts: string[] = [];
+  page.on("request", (r) => r.method() === "PUT" && r.url().endsWith("/workflow") && puts.push(r.url()));
+  const from = (await column(page, "Triage").getByRole("button", { name: /^Drag to order Triage/ }).boundingBox())!;
+  const onto = (await column(page, "Features").boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 20, from.y + 10, { steps: 4 });
+  await page.mouse.move(onto.x + onto.width / 2, onto.y + 40, { steps: 12 });
+  await page.mouse.up();
+  const dragged = ["Bugs", "Features", "Triage", "Prototypes", "Support"];
+  await expect.poll(() => rowNames(page)).toEqual(dragged);
+  await expect.poll(async () => (await readGraph()).workflows.map((w) => w.name)).toEqual(dragged);
+  await expect(page.getByText(/^Moved Triage later/)).toBeVisible();
+  expect(puts).toHaveLength(1);
+  // Back where it was.
+  await column(page, "Triage").getByRole("button", { name: /^Drag to order Triage/ }).focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(() => rowNames(page)).toEqual(["Bugs", "Triage", "Features", "Prototypes", "Support"]);
+  await page.keyboard.press("ArrowLeft");
   await expect.poll(() => rowNames(page)).toEqual(five);
   await expect.poll(async () => (await readGraph()).workflows.map((w) => w.name)).toEqual(five);
   expect(errors).toEqual([]);
