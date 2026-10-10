@@ -7,10 +7,13 @@ export type Seg = { from: string; to: string; connector?: LineConnector; hand?: 
 /**
  * What a line's rails are made of, from its topology alone: the main rail (from the start; the
  * Steps before it lead into "Also starts here"), its segments and tracks and the Connectors they
- * carry; the quiet line "When a Parent ends", its stations (Done last), segments and tracks.
+ * carry; the quiet line "When a Parent ends", its stations (Done last), segments and tracks; and
+ * `side`, the Steps "Also starts here" stands for (those before the start, the breakdown Step, the
+ * parked holds).
  */
 export function railParts(t: LineTopology) {
   const { lead, rail } = railOf(t);
+  const side: ReadonlySet<string> = new Set([...lead, ...(t.before ? [t.before] : []), ...t.holds]);
   const mainTracks = railTracks(t);
   const mainSegs: Seg[] = rail.slice(0, -1).map((from, i) => {
     const s = t.segments.find((x) => x.from === from && x.to === rail[i + 1]);
@@ -29,6 +32,6 @@ export function railParts(t: LineTopology) {
     const seg = row.segments.find((x) => x.lo === k);
     return { from, to, connector: seg?.connector };
   });
-  return { lead, rail, mainTracks, mainSegs, carried, quietStations, quietTracks, quietSegs, lastRow };
+  return { lead, side, rail, mainTracks, mainSegs, carried, quietStations, quietTracks, quietSegs, lastRow };
 }
 

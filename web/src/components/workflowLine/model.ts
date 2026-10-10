@@ -250,3 +250,23 @@ export function blockedWords(t: LineTask): string | undefined {
   if (t.blockers.length === 0 || t.done) return undefined;
   return t.blockers.length === 1 ? `blocked by ${t.blockers[0].key}` : `blocked by ${t.blockers.length}`;
 }
+
+/** The Skill whose Step a Parent's end files its Retrospective at. */
+const RETRO_SKILL = "retro";
+
+/**
+ * Where a Parent's end files its Retrospective ("Retrospective › Retro"), drawn at Done, when the
+ * Workflow drawn (`drawn`, of a Project of several) does not hold the Project's retro Step itself.
+ */
+export function retroAt<S extends { workflow_id: string; name: string }>(
+  steps: readonly S[],
+  drawn: string | undefined,
+  skillOf: (s: S) => string | undefined,
+  workflowName: (id: string) => string | undefined,
+): string | undefined {
+  const isRetro = (s: S) => skillOf(s) === RETRO_SKILL;
+  if (drawn === undefined || steps.some((s) => s.workflow_id === drawn && isRetro(s))) return undefined;
+  const s = steps.find(isRetro);
+  const w = s && workflowName(s.workflow_id);
+  return s && w ? `${w} › ${s.name}` : undefined;
+}

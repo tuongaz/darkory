@@ -7,7 +7,8 @@ import { spanText } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import type { Ghost, Trace } from "./data";
 import { chipsAt, type LaneTrack, type LineTopology } from "./layout";
-import { DONE_STATION, isHoldStep, PICKUP_MS, tokenTime, type LineConnector, type LineFacts, type LineStepFacts, type LineTask } from "./model";
+import { DONE_STATION, isHoldStep, PICKUP_MS, retroAt, tokenTime, type LineConnector, type LineFacts, type LineStepFacts, type LineTask } from "./model";
+import { AlsoStartsHere, EntryChip, Mark, StartRow, type MarkKind } from "./parts";
 import { railParts, type Seg } from "./rails";
 import { StepList } from "./StepList";
 import { Count, GhostToken, HiddenCount, Token } from "./Token";
@@ -15,7 +16,6 @@ import {
   AFTER_BRANCH,
   AFTER_HINT,
   AFTER_LABEL,
-  ALSO_LABEL,
   arriveHint,
   breakdownOutcomeHint,
   entryHint,
@@ -31,7 +31,6 @@ import {
   outcomesHint,
   retroHint,
   SKILL_HINT,
-  START_LABEL,
 } from "./words";
 
 /*
@@ -124,10 +123,6 @@ function HintPool({ ids }: { ids: ReadonlyMap<string, string> }) {
 export type Tone = "trace" | "next" | "lit" | "changed" | "plain";
 
 
-/** A mark beside a Step, for what leaves the line: into Done, another Workflow, by hand, a Breakdown's Subtasks. */
-type MarkKind = "done" | "exit" | "hand" | "files" | "chip" | "return";
-
-const glyphs: Record<MarkKind, string> = { done: "●", exit: "↗", hand: "⇢", files: "↳", chip: "↗", return: "↩" };
 
 /**
  * A selected Task's way on the line (vf-7): the Task, its Blocking chain (ringed, in full ink), the
@@ -180,8 +175,7 @@ export function VerticalLine({
 }) {
   const steps = useMemo(() => new Map(facts.steps.map((s) => [s.id, s])), [facts.steps]);
   const [root, narrow] = useNarrow();
-  const { lead, rail, mainTracks, mainSegs, carried, quietStations, quietTracks, quietSegs, lastRow } = useMemo(() => railParts(t), [t]);
-  const besides = useMemo(() => new Set([...lead, ...(t.before ? [t.before] : []), ...t.holds]), [lead, t]);
+  const { side, rail, mainTracks, mainSegs, carried, quietStations, quietTracks, quietSegs, lastRow } = useMemo(() => railParts(t), [t]);
 
   // What a line or a word means, in a sentence, while the pointer is on it or it has the focus.
   const [tip, setTip] = useState<Tip | null>(null);
@@ -227,8 +221,9 @@ export function VerticalLine({
   // A count pulses once when a Task folds into it: a waiting Task whose moment stood it as a chip
   // drops into the count as the moment ends. Nothing else that changes a count (a Filter, a scope, a
   // refetch, a deselection) pulses it.
-  const playing = JSON.stringify([...at].sort().map(([id, list]) => [id, list.filter((x) => !x.holder && moment(x)).map((x) => x.id)]));
-  const counted = JSON.stringify([...splits].sort().map(([id, x]) => [id, x.rest.map((r) => r.id)]));
+  const byId = <V,>(a: [string, V], b: [string, V]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+  const playing = JSON.stringify([...at].sort(byId).map(([id, list]) => [id, list.filter((x) => !x.holder && moment(x)).map((x) => x.id)]));
+  const counted = JSON.stringify([...splits].sort(byId).map(([id, x]) => [id, x.rest.map((r) => r.id)]));
   const was = useRef<{ playing: Map<string, string[]>; counted: Map<string, string[]> } | null>(null);
   const beats = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
@@ -307,21 +302,7 @@ export function VerticalLine({
 
   /** A mark; on the quiet line (When a Parent ends) without its fill, in muted ink. */
   const mark = (kind: MarkKind, key: string, text: string, hint: string | undefined, extra: Record<string, unknown> = {}, quiet = false) => (
-    <span
-      key={key}
-      data-mark={kind}
-      {...extra}
-      {...hover(hint)}
-      className={cn(
-        "inline-flex max-w-full items-center gap-1 rounded-[5px] px-[7px] py-0.5 text-xs leading-[1.4]",
-        quiet ? "pl-0 text-muted-foreground" : kind === "done" ? "bg-state-done-bg" : kind === "hand" ? "border border-dashed border-muted-foreground px-1.5 py-px text-muted-foreground" : "bg-muted",
-      )}
-    >
-      <span aria-hidden className={cn("font-semibold", kind === "done" ? "text-state-done" : "text-muted-foreground")}>
-        {glyphs[kind]}
-      </span>{" "}
-      <span className="min-w-0 truncate">{text}</span>
-    </span>
+    <Mark key={key} kind={kind} text={text} quiet={quiet} {...extra} {...hover(hint)} />
   );
   /** Every mark reads outcome → target: "done → Done", "pass → Triage". */
   const said = (c: LineConnector, target: string) => `${c.name} → ${target}`;
@@ -331,22 +312,16 @@ export function VerticalLine({
     t.entries
       .filter((e) => e.stepId === id)
       .map((e) => (
-        <span
+        <EntryChip
           key={e.connector.id}
-          data-chip="entry"
+          text={e.text}
+          lit={traversed.has(e.connector.id)}
           data-arrival={id}
           data-connector={e.connector.id}
           data-lit={traversed.has(e.connector.id) ? "true" : undefined}
           data-dim={way && way.entered !== e.connector.id ? "" : undefined}
           {...hover(e.hint)}
-          className={cn(
-            "inline-flex h-5 items-center gap-1 rounded-full border px-[7px] text-[11px] font-medium whitespace-nowrap text-muted-foreground",
-            traversed.has(e.connector.id) && "border-state-claimed text-state-claimed",
-          )}
-        >
-          {e.text.replace(/^from /, "")}
-          <span aria-hidden>↙</span>
-        </span>
+        />
       ));
 
   // A Step's Connectors that leave its line: Done (not along the rail), another Workflow, a Step off the rail.
@@ -519,10 +494,7 @@ export function VerticalLine({
     ) : null;
 
   // ---- Also starts here: the Steps before the start, the breakdown Step, the parked holds.
-  const sideIds = (() => {
-    const ids = new Set([...lead, ...(t.before ? [t.before] : []), ...t.holds]);
-    return facts.steps.filter((s) => ids.has(s.id)).map((s) => s.id);
-  })();
+  const sideIds = facts.steps.filter((s) => side.has(s.id)).map((s) => s.id);
   const sideMarks = (id: string): ReactNode[] => {
     const s = steps.get(id);
     if (!s) return [];
@@ -551,48 +523,40 @@ export function VerticalLine({
   const onWay = (ids: readonly string[]) => !way || (!!way.stepId && ids.includes(way.stepId)) || tasks.some((x) => way.chain.has(x.id) && !!x.stepId && ids.includes(x.stepId));
   const sideLit = onWay(sideIds);
   const group = sideIds.length > 0 && (
-    <div data-dim={sideLit ? undefined : ""} className="flex w-full min-w-0 basis-full items-start @3xl:basis-auto">
-      <span aria-hidden className="relative mt-3 mr-2 hidden h-[1.5px] w-7 flex-none bg-muted-foreground @3xl:block">
-        <span className="absolute top-[-4px] left-[-2px] border-y-[4.5px] border-r-[7px] border-y-transparent border-r-muted-foreground" />
-      </span>
-      <section aria-label={ALSO_LABEL} className="min-w-0 flex-1 rounded-md border px-2.5 pt-1 pb-1.5">
-        <div className="text-[11px] font-medium text-muted-foreground">{ALSO_LABEL}</div>
-        <div className="flex flex-col gap-1">
-          {sideIds.map((id) => {
-            const s = steps.get(id)!;
-            const hold = isHoldStep(s);
-            const list = at.get(id) ?? [];
-            const n = hidden?.get(id) ?? 0;
-            const tasksHere = trace ? (
-              <>
-                {trace.current === id && list.map(token)}
-                {n > 0 && <HiddenCount n={n} dim={!!way} />}
-              </>
-            ) : (
-              atStep(id)
-            );
-            return (
-              <div key={id} data-side={id} data-head={s.name} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                <span {...hover(hold ? holdHint(s.name) : undefined)} className="text-[13px] font-medium">
-                  {s.name}
-                </span>
-                {hold ? (
-                  holdPill(s.name)
-                ) : id === t.before ? (
-                  <InfoTip label={s.name} className="-ml-1">
-                    {filesHint(s.name, start)}
-                  </InfoTip>
-                ) : null}
-                {!hold && facts1(s, true, true)}
-                {tasksHere}
-                {entryChips(id)}
-                {sideMarks(id)}
-              </div>
-            );
-          })}
-        </div>
-      </section>
-    </div>
+    <AlsoStartsHere dim={!sideLit}>
+      {sideIds.map((id) => {
+        const s = steps.get(id)!;
+        const hold = isHoldStep(s);
+        const list = at.get(id) ?? [];
+        const n = hidden?.get(id) ?? 0;
+        const tasksHere = trace ? (
+          <>
+            {trace.current === id && list.map(token)}
+            {n > 0 && <HiddenCount n={n} dim={!!way} />}
+          </>
+        ) : (
+          atStep(id)
+        );
+        return (
+          <div key={id} data-side={id} data-head={s.name} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            <span {...hover(hold ? holdHint(s.name) : undefined)} className="text-[13px] font-medium">
+              {s.name}
+            </span>
+            {hold ? (
+              holdPill(s.name)
+            ) : id === t.before ? (
+              <InfoTip label={s.name} className="-ml-1">
+                {filesHint(s.name, start)}
+              </InfoTip>
+            ) : null}
+            {!hold && facts1(s, true, true)}
+            {tasksHere}
+            {entryChips(id)}
+            {sideMarks(id)}
+          </div>
+        );
+      })}
+    </AlsoStartsHere>
   );
 
   // ---- The main rail.
@@ -601,23 +565,12 @@ export function VerticalLine({
   const heading = branchLabel === AFTER_BRANCH ? AFTER_LABEL : branchLabel;
   const startHint = first === DONE_STATION || t.afterOnly ? undefined : t.start === first ? entryHint(name(first)) : arriveHint(name(first));
   const startRow = first !== DONE_STATION && (
-    <div data-start-row className="flex min-h-6 flex-wrap items-center gap-x-2.5 gap-y-1 pb-0.5">
-      <span data-start-label data-dim={way && (way.entered || way.from !== first) ? "" : undefined} {...hover(startHint)} className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
-        <span aria-hidden>↓</span>
-        {t.afterOnly ? heading : START_LABEL}
-        {t.afterOnly && <InfoTip label={heading}>{AFTER_HINT}</InfoTip>}
-      </span>
+    <StartRow heading={t.afterOnly ? heading : undefined} label={{ "data-dim": way && (way.entered || way.from !== first) ? "" : undefined, ...hover(startHint) }}>
       {entryChips(first)}
-    </div>
+    </StartRow>
   );
 
-  // The Retrospective a Parent's end files, where this Workflow does not hold the Project's retro Step.
-  const retro = (() => {
-    if (facts.drawn === undefined || facts.steps.some((s) => s.workflow_id === facts.drawn && s.skill?.name === "retro")) return undefined;
-    const s = facts.steps.find((x) => x.skill?.name === "retro");
-    const w = s && facts.workflows.find((x) => x.id === s.workflow_id);
-    return s && w ? `${w.name} › ${s.name}` : undefined;
-  })();
+  const retro = retroAt(facts.steps, facts.drawn, (s) => s.skill?.name, (id) => facts.workflows.find((w) => w.id === id)?.name);
 
   const returns = (id: string, list: readonly LaneTrack[], line: readonly string[]) =>
     list.flatMap((k) =>
@@ -753,7 +706,7 @@ export function VerticalLine({
         picked={(id) => way?.stepId === id}
         visited={(id) => !!trace?.stays.some((x) => x.stepId === id)}
         travelling={flow.tokens}
-        besides={besides}
+        besides={side}
         outcomeOf={(id) => facts.connectors.find((c) => c.id === id)?.name}
         measureKey={[tasks, t, trace, done, ghosts, hidden, open, narrow]}
       />

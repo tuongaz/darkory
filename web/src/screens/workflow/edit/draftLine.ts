@@ -1,8 +1,6 @@
 import { useMemo } from "react";
 import type { Skill } from "@/api/client";
-import { lineTopology } from "@/components/workflowLine/layout";
-import type { LineWorkflow } from "@/components/workflowLine/model";
-import { railParts } from "@/components/workflowLine/rails";
+import { lineTopology, railParts, type LineWorkflow } from "@/components/workflowLine";
 import type { WorkflowRecord } from "../bind";
 import { asLine, type Group } from "./draft";
 

@@ -5,11 +5,8 @@ import { useMemo, useRef, useState, type ReactNode, type RefCallback } from "rea
 import type { Project, Skill } from "@/api/client";
 import { InfoTip } from "@/components/InfoTip";
 import { Tip } from "@/components/Tip";
-import { DONE_STATION } from "@/components/workflowLine/model";
-import type { Seg } from "@/components/workflowLine/rails";
-import { LineTip, RailLine, type Tip as LineHover } from "@/components/workflowLine/Vertical";
-import { AFTER_HINT, AFTER_LABEL, ALSO_LABEL, FILES_LABEL, filesHint, HAND_LABEL, holdHint, START_LABEL } from "@/components/workflowLine/words";
-import { cn } from "@/lib/utils";
+import { AlsoStartsHere, DONE_STATION, EntryChip, LineTip, Mark, RailLine, retroAt, StartRow, type Seg, type Tip as LineHover } from "@/components/workflowLine";
+import { AFTER_HINT, AFTER_LABEL, FILES_LABEL, filesHint, HAND_LABEL, holdHint } from "@/components/workflowLine/words";
 import { same, type RecordConnector, type RecordStep, type WorkflowRecord } from "../bind";
 import { outcomes, reordered, stepsIn, workflowsOf, type Draft, type Group } from "./draft";
 import { useDraftLine } from "./draftLine";
@@ -186,10 +183,7 @@ export function OnLine({
     t.entries
       .filter((e) => e.stepId === id)
       .map((e) => (
-        <span key={e.connector.id} data-chip="entry" className="inline-flex h-5 items-center gap-1 rounded-full border px-[7px] text-[11px] font-medium whitespace-nowrap text-muted-foreground">
-          {e.text.replace(/^from /, "")}
-          <span aria-hidden>↙</span>
-        </span>
+        <EntryChip key={e.connector.id} text={e.text} />
       ));
 
   const head = (s: RecordStep) => (
@@ -233,10 +227,7 @@ export function OnLine({
   };
 
   // ---- Also starts here: the Steps before the start, the breakdown Step, the parked holds.
-  const sideIds = (() => {
-    const ids = new Set([...parts.lead, ...(t.before ? [t.before] : []), ...t.holds]);
-    return order.filter((s) => ids.has(s.id));
-  })();
+  const sideIds = order.filter((s) => parts.side.has(s.id));
   // What the live line says of a Step there, read: a parked hold moved on by hand into the start, the breakdown Step's Subtasks filed at it.
   const start = t.start !== undefined ? nameOf(t.start) : undefined;
   const sideMark = (s: RecordStep) => {
@@ -244,76 +235,34 @@ export function OnLine({
     if (!hold && s.id !== t.before) return null;
     return (
       <Tip label={hold ? holdHint(s.name) : filesHint(s.name, start)}>
-        <span
-          tabIndex={0}
-          data-mark={hold ? "hand" : "files"}
-          className={cn(
-            "inline-flex items-center gap-1 rounded-[5px] px-[7px] py-0.5 text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-            hold ? "border border-dashed border-muted-foreground px-1.5 py-px text-muted-foreground" : "bg-muted",
-          )}
-        >
-          <span aria-hidden className="font-semibold text-muted-foreground">
-            {hold ? "⇢" : "↳"}
-          </span>
-          {start ?? (hold ? HAND_LABEL : FILES_LABEL)}
-        </span>
+        <Mark tabIndex={0} kind={hold ? "hand" : "files"} text={start ?? (hold ? HAND_LABEL : FILES_LABEL)} className="outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50" />
       </Tip>
     );
   };
   const group = sideIds.length > 0 && (
-    <div className="flex w-full min-w-0 basis-full items-start @3xl:basis-auto">
-      <span aria-hidden className="relative mt-3 mr-2 hidden h-[1.5px] w-7 flex-none bg-muted-foreground @3xl:block">
-        <span className="absolute top-[-4px] left-[-2px] border-y-[4.5px] border-r-[7px] border-y-transparent border-r-muted-foreground" />
-      </span>
-      <section aria-label={ALSO_LABEL} className="min-w-0 flex-1 rounded-md border px-2.5 pt-1 pb-1.5">
-        <div className="text-[11px] font-medium text-muted-foreground">{ALSO_LABEL}</div>
-        <div className="flex flex-col gap-1.5">
-          {sideIds.map((s) => (
-            <div key={s.id} data-side={s.id} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              {head(s)}
-              {entries(s.id)}
-              {sideMark(s)}
-              {besides(s, [])}
-            </div>
-          ))}
+    <AlsoStartsHere roomy>
+      {sideIds.map((s) => (
+        <div key={s.id} data-side={s.id} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          {head(s)}
+          {entries(s.id)}
+          {sideMark(s)}
+          {besides(s, [])}
         </div>
-      </section>
-    </div>
+      ))}
+    </AlsoStartsHere>
   );
 
   const { rail, mainSegs, mainTracks, quietStations, quietSegs, quietTracks } = parts;
   const first = rail[0];
-  const startRow = first !== DONE_STATION && (
-    <div data-start-row className="flex min-h-6 flex-wrap items-center gap-x-2.5 gap-y-1 pb-0.5">
-      <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
-        <span aria-hidden>↓</span>
-        {t.afterOnly ? AFTER_LABEL : START_LABEL}
-        {t.afterOnly && <InfoTip label={AFTER_LABEL}>{AFTER_HINT}</InfoTip>}
-      </span>
-      {entries(first)}
-    </div>
-  );
-  // The Retrospective a Parent's end files, where this Workflow does not hold the Project's retro Step.
-  const retro = (() => {
-    const isRetro = (s: RecordStep) => !!s.skill_id && skillMap.get(s.skill_id)?.name === "retro";
-    if (drawn === undefined || wf.steps.some((s) => s.workflow_id === drawn && isRetro(s))) return undefined;
-    const s = wf.steps.find(isRetro);
-    return s ? `${workflowName(s.workflow_id)} › ${s.name}` : undefined;
-  })();
+  const startRow = first !== DONE_STATION && <StartRow heading={t.afterOnly ? AFTER_LABEL : undefined}>{entries(first)}</StartRow>;
+  const retro = retroAt(wf.steps, drawn, (s) => (s.skill_id ? skillMap.get(s.skill_id)?.name : undefined), workflowName);
 
   const row = (stations: readonly string[], withGroup: boolean) => (id: string, i: number) => {
     if (id === DONE_STATION) {
       return {
         name: <span className="text-sm font-semibold">Done</span>,
         tasks: null,
-        marks: withGroup && retro && (
-          <span data-retro className="inline-flex items-center gap-1 rounded-[5px] bg-muted px-[7px] py-0.5 text-xs">
-            <span aria-hidden className="font-semibold text-muted-foreground">
-              ↗
-            </span>
-            {retro}
-          </span>
-        ),
+        marks: withGroup && retro && <Mark kind="exit" text={retro} data-retro />,
       };
     }
     const s = steps.get(id)!;
