@@ -23,7 +23,7 @@ PUBLIC_URL ?= http://127.0.0.1:7357
 ## api/openapi.yaml (needs node for the web's)
 gen:
 	$(GO) generate ./client ./internal/server/gen
-	cd web && npm run gen
+	cd web && ([ -d node_modules ] || npm ci) && npm run gen
 
 ## web: build the web app into web/dist/app, which the next build embeds (needs node)
 web:
