@@ -12,3 +12,8 @@ export function mergeBase(detail: Pick<TaskDetail, "workspaces" | "parent">, wor
   const fallback = projectDefault ? workspaces.find((w) => w.id === projectDefault && w.mode === "pull_request") : undefined;
   return (named ?? fallback)?.default_branch || "main";
 }
+
+/** A pull request's address when the page may link it: https only (the server checks it; the page does not trust it). */
+export function linkable(url: string): string | undefined {
+  return url.startsWith("https://") ? url : undefined;
+}

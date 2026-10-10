@@ -16,6 +16,7 @@ import { WorkGlyph } from "@/components/WorkGlyph";
 import { cn } from "@/lib/utils";
 import { kindLabel, taskWorkGlyph } from "@/work";
 import { MergeDialog } from "@/screens/task/dialogs";
+import { linkable } from "@/screens/task/pullRequest";
 import { AnswerDialog } from "./AnswerDialog";
 import { startOfDay } from "./derive";
 import type { StepName } from "./queries";
@@ -247,9 +248,12 @@ export function MergeAct({ task, primary }: { task: Task; primary?: boolean }) {
   const pr = task.pull_request;
   if (!pr) return null;
   if (!runner) {
+    const href = linkable(pr.url);
+    // An address that is not https is not linked, as the chip does not link it.
+    if (!href) return <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">#{pr.number} open</span>;
     return (
       <Button asChild size="xs" variant={primary ? "default" : "outline"} className="relative z-10">
-        <a href={pr.url} target="_blank" rel="noreferrer noopener">
+        <a href={href} target="_blank" rel="noreferrer noopener">
           Open #{pr.number}
         </a>
       </Button>

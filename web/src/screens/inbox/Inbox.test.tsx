@@ -169,6 +169,17 @@ describe("the Inbox", () => {
       expect(read?.query.getAll("filter")).toEqual([`owner:is:${ada.id}`, "pull_request:is:open"]);
     });
 
+    it("links nothing without a Runner when the pull request's address is not https", async () => {
+      recordApi({ tasks: [landed(1, "open", { pull_request: { number: 7, url: "javascript:alert(1)", state: "open" } })], extra: runner(false) });
+      renderApp("/inbox");
+      const needs = await section("Needs you");
+      await waitFor(() => expect(row(needs, "WEB-1")).not.toBeNull());
+      const r = row(needs, "WEB-1");
+      expect(r).toHaveTextContent("#7 open");
+      expect(within(r).queryByRole("link", { name: /#7/ })).not.toBeInTheDocument();
+      expect(r.querySelector('a[href^="javascript"]')).toBeNull();
+    });
+
     it("merges through the Runner after the confirm, and the row leaves once it is merged", async () => {
       const t = landed(1, "open");
       const { calls } = recordApi({
