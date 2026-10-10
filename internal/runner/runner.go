@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/branch"
 	"github.com/tuongaz/darkory/internal/cli/remote"
 	"github.com/tuongaz/darkory/internal/runnerapi"
 )
@@ -162,8 +163,10 @@ type Runner struct {
 	merges chan client.Activity
 	// kept wakes attachKept, as a Claim ends.
 	kept chan struct{}
-	// reader is the Record the runner reads Activity and merges with.
+	// reader is the Record the runner reads Activity and merges with; ready closes once Run has
+	// set it, so the server's calls of PullRequest and Merge read it safely.
 	reader Record
+	ready  chan struct{}
 	// skills names Skills by id.
 	skills map[string]client.Skill
 	// repos are the locks on the repositories the runner changes, by path.
@@ -196,7 +199,7 @@ func New(cfg Config) (*Runner, error) {
 	}
 	r := &Runner{cfg: cfg, t: cfg.Timings, log: cfg.Log.With("component", "runner"), host: cfg.Host, gh: cfg.GitHub,
 		ledger: &ledger{path: TaskDir(cfg.Data, "branches.json")}, bin: cfg.Darkory,
-		sessions: map[string]*session{}, merges: make(chan client.Activity, 1024), kept: make(chan struct{}, 1), skills: map[string]client.Skill{},
+		sessions: map[string]*session{}, ready: make(chan struct{}), merges: make(chan client.Activity, 1024), kept: make(chan struct{}, 1), skills: map[string]client.Skill{},
 		repos: map[string]*sync.Mutex{}, tried: map[string]bool{}}
 	if r.host == nil {
 		switch cfg.Tmux {
@@ -274,6 +277,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		return errors.New("runner: no agent Member to run; give it agent tokens in <data>/agents or with --token")
 	}
 	r.reader = r.agents[0].rec
+	close(r.ready)
 	names := make([]string, len(r.agents))
 	for i, a := range r.agents {
 		names[i] = a.me.Member.Name
@@ -464,16 +468,116 @@ func (r *Runner) Stop(task string) error {
 	return s.command(ctx, cmdStop)
 }
 
-// Merge merges a Task's pull request on GitHub. Not yet: until the Runner reads pull requests it
-// finds none (docs/build/dogfood-followups-plan.md, Task 2).
-func (r *Runner) Merge(_ string, _ int64) error {
-	return runnerapi.ErrNoPullRequest
+// mergeTimeout bounds a merge: reading the pull request on GitHub, checking it, merging it.
+const mergeTimeout = 60 * time.Second
+
+// errNotStarted is the server asking about pull requests before the Runner has its Record.
+var errNotStarted = errors.New("the Runner is starting; try again in a moment")
+
+// Merge merges pull request number of a Task on GitHub, as the identity gh signs in as, once it
+// has checked there that it is open, that its head is a branch of the Task (branch.Prefix of its
+// key, whatever the title said when the branch was made) and that its base is that branch's own:
+// the Parent's branch for a Subtask, else the Workspace's default branch. It records nothing: the
+// server records the merge as the Member who asked. GitHub's refusal is the error, as gh said it.
+func (r *Runner) Merge(taskID string, number int64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), mergeTimeout)
+	defer cancel()
+	d, ws, pr, err := r.findPullRequest(ctx, taskID, number)
+	if err != nil {
+		return err
+	}
+	if pr.State != PROpen {
+		return runnerapi.ErrNoPullRequest
+	}
+	key := d.Task.Key
+	if !strings.HasPrefix(pr.HeadRefName, branch.Prefix(key)) {
+		return fmt.Errorf("pull request #%d's branch %s is not %s's", number, pr.HeadRefName, key)
+	}
+	base := ownBase(ctx, d, ws)
+	if pr.BaseRefName != base {
+		return fmt.Errorf("pull request #%d is into %s, not %s", number, pr.BaseRefName, base)
+	}
+	if err := r.gh.MergePR(ctx, ws.Path, number); err != nil {
+		r.log.Info("GitHub refused to merge a Task's pull request", "task", key, "workspace", ws.Name, "pr", number, "err", err)
+		return err
+	}
+	r.log.Info("merged a Task's pull request on GitHub", "task", key, "workspace", ws.Name, "pr", number, "branch", pr.HeadRefName, "into", base)
+	return nil
 }
 
-// PullRequest reads a Task's pull request on GitHub. Not yet: until the Runner reads pull requests
-// it finds none (docs/build/dogfood-followups-plan.md, Task 2).
-func (r *Runner) PullRequest(_ string, _ int64) (runnerapi.PullRequest, error) {
-	return runnerapi.PullRequest{}, runnerapi.ErrNoPullRequest
+// ownBase is the branch a Task's branch merges into in ws: its Parent's branch for a Subtask,
+// else the Workspace's default branch, as a checkout's base is chosen.
+func ownBase(ctx context.Context, d *client.TaskDetail, ws Workspace) string {
+	if d.Parent != nil {
+		return ParentBranch(d.Parent.Key)
+	}
+	return or(ws.DefaultBranch, defaultBranch(ctx, ws.Path))
+}
+
+// PullRequest reads pull request number of a Task on GitHub, in the Task's Workspaces in
+// pull_request mode. The server calls it while a write of the Runner's own may wait on its
+// answer, so it takes no lock: it reads the record and runs gh, nothing more.
+func (r *Runner) PullRequest(taskID string, number int64) (runnerapi.PullRequest, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), mergeTimeout)
+	defer cancel()
+	_, _, pr, err := r.findPullRequest(ctx, taskID, number)
+	if err != nil {
+		return runnerapi.PullRequest{}, err
+	}
+	return runnerapi.PullRequest{Number: pr.Number, URL: pr.URL, State: strings.ToLower(pr.State), Head: pr.HeadRefName, Base: pr.BaseRefName}, nil
+}
+
+// ghMissing says gh found no pull request of that number in the repository.
+func ghMissing(err error) bool {
+	return strings.Contains(err.Error(), "Could not resolve to a PullRequest")
+}
+
+// findPullRequest reads pull request number in each Workspace of the Task in pull_request mode:
+// the first whose head is a branch of the Task, else the first that has the number at all. It is
+// ErrNoPullRequest when none has it, or gh's error when it could not tell.
+func (r *Runner) findPullRequest(ctx context.Context, taskID string, number int64) (*client.TaskDetail, Workspace, PullRequest, error) {
+	select {
+	case <-r.ready:
+	default:
+		return nil, Workspace{}, PullRequest{}, errNotStarted
+	}
+	d, err := r.reader.Task(ctx, taskID)
+	if err != nil {
+		return nil, Workspace{}, PullRequest{}, err
+	}
+	wss, err := r.reader.Workspaces(ctx, d)
+	if err != nil {
+		return nil, Workspace{}, PullRequest{}, err
+	}
+	var (
+		first   *PullRequest
+		firstWS Workspace
+		failed  error
+	)
+	for _, ws := range wss {
+		if ws.Mode != ModePullRequest {
+			continue
+		}
+		pr, err := r.gh.PullRequest(ctx, ws.Path, number)
+		switch {
+		case err != nil && ghMissing(err):
+			continue
+		case err != nil:
+			failed = err
+			continue
+		case strings.HasPrefix(pr.HeadRefName, branch.Prefix(d.Task.Key)):
+			return d, ws, pr, nil
+		case first == nil:
+			first, firstWS = &pr, ws
+		}
+	}
+	switch {
+	case first != nil:
+		return d, firstWS, *first, nil
+	case failed != nil:
+		return nil, Workspace{}, PullRequest{}, failed
+	}
+	return nil, Workspace{}, PullRequest{}, runnerapi.ErrNoPullRequest
 }
 
 // Socket is the tmux server the runner's sessions run on, for `tmux -L`.
