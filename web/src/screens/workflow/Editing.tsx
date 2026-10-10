@@ -32,7 +32,8 @@ import {
   type Group,
 } from "./edit/draft";
 import { orgWide, useRoster } from "./edit/holders";
-import { OnLine, type OnLineActions } from "./edit/OnLine";
+import type { OnLineActions } from "./edit/lineEdit";
+import { OnLine } from "./edit/OnLine";
 import { useOrgFacts } from "./edit/reach";
 import type { DraftEditor } from "./edit/useDraft";
 import { useEditorWorkflow } from "./edit/useEditorWorkflow";
@@ -71,7 +72,7 @@ export function EditingWorkflow({
   const facts = useOrgFacts(!!editor);
   const skillMap = useMemo(() => new Map((skills ?? []).map((s) => [s.id, s])), [skills]);
   // Who takes each Skill's Steps at Save: the draft's changes to who takes them drawn in.
-  const holders = holdersAt(draft, roster, new Set((skills ?? []).filter(orgWide).map((s) => s.id)));
+  const holders = useMemo(() => holdersAt(draft, roster, new Set((skills ?? []).filter(orgWide).map((s) => s.id))), [draft, roster, skills]);
   const groups = useMemo(() => (draft ? groupsOf(draft.wf, skillMap, draft.placed) : () => "main" as const), [draft, skillMap]);
   const readOnly = !editor;
   const apply = useCallback((edit: (d: Draft) => Draft, key?: string) => editor?.apply(edit, key), [editor]);

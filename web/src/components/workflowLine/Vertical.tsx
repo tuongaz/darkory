@@ -59,7 +59,8 @@ const LANE = 12;
 const STUB = 5;
 
 type Hover = (text: string | undefined, opts?: { focus?: boolean }) => Record<string, unknown>;
-type Tip = { x: number; y: number; w: number; text: string };
+/** A hover sentence and where it shows, in the line root's box. */
+export type Tip = { x: number; y: number; w: number; text: string };
 
 /**
  * The hover sentences of one drawing: each carrier shows its sentence while the pointer is on it
@@ -735,15 +736,21 @@ export function VerticalLine({
       {branch}
       {footer}
       {pool()}
-      {tip && (
-        <div
-          role="tooltip"
-          className="pointer-events-none absolute z-30 w-max max-w-[320px] rounded-md border bg-popover px-2.5 py-1.5 text-xs leading-[18px] text-popover-foreground shadow-pop"
-          style={{ left: Math.max(8, Math.min(tip.x + 12, tip.w - 330)), top: tip.y + 16 }}
-        >
-          {tip.text}
-        </div>
-      )}
+      <LineTip tip={tip} />
+    </div>
+  );
+}
+
+/** The sentence a line's hover shows, under the pointer, inside the line root (`data-line-root`). */
+export function LineTip({ tip }: { tip: Tip | null }) {
+  if (!tip) return null;
+  return (
+    <div
+      role="tooltip"
+      className="pointer-events-none absolute z-30 w-max max-w-[320px] rounded-md border bg-popover px-2.5 py-1.5 text-xs leading-[18px] text-popover-foreground shadow-pop"
+      style={{ left: Math.max(8, Math.min(tip.x + 12, tip.w - 330)), top: tip.y + 16 }}
+    >
+      {tip.text}
     </div>
   );
 }

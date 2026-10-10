@@ -205,6 +205,14 @@ test("editing on the line, vf-9", async ({ page }) => {
   await page.getByRole("option", { name: "Build", exact: true }).click();
   await page.getByRole("combobox", { name: "Where pass out of Review leads" }).click();
   await page.getByRole("option", { name: "Verify", exact: true }).click();
+  // The editor's line says what a track means on hover, as the live line does.
+  const track = await page.locator('[data-line-root] svg path[data-connectors][data-hint*="when the holder says fail"]').first().evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await page.mouse.move(track.x, track.y);
+  await expect(page.getByRole("tooltip")).toContainText("when the holder says fail");
+  await page.mouse.move(0, 0);
   await page.getByRole("textbox", { name: "Name of Verify" }).focus();
   await page.waitForTimeout(300);
   await noSidewaysScroll(page);
