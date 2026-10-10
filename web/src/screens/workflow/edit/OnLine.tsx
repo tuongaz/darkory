@@ -18,15 +18,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { lineTopology } from "@/components/workflowLine/layout";
-import { DONE_STATION, type LineWorkflow } from "@/components/workflowLine/model";
-import { railParts, type Seg } from "@/components/workflowLine/rails";
+import { DONE_STATION } from "@/components/workflowLine/model";
+import type { Seg } from "@/components/workflowLine/rails";
 import { RailLine } from "@/components/workflowLine/Vertical";
 import { AFTER_HINT, AFTER_LABEL, ALSO_LABEL, FILES_LABEL, filesHint, HAND_LABEL, holdHint, START_LABEL } from "@/components/workflowLine/words";
 import { cn } from "@/lib/utils";
 import { same, type RecordConnector, type RecordStep, type WorkflowRecord } from "../bind";
 import { nameMax } from "../edits";
-import { asLine, isNewSkill, outcomes, stepsIn, wasTarget, workflowsOf, type Draft, type Group } from "./draft";
+import { isNewSkill, outcomes, reordered, stepsIn, wasTarget, workflowsOf, type Draft, type Group } from "./draft";
+import { useDraftLine } from "./draftLine";
 import type { Holder, Roster } from "./holders";
 import type { OrgFacts } from "./reach";
 import { SkillPicker, type SkillChoice } from "./SkillPicker";
@@ -108,20 +108,22 @@ export function OnLine({
   const steps = useMemo(() => new Map(wf.steps.map((s) => [s.id, s])), [wf.steps]);
   const baseSteps = useMemo(() => new Map(base.steps.map((s) => [s.id, s])), [base.steps]);
 
-  // The line as the live page draws it, but a new Step stays where it was put though nothing joins it yet.
-  const line = useMemo<LineWorkflow>(() => {
-    const drawn = workflows.length > 1 ? workflowId : undefined;
-    const placed = new Map(order.filter((s) => !baseSteps.has(s.id)).map((s) => [s.id, groups(s)] as const));
-    return { ...asLine(wf, skillMap, drawn), placed };
-  }, [wf, skillMap, workflows.length, workflowId, order, baseSteps, groups]);
-  const t = useMemo(() => lineTopology(line), [line]);
-  const parts = useMemo(() => railParts(t), [t]);
+  // The line as the live page draws it, but a new Step stays where it was put though nothing joins it yet;
+  // laid out again only when its structure changes, never as a name is typed.
+  const drawn = workflows.length > 1 ? workflowId : undefined;
+  const placed = new Map(order.filter((s) => !baseSteps.has(s.id)).map((s) => [s.id, groups(s)] as const));
+  const { key, t, parts } = useDraftLine(wf, skillMap, drawn, placed);
+  // The rows' heights follow the names' lengths (a field wraps): measured again when they change.
+  const measureKey = [key, wf.steps.map((s) => s.name.length).join(","), wf.connectors.map((c) => c.name.length).join(",")];
 
-  // What the draft changed: a Step added, renamed, given another Skill or moved; an outcome added, renamed or re-pointed.
+  // What the draft changed: a Step added, renamed, given another Skill, moved into another Workflow
+  // or along its own (the fewest moves, as the changes list says them); an outcome added, renamed or
+  // re-pointed. Who takes a Step is not drawn here: the changes list says it.
+  const moved = useMemo(() => reordered(base, wf), [base, wf]);
   const changedStep = (id: string) => {
     const b = baseSteps.get(id);
     const s = steps.get(id);
-    return !!s && (!b || b.name !== s.name.trim() || b.skill_id !== s.skill_id || b.workflow_id !== s.workflow_id);
+    return !!s && (!b || b.name !== s.name.trim() || b.skill_id !== s.skill_id || b.workflow_id !== s.workflow_id || moved.has(id));
   };
   const changedOutcome = useMemo(() => {
     const was = new Map(base.connectors.map((c) => [c.id, c]));
@@ -326,8 +328,9 @@ export function OnLine({
   );
   // The Retrospective a Parent's end files, where this Workflow does not hold the Project's retro Step.
   const retro = (() => {
-    if (line.drawn === undefined || line.steps.some((s) => s.workflow_id === line.drawn && s.skill?.name === "retro")) return undefined;
-    const s = line.steps.find((x) => x.skill?.name === "retro");
+    const isRetro = (s: RecordStep) => !!s.skill_id && skillMap.get(s.skill_id)?.name === "retro";
+    if (drawn === undefined || wf.steps.some((s) => s.workflow_id === drawn && isRetro(s))) return undefined;
+    const s = wf.steps.find(isRetro);
     return s ? `${workflowName(s.workflow_id)} › ${s.name}` : undefined;
   })();
 
@@ -383,7 +386,7 @@ export function OnLine({
         isStart={() => false}
         changed={changedStep}
         segment={segment}
-        measureKey={[draft]}
+        measureKey={measureKey}
       />
       <button
         type="button"
@@ -416,7 +419,7 @@ export function OnLine({
             isStart={(id) => id === first && id !== DONE_STATION}
             changed={changedStep}
             segment={segment}
-            measureKey={[draft]}
+            measureKey={measureKey}
           />
           {branch}
         </SortableContext>

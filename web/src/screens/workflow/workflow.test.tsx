@@ -294,6 +294,10 @@ describe("a Workflow's editor", () => {
     fireEvent.keyDown(grip, { key: "ArrowDown", altKey: true });
     expect(onRail()).toEqual(["Review", "Build", "Done"]);
     expect(screen.getByRole("button", { name: /^Move Build/ })).toHaveFocus();
+    // The Step the changes list says moved (the fewest moves: Review, before Build now) is drawn in the waiting blue; the other is not.
+    const dot = (id: string) => screen.getByRole("list", { name: "Steps on the line" }).closest("div")!.parentElement!.querySelector(`circle[data-dot="${id}"]`);
+    expect(dot(step.review)).toHaveAttribute("data-changed");
+    expect(dot(step.build)).not.toHaveAttribute("data-changed");
     // Build is last of the main Steps now: it does not cross into the Steps after a Parent.
     fireEvent.keyDown(screen.getByRole("button", { name: /^Move Build/ }), { key: "ArrowDown", altKey: true });
     expect(onRail()).toEqual(["Review", "Build", "Done"]);
@@ -324,6 +328,7 @@ describe("a Workflow's editor", () => {
     expect(dialog.getByRole("heading", { name: "1 outcome leads into Review" })).toBeInTheDocument();
     expect(dialog.getByRole("combobox", { name: "Where pass out of Build leads instead" })).toHaveTextContent("Remove this outcome");
     expect(dialog.getByRole("note")).toHaveTextContent("Without Review, Build has no way out.");
+    expect(dialog.getByText("Review's own outcomes go: pass → Done, needs changes → Build.")).toBeInTheDocument();
     expect(dialog.getByRole("button", { name: "Delete Review" })).toBeDisabled();
     await userEvent.click(dialog.getByRole("combobox", { name: "Step that receives the Tasks at Review" }));
     await userEvent.click(await screen.findByRole("option", { name: "Build" }));
