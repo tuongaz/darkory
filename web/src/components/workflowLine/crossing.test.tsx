@@ -33,7 +33,7 @@ const touching = (wf: LineWorkflow, t: LineTopology, drawn: ReadonlySet<string> 
 /** A Task's path as TaskLine traces it: waiting at the line's first Step, its outcomes out of there its next moves. */
 const traceAt = (wf: LineWorkflow, t: LineTopology): Trace => {
   const at = t.main.find((id) => t.steps.has(id))!;
-  return { stays: [{ stepId: at, since: 0, worked: 0, waited: 60_000 }], traversed: [], next: wf.connectors.filter((c) => c.from === at).map((c) => c.id), current: at };
+  return { taskId: "k-1", stays: [{ stepId: at, since: 0, worked: 0, waited: 60_000 }], traversed: [], next: wf.connectors.filter((c) => c.from === at).map((c) => c.id), current: at };
 };
 
 /** Every Connector a drawing shows: on the main line, an arc or a track, a branch row, a chip, the entry arrow or a mark. */

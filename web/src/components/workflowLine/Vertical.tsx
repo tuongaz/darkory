@@ -544,8 +544,9 @@ export function VerticalLine({
     for (const e of t.exits.filter((x) => x.stepId === id)) out.push(mark("exit", e.connector.id, said(e.connector, fullName(e.connector.to)), e.hint, { "data-connector": e.connector.id, "data-chip": "exit", "data-exit": e.connector.id }));
     return out;
   };
-  // A selected Task's way runs through the group when it, or a Task of its chain, is there.
-  const sideLit = !way || tasks.some((x) => way.chain.has(x.id) && !!x.stepId && sideIds.includes(x.stepId));
+  // A selected Task's way runs through a group of Steps (Also starts here, When a Parent ends) when it, or a Task of its chain, is there.
+  const onWay = (ids: readonly string[]) => !way || (!!way.stepId && ids.includes(way.stepId)) || tasks.some((x) => way.chain.has(x.id) && !!x.stepId && ids.includes(x.stepId));
+  const sideLit = onWay(sideIds);
   const group = sideIds.length > 0 && (
     <div data-dim={sideLit ? undefined : ""} className="flex w-full min-w-0 basis-full items-start @3xl:basis-auto">
       <span aria-hidden className="relative mt-3 mr-2 hidden h-[1.5px] w-7 flex-none bg-muted-foreground @3xl:block">
@@ -710,7 +711,7 @@ export function VerticalLine({
   };
   const heading = branchLabel === AFTER_BRANCH ? AFTER_LABEL : branchLabel;
   const branch = !noBranch && t.rows.length > 0 && (
-    <section aria-label={heading} className="mt-3 border-t pt-2">
+    <section aria-label={heading} data-dim={onWay(quietStations) ? undefined : ""} className="mt-3 border-t pt-2">
       <div className="mb-1 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
         {heading}
         <InfoTip label={heading}>{AFTER_HINT}</InfoTip>

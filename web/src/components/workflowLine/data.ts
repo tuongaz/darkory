@@ -263,6 +263,8 @@ export type TraceStay = {
 
 /** A Task's way through the Workflow: its stays, the Connectors it took, and the outcomes open to it now. */
 export type Trace = {
+  /** The Task whose path it is. */
+  taskId: string;
   stays: TraceStay[];
   traversed: string[];
   next: string[];
@@ -311,7 +313,7 @@ export function traceOf(
   });
   const current = task.state === "open" && task.step_id ? task.step_id : undefined;
   const next = current ? workflow.connectors.filter((c) => c.from === current).sort((a, b) => a.position - b.position).map((c) => c.id) : [];
-  return { stays: out, traversed, next, current, end: end?.kind };
+  return { taskId: task.id, stays: out, traversed, next, current, end: end?.kind };
 }
 
 /** Where a Connector leads, as a station: a Step's id, or Done. */

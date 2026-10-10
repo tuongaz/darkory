@@ -89,9 +89,9 @@ export function WorkflowLine(props: WorkflowLineProps) {
         .sort((a, b) => a.position - b.position)
         .map((c) => ({ outcome: c.name, to: nameOf(c.to) }))
     : [];
-  // Its way in: the trace says it when the line is this one Task's (its scope draws it alone), else its Step is.
+  // Its way in: its trace says it when the line traces it (its scope), else its Step is.
   const trace = props.trace;
-  const traced = !!task && !!trace && props.tasks.length === 1 && props.tasks[0].id === task.id;
+  const traced = !!task && trace?.taskId === task.id;
   const way: Way | undefined =
     task && inChain
       ? {
@@ -103,16 +103,32 @@ export function WorkflowLine(props: WorkflowLineProps) {
         }
       : undefined;
 
-  // The strip takes the focus as it appears; cleared, the focus goes back to the Task's chip, or to
-  // the count it folded into, unless it has gone elsewhere on the page.
+  // The strip takes the focus when the viewer picked the Task on the line (a chip, a row of a
+  // Step's list), not when a selection arrives from elsewhere or the Task moves on. Cleared, the
+  // focus goes back to the Task's chip, or to the count it folded into, unless it has gone
+  // elsewhere on the page.
   const box = useRef<HTMLDivElement>(null);
   const strip = useRef<HTMLElement>(null);
+  const picked = useRef(false);
+  const pick = useMemo(
+    () =>
+      onSelect &&
+      ((id: string | null) => {
+        picked.current = true;
+        onSelect(id);
+      }),
+    [onSelect],
+  );
   const back = useRef<{ key: string; stepId?: string } | null>(null);
-  const [selKey, selStep] = [task?.key, task?.stepId];
   useEffect(() => {
+    if (task) back.current = { key: task.key, stepId: task.stepId };
+  });
+  const selKey = task?.key;
+  useEffect(() => {
+    const byViewer = picked.current;
+    picked.current = false;
     if (selKey) {
-      back.current = { key: selKey, stepId: selStep };
-      strip.current?.querySelector<HTMLElement>("button, a[href]")?.focus();
+      if (byViewer) strip.current?.querySelector<HTMLElement>("button, a[href]")?.focus();
       return;
     }
     const was = back.current;
@@ -123,7 +139,7 @@ export function WorkflowLine(props: WorkflowLineProps) {
     if (active && active !== document.body && !root.contains(active)) return;
     const to = root.querySelector<HTMLElement>(`[data-box="token"][data-task="${was.key}"]`) ?? (was.stepId ? root.querySelector<HTMLElement>(`button[data-count="${was.stepId}"]`) : null);
     to?.focus();
-  }, [selKey, selStep]);
+  }, [selKey]);
 
   return (
     <div ref={box} role="region" aria-label={props.label ?? "Workflow line"} data-orientation="vertical" className={cn("w-full min-w-0", props.className)}>
@@ -153,7 +169,7 @@ export function WorkflowLine(props: WorkflowLineProps) {
         flow={flow}
         now={props.now}
         selected={selected}
-        onSelect={onSelect}
+        onSelect={pick}
         ringed={ringed}
         way={way}
         onOpenTask={props.onOpenTask}

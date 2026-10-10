@@ -4,10 +4,10 @@ import { useState } from "react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import { wfId } from "@/test/fixtures";
-import type { Chain } from "./data";
+import type { Chain, Trace } from "./data";
 import { BIG, DARK, FIVE, MAIN, NEWS, SOFTWARE } from "./fixtures";
 import { lineTopology, tracks } from "./layout";
-import type { LineMember, LineTask } from "./model";
+import type { LineMember, LineTask, LineWorkflow } from "./model";
 import { WorkflowLine } from "./WorkflowLine";
 
 // The line runs top to bottom at every width (the final design, vf-1 … vf-6): Start's filled
@@ -232,13 +232,27 @@ describe("the selected Task's strip (vf-7)", () => {
   const VF7: LineTask[] = [held(21, "build", "builder", 18), waiting(28, "build", 2), held(19, "review", "reviewer", 6)];
   const claim = (first: Chain["first"]) => (first.kind === "none" ? null : <button type="button">{`Claim ${first.task.key}`}</button>);
 
-  function Selecting({ tasks, initial = null, takeable = [] }: { tasks: readonly LineTask[]; initial?: string | null; takeable?: string[] }) {
+  function Selecting({
+    tasks,
+    initial = null,
+    takeable = [],
+    workflow = DARK("impl"),
+    trace,
+  }: {
+    tasks: readonly LineTask[];
+    initial?: string | null;
+    takeable?: string[];
+    workflow?: LineWorkflow;
+    trace?: Trace;
+  }) {
     const [selected, setSelected] = useState<string | null>(initial);
     return (
       <MemoryRouter>
+        <input aria-label="Elsewhere" />
         <WorkflowLine
           label="Workflow"
-          workflow={DARK("impl")}
+          workflow={workflow}
+          trace={trace}
           tasks={tasks}
           now={NOW}
           selected={selected}
@@ -298,6 +312,44 @@ describe("the selected Task's strip (vf-7)", () => {
     expect(dimmed(line().querySelector("[data-start-label]"))).toBe(false);
     for (const id of ["build", "review", "done"]) expect(dimmed(line().querySelector(`li[data-station="${id}"] [data-segment], li[data-station="${id}"]`)), id).toBe(false);
     expect(dimmed(line().querySelector("svg"))).toBe(false);
+  });
+
+  it("takes the focus only when the viewer picks: not for a selection that arrives from elsewhere, nor when the Task moves on", async () => {
+    const { rerender } = render(<Selecting tasks={VF7} initial="k-21" />);
+    expect(strip("DARK-21")).not.toBeNull();
+    expect(strip("DARK-21")).not.toContainElement(document.activeElement as HTMLElement);
+
+    rerender(<Selecting tasks={VF7} />);
+    const elsewhere = screen.getByRole("textbox", { name: "Elsewhere" });
+    elsewhere.focus();
+    // DARK-21 moves on to Review while selected: the focus stays where it is.
+    rerender(<Selecting tasks={[held(21, "review", "builder", 1), waiting(28, "build", 2), held(19, "review", "reviewer", 6)]} />);
+    expect(strip("DARK-21")).toHaveTextContent("next: pass → Done");
+    expect(elsewhere).toHaveFocus();
+  });
+
+  it("reads its way in from its own trace only: the entry it crossed in by stays lit, Start fades", () => {
+    const trace = (taskId: string): Trace => ({ taskId, stays: [{ stepId: "build", since: 0, worked: 0, waited: 0 }], traversed: ["triage:feature"], next: ["build:pass"], current: "build" });
+    const entry = () => line().querySelector('[data-start-row] [data-chip="entry"]');
+    const start = () => line().querySelector("[data-start-label]");
+    const { unmount } = render(<Selecting tasks={[held(21, "build", "builder", 18)]} initial="k-21" trace={trace("k-21")} />);
+    expect(dimmed(entry())).toBe(false);
+    expect(dimmed(start())).toBe(true);
+    unmount();
+    // Another Task's trace, the line showing DARK-21 alone (a Filter): DARK-21's way in is its Step.
+    render(<Selecting tasks={[held(21, "build", "builder", 18)]} initial="k-21" trace={trace("k-99")} />);
+    expect(dimmed(entry())).toBe(true);
+    expect(dimmed(start())).toBe(false);
+  });
+
+  it("fades When a Parent ends while the way runs nowhere near it, and keeps it when a Task of the chain is there", async () => {
+    const tasks = [held(21, "build", "builder", 18), waiting(30, "acceptance", 4)];
+    const { unmount } = render(<Selecting tasks={tasks} workflow={MAIN} initial="k-21" />);
+    expect(dimmed(screen.getByRole("region", { name: "When a Parent ends" }))).toBe(true);
+    unmount();
+    const blocked = [held(21, "build", "builder", 18, { blockers: [{ id: "k-30", key: "DARK-30", title: "Task 30" }] }), waiting(30, "acceptance", 4)];
+    render(<Selecting tasks={blocked} workflow={MAIN} initial="k-21" />);
+    expect(dimmed(screen.getByRole("region", { name: "When a Parent ends" }))).toBe(false);
   });
 
   it("× clears the selection and returns the focus to the chip", async () => {
