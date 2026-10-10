@@ -4546,8 +4546,9 @@ type ClientInterface interface {
 	// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
 	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 	// checked on GitHub through the Runner beside this server, when one is attached: the pull
-	// request must be merged there, its head branch must start with the Task's key, as the
-	// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+	// request must be merged there, its head branch must start with the Task's key and a dash,
+	// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
+	// `number` and `url` (the host
 	// compared without regard to case). A bad address is refused before GitHub is asked. A
 	// human's write, a write of `open`, a write of what the Task already carries, and any write
 	// with no Runner attached are not checked.
@@ -4577,8 +4578,9 @@ type ClientInterface interface {
 	// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
 	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 	// checked on GitHub through the Runner beside this server, when one is attached: the pull
-	// request must be merged there, its head branch must start with the Task's key, as the
-	// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+	// request must be merged there, its head branch must start with the Task's key and a dash,
+	// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
+	// `number` and `url` (the host
 	// compared without regard to case). A bad address is refused before GitHub is asked. A
 	// human's write, a write of `open`, a write of what the Task already carries, and any write
 	// with no Runner attached are not checked.
@@ -7244,8 +7246,9 @@ func (c *Client) PassOwnership(ctx context.Context, task TaskRef, params *PassOw
 // is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
 // digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 // checked on GitHub through the Runner beside this server, when one is attached: the pull
-// request must be merged there, its head branch must start with the Task's key, as the
-// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+// request must be merged there, its head branch must start with the Task's key and a dash,
+// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
+// `number` and `url` (the host
 // compared without regard to case). A bad address is refused before GitHub is asked. A
 // human's write, a write of `open`, a write of what the Task already carries, and any write
 // with no Runner attached are not checked.
@@ -7285,8 +7288,9 @@ func (c *Client) SetTaskPullRequestWithBody(ctx context.Context, task TaskRef, p
 // is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
 // digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 // checked on GitHub through the Runner beside this server, when one is attached: the pull
-// request must be merged there, its head branch must start with the Task's key, as the
-// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+// request must be merged there, its head branch must start with the Task's key and a dash,
+// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
+// `number` and `url` (the host
 // compared without regard to case). A bad address is refused before GitHub is asked. A
 // human's write, a write of `open`, a write of what the Task already carries, and any write
 // with no Runner attached are not checked.
@@ -14347,8 +14351,9 @@ type ClientWithResponsesInterface interface {
 	// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
 	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 	// checked on GitHub through the Runner beside this server, when one is attached: the pull
-	// request must be merged there, its head branch must start with the Task's key, as the
-	// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+	// request must be merged there, its head branch must start with the Task's key and a dash,
+	// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
+	// `number` and `url` (the host
 	// compared without regard to case). A bad address is refused before GitHub is asked. A
 	// human's write, a write of `open`, a write of what the Task already carries, and any write
 	// with no Runner attached are not checked.
@@ -14378,8 +14383,9 @@ type ClientWithResponsesInterface interface {
 	// is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
 	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 	// checked on GitHub through the Runner beside this server, when one is attached: the pull
-	// request must be merged there, its head branch must start with the Task's key, as the
-	// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+	// request must be merged there, its head branch must start with the Task's key and a dash,
+	// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
+	// `number` and `url` (the host
 	// compared without regard to case). A bad address is refused before GitHub is asked. A
 	// human's write, a write of `open`, a write of what the Task already carries, and any write
 	// with no Runner attached are not checked.
@@ -21032,8 +21038,9 @@ func (c *ClientWithResponses) PassOwnershipWithResponse(ctx context.Context, tas
 // is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
 // digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 // checked on GitHub through the Runner beside this server, when one is attached: the pull
-// request must be merged there, its head branch must start with the Task's key, as the
-// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+// request must be merged there, its head branch must start with the Task's key and a dash,
+// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
+// `number` and `url` (the host
 // compared without regard to case). A bad address is refused before GitHub is asked. A
 // human's write, a write of `open`, a write of what the Task already carries, and any write
 // with no Runner attached are not checked.
@@ -21069,8 +21076,9 @@ func (c *ClientWithResponses) SetTaskPullRequestWithBodyWithResponse(ctx context
 // is letters, digits and hyphens, starting with a letter or digit; a repository is letters,
 // digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 // checked on GitHub through the Runner beside this server, when one is attached: the pull
-// request must be merged there, its head branch must start with the Task's key, as the
-// Runner names a Task's branches, and GitHub must give it `number` and `url` (the host
+// request must be merged there, its head branch must start with the Task's key and a dash,
+// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
+// `number` and `url` (the host
 // compared without regard to case). A bad address is refused before GitHub is asked. A
 // human's write, a write of `open`, a write of what the Task already carries, and any write
 // with no Runner attached are not checked.
