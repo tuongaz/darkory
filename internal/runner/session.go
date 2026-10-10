@@ -168,6 +168,7 @@ func (s *session) run(ctx context.Context) bool {
 		delete(r.sessions, s.rec.Session())
 		r.mu.Unlock()
 		close(s.over)
+		s.readPullRequests(context.WithoutCancel(ctx))
 		s.cleanUp(context.WithoutCancel(ctx))
 	}()
 	s.log.Info("took a Task", "title", s.d.Task.Title, "step", stepName(s.d), "session", s.rec.Session())
@@ -925,6 +926,26 @@ func readTail(path string, n int64) ([]byte, error) {
 		return nil, err
 	}
 	return io.ReadAll(f)
+}
+
+// readPullRequests reads, once the Claim has ended, the pull requests of the Task's branch in each
+// of its Workspaces in pull_request mode, which the agent may have opened or merged in its Shift,
+// and writes the newest open or merged one on the Task, as the Shift.
+func (s *session) readPullRequests(ctx context.Context) {
+	for _, c := range s.checkouts {
+		if c.Workspace.Mode != ModePullRequest {
+			continue
+		}
+		cctx, cancel := context.WithTimeout(ctx, mergeTimeout)
+		prs, err := s.r.gh.PullRequestsForBranch(cctx, c.Workspace.Path, c.Branch)
+		if err != nil {
+			s.log.Warn("listing the pull requests of the Task's branch", "workspace", c.Workspace.Name, "branch", c.Branch, "err", err)
+		} else if pr, ok := newestPullRequest(prs); ok {
+			s.r.writePullRequest(cctx, []Record{s.rec}, s.key, pullRequestBody(pr), s.log.With("workspace", c.Workspace.Name),
+				"read the Task's pull request")
+		}
+		cancel()
+	}
 }
 
 // cleanUp removes the Task's worktrees once the Task has ended, keeping its branches.

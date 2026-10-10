@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/branch"
 	"github.com/tuongaz/darkory/internal/cli/remote"
 )
 
@@ -527,8 +529,9 @@ func (r *Runner) unmerged(ctx context.Context, d *client.TaskDetail, repo, branc
 	return out
 }
 
-// pollPullRequests completes a Task at a review Step whose pull request was merged on GitHub, in
-// every Workspace in pull_request mode, every Poll.
+// pollPullRequests reads the pull requests of every Workspace in pull_request mode every Poll:
+// it writes a Task's pull request on the Task, open and then merged, and completes a Task at a
+// review Step whose pull request was merged.
 func (r *Runner) pollPullRequests(ctx context.Context) {
 	t := time.NewTicker(r.t.Poll)
 	defer t.Stop()
@@ -543,6 +546,9 @@ func (r *Runner) pollPullRequests(ctx context.Context) {
 	}
 }
 
+// pollOnce reads each Workspace's pull requests once. seen holds what needs no more looking at:
+// "<repo>#<n>:<state>" for a pull request written on its Task in that state, and "<repo>#<n>"
+// for a merged one whose review needs nothing more (completeByPR).
 func (r *Runner) pollOnce(ctx context.Context, seen map[string]bool) {
 	all, err := r.reader.AllWorkspaces(ctx)
 	if err != nil {
@@ -557,6 +563,7 @@ func (r *Runner) pollOnce(ctx context.Context, seen map[string]bool) {
 			r.log.Warn("listing pull requests", "workspace", ws.Name, "err", err)
 			continue
 		}
+		r.recordPullRequests(ctx, ws, prs, seen)
 		for _, pr := range prs {
 			if pr.State != PRMerged {
 				continue
@@ -571,6 +578,100 @@ func (r *Runner) pollOnce(ctx context.Context, seen map[string]bool) {
 				seen[id] = true
 			}
 		}
+	}
+}
+
+// taskOfBranch is the key of the Task whose branch head is, as the Runner names a Task's branches
+// (branch.Prefix); empty for a Parent's branch or a branch of no Task.
+func taskOfBranch(head string) string {
+	key := KeyOf(head)
+	if key == "" || !strings.HasPrefix(head, branch.Prefix(key)) {
+		return ""
+	}
+	return key
+}
+
+// newestPullRequest is the newest of prs that is open or merged: a closed one is not the Task's.
+func newestPullRequest(prs []PullRequest) (PullRequest, bool) {
+	var newest PullRequest
+	for _, pr := range prs {
+		if (pr.State == PROpen || pr.State == PRMerged) && pr.Number > newest.Number {
+			newest = pr
+		}
+	}
+	return newest, newest.Number > 0
+}
+
+// recordPullRequests writes on each Task the newest open or merged pull request of its branches
+// among prs, a Workspace's, unless it is seen in that state already or the Task carries it so.
+func (r *Runner) recordPullRequests(ctx context.Context, ws Workspace, prs []PullRequest, seen map[string]bool) {
+	byTask := map[string][]PullRequest{}
+	var keys []string
+	for _, pr := range prs {
+		if key := taskOfBranch(pr.HeadRefName); key != "" {
+			if byTask[key] == nil {
+				keys = append(keys, key)
+			}
+			byTask[key] = append(byTask[key], pr)
+		}
+	}
+	for _, key := range keys {
+		pr, ok := newestPullRequest(byTask[key])
+		if !ok {
+			continue
+		}
+		id := fmt.Sprintf("%s#%d:%s", ws.Path, pr.Number, strings.ToLower(pr.State))
+		if seen[id] {
+			continue
+		}
+		body := pullRequestBody(pr)
+		if d, err := r.reader.Task(ctx, key); err == nil && d.Task.PullRequest != nil && *d.Task.PullRequest == body {
+			seen[id] = true // a Runner started again finds what it wrote before
+			continue
+		}
+		recs := []Record{r.reader}
+		for _, a := range r.agents {
+			if a.rec != r.reader {
+				recs = append(recs, a.rec)
+			}
+		}
+		if r.writePullRequest(ctx, recs, key, body, r.log.With("workspace", ws.Name, "task", key), "read a Task's pull request on GitHub") {
+			seen[id] = true
+		}
+	}
+}
+
+// pullRequestBody is pr as the record keeps it.
+func pullRequestBody(pr PullRequest) client.PullRequest {
+	return client.PullRequest{Number: pr.Number, URL: pr.URL, State: client.PullRequestState(strings.ToLower(pr.State))}
+}
+
+// writePullRequest writes pr on Task key through the first of recs, and on forbidden through each
+// next one: the Task's Project may not have the first one's agent as a Member. It logs to log,
+// which names the Task, and says whether the pull request needs no more writing: written, or
+// refused in a way the record will repeat (conflict: open over merged, or GitHub says otherwise;
+// invalid: no Workspace of the Task lands through pull requests, or the branch is not the Task's;
+// not_found; forbidden to every one of recs). The write takes no lock: the server checks a merged
+// write by asking this Runner's PullRequest before it answers.
+func (r *Runner) writePullRequest(ctx context.Context, recs []Record, key string, pr client.PullRequest, log *slog.Logger, msg string) bool {
+	var err error
+	for _, rec := range recs {
+		if err = rec.SetPullRequest(ctx, key, pr); !refusedBy(err, client.ErrorCodeForbidden) {
+			break
+		}
+	}
+	switch {
+	case err == nil:
+		log.Info(msg, "pr", pr.Number, "state", pr.State)
+		return true
+	case refusedBy(err, client.ErrorCodeConflict, client.ErrorCodeInvalid, client.ErrorCodeNotFound, client.ErrorCodeForbidden):
+		log.Info("the record refused a Task's pull request", "pr", pr.Number, "state", pr.State, "err", err)
+		return true
+	default:
+		if ctx.Err() == nil {
+			log.Warn("writing a Task's pull request", "pr", pr.Number, "state", pr.State, "err", err)
+		}
+		return false
 	}
 }
 
